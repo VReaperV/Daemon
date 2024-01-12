@@ -951,7 +951,7 @@ static void R_SetupFrustum()
 	float  ang;
 	vec3_t planeOrigin;
 
-	if ( tr.viewParms.portalLevel > 0 )
+	if ( tr.viewParms.portalLevel > 10 )
 	{
 		// this is a portal, so constrain the culling frustum to the portal surface
 		matrix_t invTransform;
@@ -1262,7 +1262,7 @@ Returns true if it should be mirrored
 =================
 */
 static bool R_GetPortalOrientations( drawSurf_t *drawSurf, orientation_t *surface, orientation_t *camera, vec3_t pvsOrigin,
-    bool *mirror )
+    bool *mirror, vec3_t *outAxis, vec3_t *diff )
 {
 	int           i;
 	cplane_t      originalPlane, plane;
@@ -1297,53 +1297,457 @@ static bool R_GetPortalOrientations( drawSurf_t *drawSurf, orientation_t *surfac
 	VectorCopy( plane.normal, surface->axis[ 0 ] );
 	PerpendicularVector( surface->axis[ 1 ], surface->axis[ 0 ] );
 	CrossProduct( surface->axis[ 0 ], surface->axis[ 1 ], surface->axis[ 2 ] );
+	// Log::Warn( "axis: %f %f %f", surface->axis[2][0], surface->axis[2][1], surface->axis[2][2]);
 
 	// locate the portal entity closest to this plane.
 	// origin will be the origin of the portal, origin2 will be
 	// the origin of the camera
-	for ( i = 0; i < tr.refdef.numEntities; i++ )
-	{
-		e = &tr.refdef.entities[ i ];
+	int numVertsOld = tess.numVertexes;
+	rb_surfaceTable[Util::ordinal( *( drawSurf->surface ) )]( drawSurf->surface );
+	int numVerts = tess.numVertexes - numVertsOld;
+	vec3_t portalCenter {0.0, 0.0, 0.0};
+	for ( int vertIndex = 0; vertIndex < numVerts; vertIndex++ ) {
+		// Log::Warn( "verts: %f %f %f", tess.verts[vertIndex].xyz[0], tess.verts[vertIndex].xyz[1], tess.verts[vertIndex].xyz[2] );
+		VectorAdd( portalCenter, tess.verts[vertIndex].xyz, portalCenter );
+	}
+	VectorScale( portalCenter, 1.0 / numVerts, portalCenter );
+	Log::Warn( "portalCenter: %f %f %f", portalCenter[0], portalCenter[1], portalCenter[2] );
+	float dist = Distance( portalCenter, pvsOrigin );
+	float minDistance = 999999.0f;
+	// Log::Warn( "surf: %f %f %f", drawSurf->entity->e.origin[0], drawSurf->entity->e.origin[1], drawSurf->entity->e.origin[2] );
+	// Log::Warn( "originalPlane.normal: %f %f %f", originalPlane.normal[0], originalPlane.normal[1], originalPlane.normal[2] );
+	trRefEntity_t *currentPortal = nullptr;
+	for ( i = 0; i < tr.refdef.numEntities; i++ ) {
+		e = &tr.refdef.entities[i];
 
-		if ( e->e.reType != refEntityType_t::RT_PORTALSURFACE )
-		{
+		if ( e->e.reType != refEntityType_t::RT_PORTALSURFACE ) {
 			continue;
 		}
 
 		d = DotProduct( e->e.origin, originalPlane.normal ) - originalPlane.dist;
 
-		if ( d > 64 || d < -64 )
-		{
+		if ( d > 64 || d < -64 ) {
 			continue;
 		}
 
-		// get the pvsOrigin from the entity
-		VectorCopy( e->e.oldorigin, pvsOrigin );
+		// Log::Warn( "portal entity: %f %f %f | %f %f %f", e->e.origin[0], e->e.origin[1], e->e.origin[2], e->e.oldorigin[0], e->e.oldorigin[1], e->e.oldorigin[2] );
 
+		// get the pvsOrigin from the entity
+		// VectorCopy( e->e.oldorigin, pvsOrigin );
+
+		vec_t d2 = Distance( e->e.origin, portalCenter );
+		// Log::Warn( "portal dist: %f %f", d2, d );
+		if ( d2 < minDistance ) {
+			// Log::Warn( "Passed" );
+			minDistance = d2;
+			currentPortal = e;
+		}
+	}
+	if ( currentPortal ) {
+		e = currentPortal;
 		// if the entity is just a mirror, don't use as a camera point
-		if ( e->e.oldorigin[ 0 ] == e->e.origin[ 0 ] && e->e.oldorigin[ 1 ] == e->e.origin[ 1 ] && e->e.oldorigin[ 2 ] == e->e.origin[ 2 ] )
-		{
+		if ( e->e.oldorigin[0] == e->e.origin[0] && e->e.oldorigin[1] == e->e.origin[1] && e->e.oldorigin[2] == e->e.origin[2] ) {
 			VectorScale( plane.normal, plane.dist, surface->origin );
 			VectorCopy( surface->origin, camera->origin );
-			VectorSubtract( vec3_origin, surface->axis[ 0 ], camera->axis[ 0 ] );
-			VectorCopy( surface->axis[ 1 ], camera->axis[ 1 ] );
-			VectorCopy( surface->axis[ 2 ], camera->axis[ 2 ] );
+			VectorSubtract( vec3_origin, surface->axis[0], camera->axis[0] );
+			VectorCopy( surface->axis[1], camera->axis[1] );
+			VectorCopy( surface->axis[2], camera->axis[2] );
+			Log::Warn( "Mirror!" );
 
 			*mirror = true;
 			return true;
 		}
-
 		// project the origin onto the surface plane to get
 		// an origin point we can rotate around
 		d = DotProduct( e->e.origin, plane.normal ) - plane.dist;
 		VectorMA( e->e.origin, -d, surface->axis[ 0 ], surface->origin );
+		// Log::Warn( "surface origin: %f %f %f", surface->origin[0], surface->origin[1], surface->origin[2] );
+
+		vec3_t surfToOldView;
+		// VectorSubtract( tr.viewParms.pvsOrigin, surface->origin, surfToOldView );
+		VectorCopy( tr.viewParms.orientation.axis[0], surfToOldView);
+		vec3_t oldAxis[3];
+		VectorCopy( plane.normal, oldAxis[0] );
+		CrossProduct( oldAxis[0], axisDefault[2], oldAxis[1] );
+		CrossProduct( oldAxis[0], oldAxis[1], oldAxis[2] );
+		vec3_t oldProj[3];
+		vec3_t oldCamera;
+		ProjectPointOntoVector( surfToOldView, vec3_origin, oldAxis[0], oldProj[0] );
+		ProjectPointOntoVector( surfToOldView, vec3_origin, oldAxis[1], oldProj[1] );
+		ProjectPointOntoVector( surfToOldView, vec3_origin, oldAxis[2], oldProj[2] );
+		float x = DotProduct( surfToOldView, oldAxis[0] );
+		float y = DotProduct( surfToOldView, oldAxis[1] );
+		float z = DotProduct( surfToOldView, oldAxis[2] );
+		vec3_t surfToOldProj;
+		vec3_t newAxis[3];
+		VectorMA( newAxis[0], x, e->e.axis[0], newAxis[0] );
+		VectorMA( newAxis[1], y, e->e.axis[1], newAxis[1] );
+		VectorMA( newAxis[2], z, e->e.axis[2], newAxis[2] );
+
+		ProjectPointOntoVector( surfToOldView, vec3_origin, plane.normal, surfToOldProj );
+		// ProjectPointOnPlane( surfToOldProj, surfToOldView, plane.normal );
+		float pitch = -AngleBetweenVectors( surfToOldView, surfToOldProj );
+		float yaw = -AngleBetweenVectors( plane.normal, surfToOldProj );
+		float angle = AngleBetweenVectors( surfToOldView, plane.normal );
+
+		vec3_t portalProj;
+		vec3_t surfAxis[3];
+		vec3_t originProj;
+		vec3_t portalInverseNormal;
+		VectorCopy( plane.normal, portalInverseNormal );
+		VectorSubtract( vec3_origin, portalInverseNormal, portalInverseNormal );
+		VectorCopy( portalInverseNormal, surfAxis[0] );
+		CrossProduct( surfAxis[0], axisDefault[2], surfAxis[1] );
+		VectorSubtract( vec3_origin, surfAxis[1], surfAxis[1] );
+		CrossProduct( surfAxis[0], surfAxis[1], surfAxis[2] );
+		VectorNormalize( surfAxis[0] );
+		VectorNormalize( surfAxis[1] );
+		VectorNormalize( surfAxis[2] );
+		vec3_t originNormalized;
+		VectorCopy( tr.viewParms.pvsOrigin, originNormalized );
+		VectorNormalize( originNormalized );
+		vec3_t newOrigin;
+		VectorSubtract( pvsOrigin, portalCenter, newOrigin );
+		//VectorSubtract( vec3_origin, newOrigin, newOrigin );
+		// VectorAdd( e->e.oldorigin, *diff, *diff );
+		// Log::Warn( "e.origin: %f %f %f", e->e.origin[0], e->e.origin[1], e->e.origin[2] );
+		// Log::Warn( "pvsOrigin: %f %f %f", pvsOrigin[0], pvsOrigin[1], pvsOrigin[2] );
+		// Log::Warn( "diff: %f %f %f", newOrigin[0], newOrigin[1], newOrigin[2] );
+		portalProj[0] = DotProduct( newOrigin, surfAxis[0] );
+		portalProj[1] = DotProduct( newOrigin, surfAxis[1] );
+		portalProj[2] = DotProduct( newOrigin, surfAxis[2] );
+		// ProjectPointOntoVector( *diff, vec3_origin, )
+		/* ProjectPointOntoVector(surfToOldView, vec3_origin, surfAxis[0], originProj[0]);
+		ProjectPointOntoVector( surfToOldView, vec3_origin, surfAxis[1], originProj[1] );
+		ProjectPointOntoVector( surfToOldView, vec3_origin, surfAxis[2], originProj[2] ); */
+		originProj[0] = DotProduct( originNormalized, surfAxis[0] );
+		originProj[1] = DotProduct( originNormalized, surfAxis[1] );
+		originProj[2] = DotProduct( originNormalized, surfAxis[2] );
+		// portalProj[0] = DotProduct( surfToOldView, surfAxis[0] );
+		// portalProj[1] = DotProduct( surfToOldView, surfAxis[1] );
+		// portalProj[2] = DotProduct( surfToOldView, surfAxis[2] );
+		/* originProj[0] = DotProduct(surfToOldView, surfAxis[0]);
+		originProj[1] = DotProduct( surfToOldView, surfAxis[1] );
+		originProj[2] = DotProduct( surfToOldView, surfAxis[2] );
+		portalProj[0] = DotProduct( surfToOldView, surfAxis[0] );
+		portalProj[1] = DotProduct( surfToOldView, surfAxis[1] );
+		portalProj[2] = DotProduct( surfToOldView, surfAxis[2] ); */
+		Log::Warn( "Debug camera" );
+		vec3_t portalCameraAxis[3];
+		AxisCopy( e->e.axis, portalCameraAxis );
+		VectorNormalize( portalCameraAxis[0] );
+		VectorNormalize( portalCameraAxis[1] );
+		VectorNormalize( portalCameraAxis[2] );
+		/* Log::Warn("e.axis: %f %f %f", e->e.axis[0][0], e->e.axis[0][1], e->e.axis[0][2]);
+		Log::Warn( "e.axis: %f %f %f", e->e.axis[1][0], e->e.axis[1][1], e->e.axis[1][2] );
+		Log::Warn( "e.axis: %f %f %f", e->e.axis[2][0], e->e.axis[2][1], e->e.axis[2][2] );
+		Log::Warn( "portalCameraAxis: %f %f %f", portalCameraAxis[0][0], portalCameraAxis[0][1], portalCameraAxis[0][2] );
+		Log::Warn( "portalCameraAxis: %f %f %f", portalCameraAxis[1][0], portalCameraAxis[1][1], portalCameraAxis[1][2] );
+		Log::Warn( "portalCameraAxis: %f %f %f", portalCameraAxis[2][0], portalCameraAxis[2][1], portalCameraAxis[2][2] ); */
+		vec3_t portalCameraViewOrigin;
+		VectorMA( portalCameraAxis[0], originProj[0], portalCameraAxis[0], portalCameraAxis[0] );
+		VectorMA( portalCameraAxis[1], originProj[1], portalCameraAxis[1], portalCameraAxis[1] );
+		VectorMA( portalCameraAxis[2], originProj[2], portalCameraAxis[2], portalCameraAxis[2] );
+		VectorMA( e->e.oldorigin, portalProj[0], portalCameraAxis[0], newOrigin );
+		VectorMA( e->e.oldorigin, portalProj[1], portalCameraAxis[1], newOrigin );
+		VectorMA( e->e.oldorigin, portalProj[2], portalCameraAxis[2], newOrigin );
+		// Log::Warn( "portalProj: %f %f %f", portalProj[0], portalProj[1], portalProj[2] );
+		// Log::Warn( "newOrigin: %f %f %f", newOrigin[0], newOrigin[1], newOrigin[2] );
+		VectorCopy( newOrigin, *diff );
+		VectorNormalize( portalCameraAxis[0] );
+		VectorNormalize( portalCameraAxis[1] );
+		VectorNormalize( portalCameraAxis[2] );
+		vec3_t portalCameraAngles;
+		AxisToAngles( e->e.axis, portalCameraAngles );
+		vec3_t testAngles;
+		vec3_t testOrigAxis[3];
+		AxisCopy( tr.viewParms.orientation.axis, testOrigAxis );
+		// VectorScale( testOrigAxis[0], -1, testOrigAxis[0] );
+		AxisToAngles( testOrigAxis, testAngles );
+		Log::Warn( "portalCameraAngles: %f %f %f", portalCameraAngles[0], portalCameraAngles[1], portalCameraAngles[2] );
+		Log::Warn( "testAngles: %f %f %f", testAngles[0], testAngles[1], testAngles[2] );
+		/* bool hack = false;
+		if ( testAngles[0] <= -180.0 ) {
+			testAngles[0] = 360.0 + testAngles[0];
+			hack = true;
+		} else if ( testAngles[0] >= 180.0 ) {
+			testAngles[0] = testAngles[0] - 360.0;
+			hack = true;
+		} */
+		quat_t testQuat;
+		quat_t testQuatYaw;
+		quat_t testQuatRoll;
+		QuatFromAngles( testQuat, testAngles[0], 0.0, 0.0 );
+		QuatFromAngles( testQuatYaw, 0.0, testAngles[1], 0.0 );
+		QuatFromAngles( testQuatRoll, 0.0, 0.0, testAngles[2] );
+		vec3_t testTransformed;
+		transform_t testTransform{ *testQuat, *vec3_origin, 1.0 };
+		vec3_t test{ 1, 0, 0 };
+		QuatTransformVector( testQuat, testOrigAxis[0], test );
+		vec3_t quatAxis[3];
+		quat_t testQuatOut;
+		QuatMultiply( testQuatYaw, testQuat, testQuatOut );
+		QuatMultiply2( testQuatOut, testQuatRoll );
+		QuatToAxis( testQuatOut, quatAxis );
+		Log::Warn( "quat to axis: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "quat to axis: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "quat to axis: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		vec3_t pAngles;
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		quat_t portalCameraQuat;
+		quat_t portalCameraQuatYaw;
+		quat_t portalCameraQuatRoll;
+		// vec3_t portalCameraAngles;
+		AxisToAngles( e->e.axis, portalCameraAngles );
+		QuatFromAngles( portalCameraQuat, portalCameraAngles[0], 0.0, 0.0 );
+		QuatFromAngles( portalCameraQuatYaw, 0.0, portalCameraAngles[1], 0.0 );
+		QuatFromAngles( portalCameraQuatRoll, 0.0, 0.0, portalCameraAngles[2] );
+		QuatMultiply( portalCameraQuatYaw, portalCameraQuat, testQuatOut );
+		QuatMultiply2( testQuatOut, portalCameraQuatRoll );
+		QuatToAxis( testQuatOut, quatAxis );
+		Log::Warn( "pcamera quat to axis: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "pcamera quat to axis: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "pcamera quat to axis: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		QuatMultiply( testQuatYaw, testQuat, testQuatOut );
+		QuatMultiply2( testQuatOut, testQuatRoll );
+		QuatToAxis( testQuatOut, quatAxis );
+		Log::Warn( "inv quat to axis: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "inv quat to axis: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "inv quat to axis: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		quat_t currentView;
+		quat_t currentViewYaw;
+		quat_t currentViewRoll;
+		vec3_t currentViewAngles;
+		vec3_t drawSurfAxis[3];
+		VectorCopy( plane.normal, drawSurfAxis[0] );
+		Log::Warn( "plane normal: %f %f %f", plane.normal[0], plane.normal[1], plane.normal[2] );
+		VectorInverse( drawSurfAxis[0] );
+		CrossProduct( drawSurfAxis[0], axisDefault[2], drawSurfAxis[1] );
+		VectorSubtract( vec3_origin, drawSurfAxis[1], drawSurfAxis[1] );
+		CrossProduct( drawSurfAxis[0], drawSurfAxis[1], drawSurfAxis[2] );
+		AxisToAngles( drawSurfAxis, currentViewAngles );
+		Log::Warn( "drawSurf angles: %f %f %f", currentViewAngles[0], currentViewAngles[1], currentViewAngles[2] );
+		QuatFromAngles( currentView, currentViewAngles[0], 0.0, 0.0 );
+		QuatFromAngles( currentViewYaw, 0.0, currentViewAngles[1], 0.0 );
+		QuatFromAngles( currentViewRoll, 0.0, 0.0, currentViewAngles[2] );
+		QuatMultiply( currentViewYaw, currentView, testQuatOut );
+		QuatMultiply2( testQuatOut, currentViewRoll );
+		QuatToAxis( testQuatOut, quatAxis );
+		Log::Warn( "drawSurf quat: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "drawSurf quat: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "drawSurf quat: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		QuatInverse( currentView );
+		QuatInverse( currentViewYaw );
+		QuatInverse( currentViewRoll );
+		QuatMultiply( currentViewYaw, currentView, testQuatOut );
+		QuatMultiply2( testQuatOut, currentViewRoll );
+		QuatToAxis( testQuatOut, quatAxis );
+		Log::Warn( "drawSurf inv quat: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "drawSurf inv quat: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "drawSurf inv quat: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		//OrigQuat
+		quat_t origQuat;
+		quat_t origQuatYaw;
+		quat_t origQuatRoll;
+		QuatCopy( currentView, origQuat );
+		QuatCopy( currentViewYaw, origQuatYaw );
+		QuatCopy( currentViewRoll, origQuatRoll );
+		/* QuatInverse(origQuat);
+		QuatInverse( origQuatYaw );
+		QuatInverse( origQuatRoll ); */
+		QuatMultiply( currentViewYaw, currentView, testQuatOut );
+		QuatMultiply2( testQuatOut, currentViewRoll );
+		QuatToAxis( testQuatOut, quatAxis );
+		Log::Warn( "origQuat: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "origQuat: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "origQuat: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		QuatMultiply2( origQuat, portalCameraQuat );
+		QuatMultiply2( origQuatYaw, portalCameraQuatYaw );
+		QuatMultiply2( origQuatRoll, portalCameraQuatRoll );
+		QuatMultiply2( origQuatYaw, origQuat );
+		QuatMultiply2( origQuatYaw, origQuatRoll );
+		//OrigQuat
+		QuatMultiply2( currentView, portalCameraQuat );
+		QuatMultiply2( testQuat, currentView );
+		QuatToAxis( testQuat, quatAxis );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles pitch: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		QuatMultiply2( currentViewYaw, portalCameraQuatYaw );
+		QuatMultiply2( testQuatYaw, currentViewYaw );
+		QuatToAxis( testQuatYaw, quatAxis );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles yaw: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		QuatMultiply2( currentViewRoll, portalCameraQuatRoll );
+		QuatMultiply2( testQuatRoll, currentViewRoll );
+		/* QuatCopy(currentView, testQuat);
+		QuatCopy( currentViewYaw, testQuatYaw );
+		QuatCopy( currentViewRoll, testQuatRoll ); */
+		QuatToAxis( testQuatRoll, quatAxis );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles roll: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		QuatMultiply2( testQuatYaw, testQuat );
+		QuatToAxis( testQuatYaw, quatAxis );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles yaw + pitch: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		QuatMultiply2( testQuatYaw, testQuatRoll );
+		QuatToAxis( testQuatYaw, quatAxis );
+		Log::Warn( "quat m to axis: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "quat m to axis: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "quat m to axis: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		AxisToAngles( quatAxis, pAngles );
+		/* if ( pAngles[0] <= -180.0 ) {
+			pAngles[0] = -360.0 - pAngles[0];
+		} else if ( pAngles[0] >= 180.0 ) {
+			pAngles[0] = 360.0 - pAngles[0];
+		} */
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		quat_t tQ;
+		QuatFromAngles( tQ, pAngles[0], pAngles[1], pAngles[2] );
+		QuatToAxis( tQ, quatAxis );
+		/* if ( hack ) {
+			pAngles[0] *= -1;
+			AnglesToAxis( pAngles, quatAxis );
+		} */
+		Log::Warn( "tQ to axis: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "tQ to axis: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "tQ to axis: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		QuatToAxis( tQ, quatAxis );
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		Log::Warn( "origQuat: %f %f %f", quatAxis[0][0], quatAxis[0][1], quatAxis[0][2] );
+		Log::Warn( "origQuat: %f %f %f", quatAxis[1][0], quatAxis[1][1], quatAxis[1][2] );
+		Log::Warn( "origQuat: %f %f %f", quatAxis[2][0], quatAxis[2][1], quatAxis[2][2] );
+		QuatToAxis( origQuatYaw, quatAxis );
+		AxisToAngles( quatAxis, pAngles );
+		Log::Warn( "pAngles: %f %f %f", pAngles[0], pAngles[1], pAngles[2] );
+		// transform_t pTransform{ *testQuat, *vec3_origin, 1.0 };
+		vec3_t nOrig;
+		vec3_t currentToPortal;
+		VectorSubtract( portalCenter, pvsOrigin, currentToPortal );
+		// float pLength = VectorNormalize( currentToPortal );
+		Log::Warn( "==========" );
+		Log::Warn( "portalCenter: %f %f %f", portalCenter[0], portalCenter[1], portalCenter[2] );
+		Log::Warn( "e.origin: %f %f %f", e->e.origin[0], e->e.origin[1], e->e.origin[2] );
+		Log::Warn( "e.oldorigin: %f %f %f", e->e.oldorigin[0], e->e.oldorigin[1], e->e.oldorigin[2] );
+		Log::Warn( "currentToPortal: %f %f %f", currentToPortal[0], currentToPortal[1], currentToPortal[2] );
+		QuatTransformVector( origQuatYaw, currentToPortal, nOrig );
+		Log::Warn( "nOrig: %f %f %f", nOrig[0], nOrig[1], nOrig[2] );
+		//VectorAdd( nOrig, e->e.oldorigin, nOrig );
+		vec3_t tst;
+		VectorSubtract( portalCenter, pvsOrigin, tst );
+		VectorAdd( tst, e->e.oldorigin, tst );
+		// VectorMA( e->e.oldorigin, -pLength, nOrig, nOrig );
+		// VectorMA( vec3_origin, 1, nOrig, nOrig );
+		VectorSubtract( e->e.oldorigin, nOrig, nOrig );
+		// VectorAdd( e->e.oldorigin, nOrig, nOrig );
+		Log::Warn( "nOrig: %f %f %f", nOrig[0], nOrig[1], nOrig[2] );
+		Log::Warn( "tst: %f %f %f", tst[0], tst[1], tst[2] );
+
+		vec3_t pCamProj;
+		VectorSubtract( e->e.oldorigin, e->e.origin, pCamProj );
+		VectorAdd( pvsOrigin, pCamProj, pCamProj );
+
+		QuatTransformVector( tQ, axisDefault[0], test );
+		VectorCopy( test, quatAxis[0] );
+		CrossProduct( quatAxis[0], axisDefault[2], quatAxis[1] );
+		VectorSubtract( vec3_origin, quatAxis[1], quatAxis[1] );
+		VectorNormalize( quatAxis[1] );
+		CrossProduct( quatAxis[0], quatAxis[1], quatAxis[2] );
+		//VectorCopy( testOrigAxis[0], test );
+		//TransformPoint( &testTransform, test, test );
+		//VectorCopy( tr.viewParms.orientation.axis[0], testTransformed );
+		//VectorSubtract( vec3_origin, testTransformed, testTransformed );
+		VectorNormalize( testTransformed );
+		// TransformNormalVector( &testTransform, test, testTransformed );
+		Log::Warn( "TRANSFORMED: %f %f %f", testTransformed[0], testTransformed[1], testTransformed[2] );
+		Log::Warn( "test: %f %f %f", test[0], test[1], test[2] );
+		float testPitch = testAngles[0];
+		VectorSubtract( testAngles, portalCameraAngles, testAngles );
+		// testAngles[0] = 0.0;
+		// testAngles[1] = roundf( testAngles[1] );
+		Log::Warn( "testAngles2: %f %f %f", testAngles[0], testAngles[1], testAngles[2] );
+		// quat_t portalCameraQuat;
+		QuatFromAngles( portalCameraQuat, testAngles[0], testAngles[1], testAngles[2] );
+		vec3_t projTransformed;
+		transform_t portalTransform {*portalCameraQuat, *vec3_origin, 1.0};
+		vec3_t testPortalFront;
+		VectorCopy( tr.viewParms.orientation.axis[0], testPortalFront );
+		Log::Warn( "testPortalFront: %f %f %f", testPortalFront[0], testPortalFront[1], testPortalFront[2] );
+		VectorNormalize( testPortalFront );
+		Log::Warn( "testPortalFront normalized: %f %f %f", testPortalFront[0], testPortalFront[1], testPortalFront[2] );
+		TransformNormalVector( &portalTransform, testPortalFront, projTransformed );
+		// TransformPoint( &portalTransform, originProj, projTransformed );
+		Log::Warn( "projTransformed: %f %f %f", projTransformed[0], projTransformed[1], projTransformed[2] );
+		vec3_t testAxis[3];
+		VectorCopy( projTransformed, testAxis[0] );
+		CrossProduct( testAxis[0], axisDefault[2], testAxis[1] );
+		VectorSubtract( vec3_origin, testAxis[1], testAxis[1] );
+		CrossProduct( testAxis[0], testAxis[1], testAxis[2] );
+		vec3_t testPortalOrig;
+		vec3_t testPortalOrig2;
+		VectorCopy( pvsOrigin, testPortalOrig );
+		VectorSubtract( testPortalOrig, e->e.origin, testPortalOrig );
+		float length = VectorNormalize( testPortalOrig );
+		TransformNormalVector( &portalTransform, testPortalOrig, testPortalOrig2 );
+		VectorMA( e->e.oldorigin, length, testPortalOrig2, *diff );
+		// TransformPoint( &portalTransform, testPortalOrig, testPortalOrig2 );
+		Log::Warn("testPortalOrig: %f %f %f", testPortalOrig[0], testPortalOrig[1], testPortalOrig[2]);
+		Log::Warn( "testPortalOrig2: %f %f %f", testPortalOrig2[0], testPortalOrig2[1], testPortalOrig2[2] );
+		Log::Warn( "testAxis: %f %f %f", testAxis[0][0], testAxis[0][1], testAxis[0][2] );
+		Log::Warn( "testAxis: %f %f %f", testAxis[1][0], testAxis[1][1], testAxis[1][2] );
+		Log::Warn( "testAxis: %f %f %f", testAxis[2][0], testAxis[2][1], testAxis[2][2] );
+		// VectorSubtract( vec3_origin, portalCameraAxis[0], portalCameraAxis[0] );
+		// VectorSubtract( vec3_origin, portalCameraAxis[2], portalCameraAxis[2] );
+		/* Log::Warn("portalCameraAxisNew: %f %f %f", portalCameraAxis[0][0], portalCameraAxis[0][1], portalCameraAxis[0][2]);
+		Log::Warn( "portalCameraAxisNew: %f %f %f", portalCameraAxis[1][0], portalCameraAxis[1][1], portalCameraAxis[1][2] );
+		Log::Warn( "portalCameraAxisNew: %f %f %f", portalCameraAxis[2][0], portalCameraAxis[2][1], portalCameraAxis[2][2] );
+		Log::Warn( "surfAxis: %f %f %f", surfAxis[0][0], surfAxis[0][1], surfAxis[0][2] );
+		Log::Warn( "surfAxis: %f %f %f", surfAxis[1][0], surfAxis[1][1], surfAxis[1][2] );
+		Log::Warn( "surfAxis: %f %f %f", surfAxis[2][0], surfAxis[2][1], surfAxis[2][2] );
+		Log::Warn( "surfToOldView: %f %f %f", surfToOldView[0], surfToOldView[1], surfToOldView[2] );
+		Log::Warn( "originProj: %f %f %f", originProj[0], originProj[1], originProj[2] );
+		Log::Warn( "portalProj: %f %f %f", portalProj[0], portalProj[1], portalProj[2] ); */
+		Log::Warn( "Debug camera END" );
+
+		vec3_t surfToNewView;
+		VectorSubtract( vec3_origin, e->e.axis[0], surfToNewView );
+		// RotatePointAroundVector
+		float newX = surfToNewView[0] * cosf( DEG2RAD( pitch ) ) - surfToNewView[1] * sinf( DEG2RAD( pitch ) );
+		float newY = surfToNewView[0] * sinf( DEG2RAD( pitch ) ) + surfToNewView[1] * cosf( DEG2RAD( pitch ) );
+		surfToNewView[0] = newX;
+		surfToNewView[1] = newY;
+		newX = surfToNewView[0] * cosf( DEG2RAD( yaw ) ) + surfToNewView[2] * sinf( DEG2RAD( yaw ) );
+		float newZ = -surfToNewView[0] * sinf( DEG2RAD( yaw ) ) + surfToNewView[2] * cosf( DEG2RAD( yaw ) );
+		surfToNewView[0] = newX;
+		surfToNewView[2] = newZ;
+		vec3_t angles = { yaw, pitch, 0.0 };
+		vec3_t axis[3];
+		AnglesToAxis( angles, axis );
+		Log::Warn( "angles: %f %f %f", angles[0], angles[1], angles[2] );
+		VectorCopy( nOrig, *diff );
+		AxisCopy( quatAxis, outAxis );
 
 		// now get the camera origin and orientation
 		VectorCopy( e->e.oldorigin, camera->origin );
+		// RotatePointAroundVector
 		AxisCopy( e->e.axis, camera->axis );
 		VectorSubtract( vec3_origin, camera->axis[ 0 ], camera->axis[ 0 ] );
 		VectorSubtract( vec3_origin, camera->axis[ 1 ], camera->axis[ 1 ] );
-
+		AxisCopy( quatAxis, camera->axis );
+		VectorSubtract( vec3_origin, camera->axis[0], camera->axis[0] );
+		VectorSubtract( vec3_origin, camera->axis[1], camera->axis[1] );
+		// VectorCopy( nOrig, camera->origin );
+		Log::Warn( "e.oldorigin: %f %f %f", e->e.oldorigin[0], e->e.oldorigin[1], e->e.oldorigin[2] );
 		// optionally rotate
 		if ( e->e.oldframe )
 		{
@@ -1373,6 +1777,10 @@ static bool R_GetPortalOrientations( drawSurf_t *drawSurf, orientation_t *surfac
 			RotatePointAroundVector( camera->axis[ 1 ], camera->axis[ 0 ], transformed, d );
 			CrossProduct( camera->axis[ 0 ], camera->axis[ 1 ], camera->axis[ 2 ] );
 		}
+
+		// VectorCopy( e->e.axis[0], camera->axis[0] );
+		// VectorCopy( e->e.axis[1], camera->axis[1] );
+		// VectorCopy( e->e.axis[2], camera->axis[2] );
 
 		*mirror = false;
 		return true;
@@ -1856,16 +2264,25 @@ static bool R_MirrorViewBySurface(drawSurf_t *drawSurf)
 	// trivially reject portal/mirror
 	if (SurfIsOffscreen(drawSurf, surfRect))
 	{
+		Log::Warn( "offscreen!" );
 		return false;
 	}
 
 	viewParms_t newParms = tr.viewParms;
+	vec3_t newAxis[3];
+	vec3_t diff;
 
-	if ( !R_GetPortalOrientations( drawSurf, &surface, &camera, newParms.pvsOrigin, &newParms.isMirror) )
+	if ( !R_GetPortalOrientations( drawSurf, &surface, &camera, newParms.pvsOrigin, &newParms.isMirror, newAxis, &diff ) )
 	{
+		/// Log::Warn( "portal not found!" );
 		return false; // bad portal, no portalentity
 	}
-
+	if ( !newParms.isMirror ) {
+		VectorCopy( camera.origin, newParms.pvsOrigin );
+	}
+	else {
+		newParms.mirrorLevel++;
+	}
 	// draw stencil mask
 	R_AddPreparePortalCmd( drawSurf );
 
@@ -1886,15 +2303,41 @@ static bool R_MirrorViewBySurface(drawSurf_t *drawSurf)
 	R_MirrorVector(oldParms.orientation.axis[1], &surface, &camera, newParms.orientation.axis[1]);
 	R_MirrorVector(oldParms.orientation.axis[2], &surface, &camera, newParms.orientation.axis[2]);
 
+	// VectorAdd( newParms.orientation.origin, diff, newParms.orientation.origin );
+	// VectorScale( diff, -1, diff );
+	VectorCopy( diff, newParms.pvsOrigin );
+	VectorCopy( diff, newParms.orientation.origin );
 	// restrict view frustum to screen rect of surface
 	R_SetupPortalFrustum(oldParms, camera, newParms);
-
+	AxisCopy( newAxis, newParms.orientation.axis );
+	
+	Log::Warn( "oldParms: %f %f %f", oldParms.orientation.origin[0], oldParms.orientation.origin[1], oldParms.orientation.origin[2] );
+	// Log::Warn( "camera: %f %f %f", camera.origin[0], camera.origin[1], camera.origin[2] );
+	Log::Warn("oldParms: %f %f %f", oldParms.orientation.axis[0][0], oldParms.orientation.axis[0][1], oldParms.orientation.axis[0][2]);
+	Log::Warn( "oldParms: %f %f %f", oldParms.orientation.axis[1][0], oldParms.orientation.axis[1][1], oldParms.orientation.axis[1][2] );
+	Log::Warn( "oldParms: %f %f %f", oldParms.orientation.axis[2][0], oldParms.orientation.axis[2][1], oldParms.orientation.axis[2][2] );
+	Log::Warn( "newParms: %f %f %f", newParms.orientation.axis[0][0], newParms.orientation.axis[0][1], newParms.orientation.axis[0][2] );
+	Log::Warn( "newParms: %f %f %f", newParms.orientation.axis[1][0], newParms.orientation.axis[1][1], newParms.orientation.axis[1][2] );
+	Log::Warn( "newParms: %f %f %f", newParms.orientation.axis[2][0], newParms.orientation.axis[2][1], newParms.orientation.axis[2][2] );
+	// Log::Warn( "camera: %f %f %f", camera.axis[0][0], camera.axis[0][1], camera.axis[0][2] );
+	// Log::Warn( "camera: %f %f %f", camera.axis[1][0], camera.axis[1][1], camera.axis[1][2] );
+	// Log::Warn( "camera: %f %f %f", camera.axis[2][0], camera.axis[2][1], camera.axis[2][2] );
+	// Log::Warn( "newParms: %d", newParms. );
+	Log::Warn( "newParms: %f %f %f", newParms.orientation.origin[0], newParms.orientation.origin[1], newParms.orientation.origin[2] );
+	//0 0 -1
+	//-1 0 0
+	//0 1 0
+	// 4520 -4216 -59
+	// 4616 -4216 -59
 	// render the mirror view
-	R_RenderView( &newParms );
+	Log::Warn( "LEVEL: %i %i", newParms.portalLevel, newParms.mirrorLevel );
+	R_RenderView( &newParms, false );
 
 	tr.viewParms = oldParms;
 
 	R_AddFinalisePortalCmd( drawSurf );
+
+	// Log::Warn( "newParms: %s", newParms.numDrawSurfs );
 
 	return true;
 }
@@ -2028,7 +2471,11 @@ static void R_SortDrawSurfs()
 		ia = &tr.viewParms.interactions[ tr.viewParms.numInteractions - 1 ];
 		ia->next = nullptr;
 	}
-
+	// Log::Warn( "numsort: %i %i %i", tr.viewParms.drawSurfs, tr.viewParms.firstDrawSurf, tr.viewParms.numDrawSurfs );
+	/* for ( int j = 0; j < tr.viewParms.numDrawSurfs; j++ ) {
+		drawSurf_t s = tr.viewParms.drawSurfs[j];
+		Log::Warn("numsort: %f %b %i", s.shader->sort, s.shader->isPortal, s.surface);
+	} */
 	std::sort( tr.viewParms.drawSurfs, tr.viewParms.drawSurfs + tr.viewParms.numDrawSurfs,
 	           []( const drawSurf_t &a, const drawSurf_t &b ) {
 	               return a.sort < b.sort;
@@ -2060,11 +2507,20 @@ static void R_SortDrawSurfs()
 
 	// check for any pass through drawing, which
 	// may cause another view to be rendered first
+	/* Log::Warn("sort portal debug: %i %i", tr.viewParms.firstDrawSurf[Util::ordinal(shaderSort_t::SS_PORTAL)], tr.viewParms.firstDrawSurf[Util::ordinal(shaderSort_t::SS_PORTAL) + 1]);
+	for ( int j = tr.viewParms.firstDrawSurf[Util::ordinal( shaderSort_t::SS_PORTAL )];
+		j < tr.viewParms.firstDrawSurf[Util::ordinal( shaderSort_t::SS_PORTAL ) + 1]; j++ ) {
+		Log::Warn( "sort portal debug: %i", j );
+	} */
+	Log::Warn( "sort pvs: %f %f %f", tr.viewParms.pvsOrigin[0], tr.viewParms.pvsOrigin[1], tr.viewParms.pvsOrigin[2]);
+	// Log::Warn( "sort before portal" );
 	for ( i = tr.viewParms.firstDrawSurf[ Util::ordinal(shaderSort_t::SS_PORTAL) ];
 	      i < tr.viewParms.firstDrawSurf[ Util::ordinal(shaderSort_t::SS_PORTAL) + 1 ]; i++ )
 	{
+		// Log::Warn( "sort in portal" );
 		drawSurf = &tr.viewParms.drawSurfs[ i ];
 		shader = drawSurf->shader;
+		Log::Warn( "%s", &tr.viewParms.drawSurfs[i]);
 
 		// if the mirror was completely clipped away, we may need to check another surface
 		if ( R_MirrorViewBySurface( drawSurf ) )
@@ -2076,6 +2532,7 @@ static void R_SortDrawSurfs()
 			}
 		}
 	}
+	// Log::Warn( "sort after portal" );
 
 	// tell renderer backend to render this view
 	R_AddDrawViewCmd( false );
@@ -2769,8 +3226,13 @@ A view may be either the actual camera view,
 or a mirror / remote location
 ================
 */
-void R_RenderView( viewParms_t *parms )
+void R_RenderView( viewParms_t *parms, bool isPortal )
 {
+	Log::Warn( "parms: RenderView pvsOrigin %f %f %f", parms->pvsOrigin[0], parms->pvsOrigin[1], parms->pvsOrigin[2] );
+	Log::Warn( "parms: %f %f %f", parms->orientation.axis[0][0], parms->orientation.axis[0][1], parms->orientation.axis[0][2] );
+	Log::Warn( "parms: %f %f %f", parms->orientation.axis[1][0], parms->orientation.axis[1][1], parms->orientation.axis[1][2] );
+	Log::Warn( "parms: %f %f %f", parms->orientation.axis[2][0], parms->orientation.axis[2][1], parms->orientation.axis[2][2] );
+	//Log::Warn( "CMD: R_RenderView" );
 	int      firstDrawSurf;
 	int      firstInteraction;
 
@@ -2839,8 +3301,10 @@ void R_RenderView( viewParms_t *parms )
 	MatrixTransformNormal2( tr.viewParms.world.viewMatrix, tr.refdef.blurVec );
 	tr.refdef.blurVec[2] *= -1;
 
-	tr.viewParms.drawSurfs = tr.refdef.drawSurfs + firstDrawSurf;
-	tr.viewParms.numDrawSurfs = tr.refdef.numDrawSurfs - firstDrawSurf;
+	if ( !isPortal ) {
+		tr.viewParms.drawSurfs = tr.refdef.drawSurfs + firstDrawSurf;
+		tr.viewParms.numDrawSurfs = tr.refdef.numDrawSurfs - firstDrawSurf;
+	}
 
 	tr.viewParms.interactions = tr.refdef.interactions + firstInteraction;
 	tr.viewParms.numInteractions = tr.refdef.numInteractions - firstInteraction;
@@ -2849,6 +3313,7 @@ void R_RenderView( viewParms_t *parms )
 
 	// draw main system development information (surface outlines, etc)
 	R_DebugGraphics();
+	Log::Warn( "CMD: R_RenderView_END" );
 }
 
 /*
