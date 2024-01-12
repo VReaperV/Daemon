@@ -259,6 +259,14 @@ struct refLight_t
 
 // ================================================================================================
 
+/* struct refPortal_t {
+	vec3_t    origin;
+	quat_t    rotation;
+	vec3_t    center;
+
+	trRefEntity_t *portalCamera;
+}; */
+
 struct refdef_t
 {
 	int    x, y, width, height;

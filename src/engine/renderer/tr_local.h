@@ -577,6 +577,17 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 		float   angle;
 	};
 
+	// a trRefPortal_t has all the information passed in by
+	// the client game, as well as some locally derived info
+	/* struct trRefPortal_t {
+		// public from client game
+		refPortal_t portal;
+
+		// local
+
+	}; */
+
+
 // a trRefEntity_t has all the information passed in by
 // the client game, as well as some locally derived info
 	struct trRefEntity_t
@@ -1618,6 +1629,7 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 		vec3_t         pvsOrigin; // may be different than or.origin for portals
 
 		int            portalLevel; // number of portals this view is through
+		int            mirrorLevel;
 		bool           isMirror; // the portal is a mirror, invert the face culling
 
 		int            frameSceneNum; // copied from tr.frameSceneNum
@@ -2165,6 +2177,13 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 		int                numLights;
 		trRefLight_t       *lights;
 
+		/* int                   numPortals;
+		trRefPortal_t         *portals;
+		int                   numPortalCameras;
+		trRefPortalCamera_t   *portalCameras;
+		int                   numTargetPositions;
+		trRefTargetPosition_t *targetPositions; */
+
 		int                numInteractions;
 		interactionCache_t **interactions;
 
@@ -2554,6 +2573,8 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 // the renderer front end should never modify glState_t
 	struct glstate_t
 	{
+		int forceCullFaceMode = 0;
+		bool portalTest = false;
 		int    blendSrc, blendDst;
 		float  clearColorRed, clearColorGreen, clearColorBlue, clearColorAlpha;
 		double clearDepth;
@@ -2580,6 +2601,7 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 
 		bool        finishCalled;
 		cullType_t      faceCulling; // FIXME redundant cullFace
+		int             glFrontFace;
 		uint32_t        glStateBits;
 		uint32_t        glStateBitsMask; // GLS_ bits set to 1 will not be changed in GL_State
 		uint32_t        vertexAttribsState;
@@ -3150,7 +3172,7 @@ inline bool checkGLErrors()
 	float          R_NoiseGet4f( float x, float y, float z, float t );
 	void           R_NoiseInit();
 
-	void           R_RenderView( viewParms_t *parms );
+	void           R_RenderView( viewParms_t *parms, bool isPortal );
 	void           R_RenderPostProcess();
 
 	void           R_AddMDVSurfaces( trRefEntity_t *e );
@@ -3519,6 +3541,7 @@ inline bool checkGLErrors()
 
 	void Tess_StageIteratorDebug();
 	void Tess_StageIteratorGeneric();
+	void Tess_StageIteratorPortal();
 	void Tess_StageIteratorDepthFill();
 	void Tess_StageIteratorShadowFill();
 	void Tess_StageIteratorLighting();

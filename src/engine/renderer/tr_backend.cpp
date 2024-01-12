@@ -386,7 +386,7 @@ void GL_PolygonOffset( float factor, float units )
 
 void GL_Cull( cullType_t cullType )
 {
-	if ( backEnd.viewParms.isMirror )
+	if ( backEnd.viewParms.mirrorLevel % 2 == 1 )
 	{
 		GL_FrontFace( GL_CW );
 	}
@@ -400,7 +400,7 @@ void GL_Cull( cullType_t cullType )
 		return;
 	}
 
-	if ( cullType == cullType_t::CT_TWO_SIDED )
+	if ( cullType == cullType_t::CT_TWO_SIDED || glState.forceCullFaceMode )
 	{
 		glDisable( GL_CULL_FACE );
 	}
@@ -759,7 +759,7 @@ static void SetViewportAndScissor()
 	vec4_t	q, c;
 
 	memcpy( mat, backEnd.viewParms.projectionMatrix, sizeof(mat) );
-	if( backEnd.viewParms.portalLevel > 0 )
+	if( backEnd.viewParms.portalLevel > 10 )
 	{
 		VectorCopy(backEnd.viewParms.portalFrustum[FRUSTUM_NEAR].normal, c);
 		c[3] = backEnd.viewParms.portalFrustum[FRUSTUM_NEAR].dist;
@@ -4711,7 +4711,17 @@ static void RB_RenderView( bool depthPass )
 	backEnd.projection2D = false;
 
 	// set the modelview matrix for the viewer
-	SetViewportAndScissor();
+	if ( !glState.portalTest || true ) {
+		SetViewportAndScissor();
+	}
+
+	// 1: -256 -102 -507 -499: 0
+	// 2: -499 -82 -745 -264: 1
+	// 3: -741 -63 -1103 -29: 3
+
+	//1: View: -504 -42 -398 -392
+	//2: Portal1: -743 -42 -846 -152
+	//3: Portal1Finalise - 1
 
 	// ensures that depth writes are enabled for the depth clear
 	GL_State( GLS_DEFAULT );
@@ -5556,8 +5566,8 @@ const RenderCommand *PreparePortalCommand::ExecuteSelf( ) const
 	glStencilFunc( GL_EQUAL, backEnd.viewParms.portalLevel + 1, 0xff );
 	glStencilOp( GL_KEEP, GL_KEEP, GL_KEEP );
 
-	GL_State( GLS_DEPTHMASK_TRUE | GLS_DEPTHTEST_DISABLE | GLS_COLORMASK_BITS );
-	glState.glStateBitsMask = GLS_DEPTHMASK_TRUE | GLS_DEPTHTEST_DISABLE | GLS_COLORMASK_BITS;
+	GL_State( GLS_DEPTHMASK_TRUE /* | GLS_DEPTHTEST_DISABLE */ | GLS_COLORMASK_BITS | GLS_DEPTHFUNC_ALWAYS);
+	glState.glStateBitsMask = GLS_DEPTHMASK_TRUE /* | GLS_DEPTHTEST_DISABLE */ | GLS_COLORMASK_BITS | GLS_DEPTHFUNC_ALWAYS;
 
 	Tess_Begin( Tess_StageIteratorGeneric, nullptr, shader,
 		    nullptr, false, false, -1, -1 );
@@ -5567,6 +5577,11 @@ const RenderCommand *PreparePortalCommand::ExecuteSelf( ) const
 	glState.glStateBitsMask = 0;
 
 	glDepthRange( 0.0f, 1.0f );
+
+	glState.portalTest = true;
+	// glState.forceCullFaceMode = 1;
+
+	// GL_Cull( cullType_t::CT_TWO_SIDED );
 
 	// keep stencil test enabled !
 
@@ -5580,6 +5595,9 @@ RB_FinalisePortal
 */
 const RenderCommand *FinalisePortalCommand::ExecuteSelf( ) const
 {
+	// glState.forceCullFaceMode = 0;
+	// GL_Cull( cullType_t::CT_FRONT_SIDED );
+	glState.portalTest = false;
 	GLimp_LogComment( "--- FinalisePortalCommand::ExecuteSelf ---\n" );
 
 	backEnd.refdef = refdef;
@@ -5604,6 +5622,9 @@ const RenderCommand *FinalisePortalCommand::ExecuteSelf( ) const
 
 	GL_LoadModelViewMatrix( backEnd.orientation.modelViewMatrix );
 
+	GL_State( GLS_DEPTHMASK_TRUE | GLS_DEPTHFUNC_ALWAYS );
+	glState.glStateBitsMask = GLS_DEPTHMASK_TRUE | GLS_DEPTHFUNC_ALWAYS;
+
 	glStencilFunc( GL_EQUAL, backEnd.viewParms.portalLevel + 1, 0xff );
 	glStencilOp( GL_KEEP, GL_KEEP, GL_DECR );
 
@@ -5611,15 +5632,32 @@ const RenderCommand *FinalisePortalCommand::ExecuteSelf( ) const
 	glState.glStateBitsMask = GLS_DEPTHMASK_TRUE | GLS_DEPTHFUNC_ALWAYS | GLS_COLORMASK_BITS;
 
 	Tess_Begin( Tess_StageIteratorGeneric, nullptr, shader,
+		nullptr, false, false, -1, -1 );
+	rb_surfaceTable[Util::ordinal( *( surface->surface ) )]( surface->surface );
+	Tess_End();
+
+	glStencilFunc( GL_EQUAL, backEnd.viewParms.portalLevel + 1, 0xff );
+	glStencilOp( GL_KEEP, GL_KEEP, GL_DECR );
+
+	GL_State( GLS_DEPTHMASK_TRUE | GLS_COLORMASK_BITS | GLS_DEPTHFUNC_ALWAYS);
+	glState.glStateBitsMask = GLS_DEPTHMASK_TRUE | GLS_COLORMASK_BITS | GLS_DEPTHFUNC_ALWAYS;
+
+	Tess_Begin( Tess_StageIteratorPortal, nullptr, shader,
 		    nullptr, false, false, -1, -1 );
 	rb_surfaceTable[Util::ordinal(*(surface->surface))](surface->surface );
 	Tess_End();
+
+	glStencilFunc( GL_EQUAL, backEnd.viewParms.portalLevel, 0xff );
+	glStencilOp( GL_KEEP, GL_KEEP, GL_KEEP );
 
 	glState.glStateBitsMask = 0;
 
 	if( backEnd.viewParms.portalLevel == 0 ) {
 		glDisable( GL_STENCIL_TEST );
 	}
+
+	// glStencilFunc( GL_EQUAL, backEnd.viewParms.portalLevel, 0xff );
+	// glStencilOp( GL_KEEP, GL_KEEP, GL_KEEP );
 
 	return this + 1;
 }
@@ -5884,10 +5922,53 @@ void RB_ExecuteRenderCommands( const void *data )
 		backEnd.smpFrame = 1;
 	}
 
+	Log::Warn( "CMD: Start" );
 	while ( cmd != nullptr )
 	{
+		/* if ( dynamic_cast< const SetColorCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: ColorCommand" );
+		} else if ( dynamic_cast< const SetColorGradingCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: ColorGradingCommand" );
+		} else if ( dynamic_cast< const DrawBufferCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: DrawBufferCommand" );
+		} else if ( dynamic_cast< const SwapBuffersCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: SwapBufferCommand" );
+		} else if ( dynamic_cast< const StretchPicCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: StretchPicCommand" );
+		} else if ( dynamic_cast< const RotatedPicCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: RotatedPicCommand" );
+		} else if ( dynamic_cast< const GradientPicCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: GradientPicCommand" );
+		} else if ( dynamic_cast< const Poly2dCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: Poly2dCommand" );
+		} else if ( dynamic_cast< const Poly2dIndexedCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: Poly2dIndexedCommand" );
+		} else if ( dynamic_cast< const ScissorSetCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: ScissorSetCommand" );
+		} else if ( dynamic_cast< const SetMatrixTransformCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: SetMatrixTransformCommand" );
+		} else if ( dynamic_cast< const ResetMatrixTransformCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: ResetMatrixTransformCommand" );
+		} else if ( dynamic_cast< const DrawViewCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: DrawViewCommand" );
+		} else if ( dynamic_cast< const SetupLightsCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: SetupLightsCommand" );
+		} else if ( dynamic_cast< const RenderFinishCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: RenderFinishCommand" );
+		} else if ( dynamic_cast< const RenderPostProcessCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: RenderPostProcessCommand" );
+		} else if ( dynamic_cast< const ClearBufferCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: ClearBufferCommand" );
+		} else if ( dynamic_cast< const PreparePortalCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: PreparePortalCommand" );
+		} else if ( dynamic_cast< const FinalisePortalCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: FinalisePortalCommand" );
+		} else if ( dynamic_cast< const EndOfListCommand* >( cmd ) != nullptr ) {
+			Log::Warn( "CMD: EndOfListCommand" );
+		} */
 		cmd = cmd->ExecuteSelf();
 	}
+	Log::Warn( "CMD: End" );
 	// stop rendering on this thread
 	t2 = ri.Milliseconds();
 	backEnd.pc.msec = t2 - t1;
