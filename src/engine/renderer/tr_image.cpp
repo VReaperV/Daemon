@@ -146,10 +146,10 @@ void GL_TextureMode( const char *string )
 
 /*
 ===============
-R_ListImages_f
+R_ImageList_f
 ===============
 */
-void R_ListImages_f()
+void R_ImageList_f()
 {
 	int        i;
 	image_t    *image;

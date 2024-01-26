@@ -583,10 +583,10 @@ skelAnimation_t *R_GetAnimationByHandle( qhandle_t index )
 
 /*
 ================
-R_ListAnimations_f
+R_AnimationList_f
 ================
 */
-void R_ListAnimations_f()
+void R_AnimationList_f()
 {
 	int             i;
 	skelAnimation_t *anim;

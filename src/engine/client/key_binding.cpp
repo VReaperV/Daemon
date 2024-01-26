@@ -456,11 +456,11 @@ std::string ExtraInfoKeyString(Key key)
 	return KeyToString(key);
 }
 
-class ListBindsCmd: public Cmd::StaticCmd
+class BindListCmd: public Cmd::StaticCmd
 {
 public:
-	ListBindsCmd():
-		StaticCmd("listBinds", Cmd::KEY_BINDING, "Lists all key bindings")
+	BindListCmd():
+		StaticCmd("bindlist", Cmd::KEY_BINDING, "Lists all key bindings")
 	{}
 
 	void Run(const Cmd::Args&) const override
@@ -811,7 +811,7 @@ public:
 	// TODO: completion
 };
 
-const ListBindsCmd ListBindsCmdRegistration;
+const BindListCmd BindListCmdRegistration;
 const BindCmd BindCmdRegistration{"bind", "Set or view command to be executed when a key is pressed", false};
 const BindCmd TeambindCmdRegistration{"teambind", "Set key binding for a specific team", true};
 const EditBindCmd EditBindCmdRegistration;

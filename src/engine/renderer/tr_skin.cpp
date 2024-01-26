@@ -329,10 +329,10 @@ skin_t         *R_GetSkinByHandle( qhandle_t hSkin )
 
 /*
 ===============
-R_ListSkins_f
+R_SkinList_f
 ===============
 */
-void R_ListSkins_f()
+void R_SkinList_f()
 {
 	int    i, j;
 	skin_t *skin;
