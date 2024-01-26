@@ -1331,9 +1331,6 @@ static bool R_GetPortalOrientations( drawSurf_t *drawSurf, orientation_t *surfac
 			VectorMA( tr.viewParms.orientation.axis[0], -2 * DotProduct( tr.viewParms.orientation.axis[0], plane.normal ), plane.normal, outAxis[0] );
 			VectorMA( tr.viewParms.orientation.axis[1], -2 * DotProduct( tr.viewParms.orientation.axis[1], plane.normal ), plane.normal, outAxis[1] );
 			CrossProduct( outAxis[0], outAxis[1], outAxis[2] );
-			if ( tr.viewParms.mirrorLevel % 2 == 0 ) {
-				VectorInverse( outAxis[2] );
-			}
 
 			*mirror = true;
 			return true;
@@ -1406,9 +1403,6 @@ static bool R_GetPortalOrientations( drawSurf_t *drawSurf, orientation_t *surfac
 		VectorCopy( currentAxis, outAxis[1] );
 
 		CrossProduct( outAxis[0], outAxis[1], outAxis[2] );
-		if ( tr.viewParms.mirrorLevel % 2 == 1 ) { // Mirrors flip the up vector
-			VectorInverse( outAxis[2] );
-		}
 
 		vec3_t newOrigin;
 		VectorSubtract( portalCenter, tr.viewParms.orientation.origin, newOrigin );
@@ -1924,6 +1918,9 @@ static bool R_MirrorViewBySurface(drawSurf_t *drawSurf)
 	}
 	if ( newParms.isMirror ) {
 		newParms.mirrorLevel++;
+	}
+	if ( newParms.mirrorLevel % 2 == 1 ) { // Mirrors flip the up vector
+		VectorInverse( newParms.orientation.axis[2] );
 	}
 
 	// draw stencil mask
