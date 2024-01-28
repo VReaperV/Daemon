@@ -1353,11 +1353,6 @@ static bool R_GetPortalOrientations( drawSurf_t *drawSurf, orientation_t *surfac
 				RotatePointAroundVector( e->e.axis[ 1 ], e->e.axis[ 0 ], transformed, d );
 				CrossProduct( e->e.axis[ 0 ], e->e.axis[ 1 ], e->e.axis[ 2 ] );
 			}
-		} else if ( e->e.skinNum ) {
-			d = e->e.skinNum;
-			VectorCopy( e->e.axis[ 1 ], transformed);
-			RotatePointAroundVector( e->e.axis[ 1 ], e->e.axis[ 0 ], transformed, d );
-			CrossProduct( e->e.axis[ 0 ], e->e.axis[ 1 ], e->e.axis[ 2 ] );
 		}
 
 		vec3_t axisAngles;
@@ -1383,13 +1378,15 @@ static bool R_GetPortalOrientations( drawSurf_t *drawSurf, orientation_t *surfac
 		vec3_t currentAxis;
 
 		VectorCopy( tr.viewParms.orientation.axis[0], currentAxis );
-		float currentAxisZ = currentAxis[2]; // QuatTransformVector rotates on a local plane
-		currentAxis[2] = 0.0;                // So transform in the worlds XY plane first
+		// QuatTransformVector rotates on a local plane so transform in the worlds XY plane first
+		float currentAxisZ = currentAxis[2];
+		currentAxis[2] = 0.0;
 		QuatTransformVector( surfToWorldQuatYaw, tr.viewParms.orientation.axis[0], currentAxis );
 		currentAxis[2] = currentAxisZ;
-		QuatTransformVector( surfToWorldQuatPitch, currentAxis, currentAxis ); // Have to keep rotation separate for each axis
-		QuatTransformVector( surfToWorldQuatRoll, currentAxis, currentAxis );  // in a local to world transform to get the correct
-		QuatTransformVector( worldToCameraQuat, currentAxis, currentAxis );    // result
+		// Have to keep rotation separate for each axis in a local to world transform to get the correct result
+		QuatTransformVector( surfToWorldQuatPitch, currentAxis, currentAxis );
+		QuatTransformVector( surfToWorldQuatRoll, currentAxis, currentAxis );
+		QuatTransformVector( worldToCameraQuat, currentAxis, currentAxis );
 		VectorCopy( currentAxis, outAxis[0] );
 
 		VectorCopy( tr.viewParms.orientation.axis[1], currentAxis );
