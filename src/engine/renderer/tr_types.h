@@ -336,6 +336,7 @@ struct glconfig_t
 	char                 vendor_string[ MAX_STRING_CHARS ];
 	char                 version_string[ MAX_STRING_CHARS ];
 
+	int                  maxTextureUnits;
 	int                  maxTextureSize; // queried from GL
 
 	int colorBits;

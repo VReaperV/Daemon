@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "botlib/bot_debug.h"
 #include "tr_public.h"
 #include "iqm.h"
+#include "TextureManager.h"
 
 #define GLEW_NO_GLU
 #include <GL/glew.h>
@@ -707,6 +708,7 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 
 		GLenum         type;
 		GLuint         texnum; // gl texture binding
+		Texture        texture;
 
 		uint16_t       width, height; // source image
 		uint16_t       uploadWidth, uploadHeight; // after power of two and picmip but not including clamp to MAX_TEXTURE_SIZE
@@ -2737,6 +2739,8 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 
 		world_t    *world;
 
+		TextureManager textureManager;
+
 		const byte *externalVisData; // from RE_SetWorldVisData, shared with CM_Load
 
 		image_t    *defaultImage;
@@ -2979,6 +2983,7 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 	extern cvar_t *r_ext_texture_float;
 	extern cvar_t *r_ext_texture_integer;
 	extern cvar_t *r_ext_texture_rg;
+	extern cvar_t* r_ext_bindless_textures;
 	extern cvar_t *r_ext_texture_filter_anisotropic;
 	extern cvar_t *r_ext_gpu_shader4;
 	extern cvar_t *r_arb_buffer_storage;
@@ -3250,12 +3255,12 @@ inline bool checkGLErrors()
 	====================================================================
 	*/
 	void GL_Bind( image_t *image );
-	void GL_BindNearestCubeMap( const vec3_t xyz );
+	void GL_BindNearestCubeMap( GLint location, const vec3_t xyz );
 	void GL_Unbind( image_t *image );
-	void BindAnimatedImage( textureBundle_t *bundle );
+	void BindAnimatedImage( GLint location, textureBundle_t *bundle );
 	void GL_TextureFilter( image_t *image, filterType_t filterType );
 	void GL_BindProgram( shaderProgram_t *program );
-	void GL_BindToTMU( int unit, image_t *image );
+	void GL_BindToTMU( GLint unit, image_t *image );
 	void GL_BindNullProgram();
 	void GL_SetDefaultState();
 	void GL_SelectTexture( int unit );

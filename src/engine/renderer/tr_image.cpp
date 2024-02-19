@@ -140,6 +140,11 @@ void GL_TextureMode( const char *string )
 			{
 				glTexParameterf( image->type, GL_TEXTURE_MAX_ANISOTROPY_EXT, r_ext_texture_filter_anisotropic->value );
 			}
+
+			// Getting bindless handle makes the texture immutable, so generate it again because we used glTexParameter*
+			if ( glConfig2.bindlessTexturesAvailable ) {
+				image->texture.GenBindlessHandle();
+			}
 		}
 	}
 }
@@ -1369,6 +1374,7 @@ image_t        *R_AllocImage( const char *name, bool linkIntoHashTable )
 	memset( image, 0, sizeof( image_t ) );
 
 	glGenTextures( 1, &image->texnum );
+	image->texture.textureHandle = image->texnum;
 
 	Com_AddToGrowList( &tr.images, image );
 
@@ -1419,6 +1425,7 @@ image_t *R_CreateImage( const char *name, const byte **pic, int width, int heigh
 	}
 
 	image->type = GL_TEXTURE_2D;
+	image->texture.target = GL_TEXTURE_2D;
 
 	image->width = width;
 	image->height = height;
@@ -1451,6 +1458,7 @@ image_t *R_CreateGlyph( const char *name, const byte *pic, int width, int height
 	}
 
 	image->type = GL_TEXTURE_2D;
+	image->texture.target = GL_TEXTURE_2D;
 	image->width = width;
 	image->height = height;
 	image->bits = IF_NOPICMIP;
@@ -1497,6 +1505,7 @@ image_t *R_CreateCubeImage( const char *name, const byte *pic[ 6 ], int width, i
 	}
 
 	image->type = GL_TEXTURE_CUBE_MAP;
+	image->texture.target = GL_TEXTURE_CUBE_MAP;
 
 	image->width = width;
 	image->height = height;
@@ -1533,6 +1542,7 @@ image_t *R_Create3DImage( const char *name, const byte *pic, int width, int heig
 	}
 
 	image->type = GL_TEXTURE_3D;
+	image->texture.target = GL_TEXTURE_3D;
 
 	image->width = width;
 	image->height = height;
@@ -3037,8 +3047,12 @@ void R_ShutdownImages()
 	{
 		image = (image_t*) Com_GrowListElement( &tr.images, i );
 
+		if ( image->texture.IsResident() ) {
+			image->texture.MakeNonResident();
+		}
 		glDeleteTextures( 1, &image->texnum );
 	}
+	tr.textureManager.FreeTextures();
 
 	memset( glState.currenttextures, 0, sizeof( glState.currenttextures ) );
 
