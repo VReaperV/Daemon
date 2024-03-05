@@ -49,15 +49,17 @@ enum {
 
 class Texture {
 	public:
-	GLuint textureHandle;
-	GLuint64 bindlessTextureHandle;
-	bool hasBindlessHandle;
+	GLuint textureHandle = 0;
+	GLuint64 bindlessTextureHandle = 0;
+	bool hasBindlessHandle = false;
 
-	int frameBindCounter;
-	int totalBindCounter;
+	int frameBindCounter = 0;
+	int totalBindCounter = 0;
 
-	GLenum target;
-	float adjustedPriority;
+	GLenum target = GL_TEXTURE_2D;
+
+	int basePriority = 0;
+	float adjustedPriority = 0.0f;
 
 	Texture();
 	~Texture();
@@ -70,13 +72,17 @@ class Texture {
 
 	void GenBindlessHandle();
 
+	struct Compare {
+		bool operator() ( const Texture* lhs, const Texture* rhs ) {
+			if ( lhs->adjustedPriority != rhs->adjustedPriority ) {
+				return lhs->adjustedPriority > rhs->adjustedPriority;
+			}
+			return lhs->adjustedPriority < rhs->adjustedPriority;
+		}
+	};
+
 	private:
-		bool bindlessTextureResident;
-
-		int basePriority;
-
-		float frameUsage;
-		float totalUsage;
+		bool bindlessTextureResident = false;
 };
 
 class TextureManager {
@@ -87,6 +93,7 @@ class TextureManager {
 	void UpdateAdjustedPriorities();
 
 	void BindTexture( const GLint location, Texture* texture );
+	void AllNonResident();
 	void BindReservedTexture( const GLenum target, const GLuint handle );
 	void StartTextureSequence();
 	void EndTextureSequence();

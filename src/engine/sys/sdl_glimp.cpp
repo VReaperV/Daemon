@@ -1784,8 +1784,6 @@ static void GLimp_InitExtensions()
 	// made required in OpenGL 3.0
 	glConfig2.textureRGAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_CORE, ARB_texture_rg, r_ext_texture_rg->value );
 
-	glConfig2.bindlessTexturesAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_CORE, ARB_bindless_texture, r_ext_bindless_textures->value );
-
 	{
 		/* GT218-based GPU with Nvidia 340.108 driver advertising
 		ARB_texture_gather extension is know to fail to compile
@@ -1932,6 +1930,9 @@ static void GLimp_InitExtensions()
 
 	// made required in OpenGL 3.2
 	glConfig2.syncAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_CORE, ARB_sync, r_arb_sync->value );
+
+	// not required by any OpenGL version
+	glConfig2.bindlessTexturesAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_NONE, ARB_bindless_texture, r_arb_bindless_texture->value );
 
 	GL_CheckErrors();
 }

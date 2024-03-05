@@ -379,7 +379,7 @@ static void addExtension( std::string &str, int enabled, int minGlslVersion,
 			  int supported, const char *name ) {
 	if( !enabled ) {
 		// extension disabled by user
-	} else if( glConfig2.shadingLanguageVersion >= minGlslVersion ) {
+	} else if ( minGlslVersion != -1 && glConfig2.shadingLanguageVersion >= minGlslVersion ) {
 		// the extension is available in the core language
 		str += Str::Format( "#define HAVE_%s 1\n", name );
 	} else if( supported ) {
@@ -421,7 +421,7 @@ static std::string GenVersionDeclaration() {
 		      GLEW_ARB_gpu_shader5, "ARB_gpu_shader5" );
 	addExtension( str, r_arb_uniform_buffer_object->integer, 140,
 		      GLEW_ARB_uniform_buffer_object, "ARB_uniform_buffer_object" );
-	addExtension( str, glConfig2.bindlessTexturesAvailable, 400,
+	addExtension( str, glConfig2.bindlessTexturesAvailable, -1,
 		      GLEW_ARB_bindless_texture, "ARB_bindless_texture" );
 
 	return str;
