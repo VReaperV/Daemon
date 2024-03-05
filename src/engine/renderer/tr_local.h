@@ -296,6 +296,8 @@ static inline void glFboSetExt()
 enum class lightMode_t { FULLBRIGHT, VERTEX, GRID, MAP };
 enum class deluxeMode_t { NONE, GRID, MAP };
 
+enum class dynamicLightRenderer_t { LEGACY, TILED };
+
 	enum class renderSpeeds_t
 	{
 	  RSPEEDS_GENERAL = 1,
@@ -1181,9 +1183,9 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 	  ST_LIGHTMAP,
 	  ST_STYLELIGHTMAP,
 	  ST_STYLECOLORMAP,
-	  ST_COLLAPSE_lighting_PBR,   // map|diffusemap + opt:normalmap + opt:glowmap + opt:physicalmap
-	  ST_COLLAPSE_lighting_PHONG, // map|diffusemap + opt:normalmap + opt:glowmap + specularmap
-	  ST_COLLAPSE_reflection_CB,  // color cubemap + normalmap
+	  ST_COLLAPSE_COLORMAP,
+	  ST_COLLAPSE_DIFFUSEMAP,
+	  ST_COLLAPSE_REFLECTIONMAP,  // color cubemap + normalmap
 
 	  // light shader stage types
 	  ST_ATTENUATIONMAP_XY,
@@ -1194,9 +1196,9 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 	{
 	  COLLAPSE_none,
 	  COLLAPSE_generic, // used before we know it's another one
-	  COLLAPSE_lighting_PHONG,
-	  COLLAPSE_lighting_PBR,
-	  COLLAPSE_reflection_CB,
+	  COLLAPSE_PHONG,
+	  COLLAPSE_PBR,
+	  COLLAPSE_REFLECTIONMAP,
 	};
 
 	struct shaderStage_t
@@ -1228,8 +1230,6 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 
 		bool        tcGen_Environment;
 		bool        tcGen_Lightmap;
-
-		bool implicitLightmap;
 
 		Color::Color32Bit constantColor; // for CGEN_CONST and AGEN_CONST
 
@@ -2948,8 +2948,9 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 	extern cvar_t *r_lightScale;
 
 	extern cvar_t *r_fastsky; // controls whether sky should be cleared or drawn
-	extern cvar_t *r_dynamicLight; // dynamic lights enabled/disabled
-	extern cvar_t *r_staticLight; // static lights enabled/disabled
+	extern Cvar::Range<Cvar::Cvar<int>> r_dynamicLightRenderer;
+	extern Cvar::Cvar<bool> r_dynamicLight;
+	extern Cvar::Cvar<bool> r_staticLight;
 	extern cvar_t *r_dynamicLightCastShadows;
 	extern cvar_t *r_precomputedLighting;
 	extern Cvar::Cvar<int> r_mapOverBrightBits;
@@ -3030,10 +3031,7 @@ enum class deluxeMode_t { NONE, GRID, MAP };
 
 	extern cvar_t *r_clear; // force screen clear every frame
 
-	extern cvar_t *r_shadows; // controls shadows: 0 = none, 1 = blur, 2 = black planar projection,
-
-// 3 = stencil shadow volumes
-// 4 = shadow mapping
+	extern Cvar::Range<Cvar::Cvar<int>> r_shadows;
 	extern cvar_t *r_softShadows;
 	extern cvar_t *r_softShadowsPP;
 	extern cvar_t *r_shadowBlur;
