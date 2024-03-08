@@ -75,7 +75,7 @@ void Texture::GenBindlessHandle() {
 // TextureManager textureManager;
 
 TextureManager::TextureManager() {
-	textureUnits.reserve( glConfig2.maxTextureUnits );
+	textureUnits.reserve( glConfig.maxTextureUnits );
 }
 
 TextureManager::~TextureManager() = default;
@@ -166,7 +166,7 @@ void TextureManager::BindTexture( const GLint location, Texture *texture ) {
 	}
 
 	// Slot 0 is reserved for non-rendering OpenGL calls that require textures to be bound
-	if ( textureUnits.size() + 1 < (size_t) glConfig2.maxTextureUnits ) {
+	if ( textureUnits.size() + 1 < (size_t) glConfig.maxTextureUnits ) {
 		textureUnits.push_back( texture );
 		glActiveTexture( GL_TEXTURE1 + textureUnits.size() - 1 );
 		handle = textureUnits.size() - 1;

@@ -157,7 +157,7 @@ void GL_SelectTexture( int unit )
 		return;
 	}
 
-	if ( unit >= 0 && unit <= glConfig2.maxTextureUnits )
+	if ( unit >= 0 && unit <= glConfig.maxTextureUnits )
 	{
 		glActiveTexture( GL_TEXTURE0 + unit );
 
