@@ -72,13 +72,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 	cvar_t      *r_lightScissors;
 	cvar_t      *r_noLightVisCull;
 	cvar_t      *r_noInteractionSort;
-	Cvar::Range<Cvar::Cvar<int>> r_dynamicLightRenderer( "r_dynamicLightRenderer",
-		"renderer for dynamic lights: 0: legacy, 1: tiled", Cvar::NONE,
-		Util::ordinal(dynamicLightRenderer_t::TILED),
-		Util::ordinal(dynamicLightRenderer_t::LEGACY),
-		Util::ordinal(dynamicLightRenderer_t::TILED) );
-	Cvar::Cvar<bool> r_dynamicLight( "r_dynamicLight", "enable dynamic lights", Cvar::NONE, true );
-	Cvar::Cvar<bool> r_staticLight( "r_staticLight", "enable static lights", Cvar::NONE, true );
+	cvar_t      *r_dynamicLight;
+	cvar_t      *r_staticLight;
 	cvar_t      *r_dynamicLightCastShadows;
 	cvar_t      *r_precomputedLighting;
 	Cvar::Cvar<int> r_mapOverBrightBits("r_mapOverBrightBits", "default map light color shift", Cvar::NONE, 2);
@@ -113,11 +108,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 	cvar_t      *r_colorbits;
 
 	cvar_t      *r_drawBuffer;
-
-	Cvar::Range<Cvar::Cvar<int>> r_shadows( "cg_shadows", "shadowing mode", Cvar::NONE,
-		Util::ordinal(shadowingMode_t::SHADOWING_BLOB),
-		Util::ordinal(shadowingMode_t::SHADOWING_NONE),
-		Util::ordinal(shadowingMode_t::SHADOWING_EVSM32) );
+	cvar_t      *r_shadows;
 	cvar_t      *r_softShadows;
 	cvar_t      *r_softShadowsPP;
 	cvar_t      *r_shadowBlur;
@@ -1205,11 +1196,9 @@ ScreenshotCmd screenshotPNGRegistration("screenshotPNG", ssFormat_t::SSF_PNG, "p
 
 		r_noLightVisCull = Cvar_Get( "r_noLightVisCull", "0", CVAR_CHEAT );
 		r_noInteractionSort = Cvar_Get( "r_noInteractionSort", "0", CVAR_CHEAT );
+		r_dynamicLight = Cvar_Get( "r_dynamicLight", "2", CVAR_LATCH | CVAR_ARCHIVE );
 
-		Cvar::Latch( r_dynamicLightRenderer );
-		Cvar::Latch( r_dynamicLight );
-		Cvar::Latch( r_staticLight );
-
+		r_staticLight = Cvar_Get( "r_staticLight", "2", CVAR_ARCHIVE );
 		r_drawworld = Cvar_Get( "r_drawworld", "1", CVAR_CHEAT );
 		r_portalOnly = Cvar_Get( "r_portalOnly", "0", CVAR_CHEAT );
 		r_portalSky = Cvar_Get( "cg_skybox", "1", 0 );
@@ -1261,7 +1250,8 @@ ScreenshotCmd screenshotPNGRegistration("screenshotPNG", ssFormat_t::SSF_PNG, "p
 		r_lockpvs = Cvar_Get( "r_lockpvs", "0", CVAR_CHEAT );
 		r_noportals = Cvar_Get( "r_noportals", "0", CVAR_CHEAT );
 
-		Cvar::Latch( r_shadows );
+		r_shadows = Cvar_Get( "cg_shadows", "1",  CVAR_LATCH );
+		AssertCvarRange( r_shadows, 0, Util::ordinal(shadowingMode_t::SHADOWING_EVSM32), true );
 
 		r_softShadows = Cvar_Get( "r_softShadows", "0",  CVAR_LATCH );
 		AssertCvarRange( r_softShadows, 0, 6, true );

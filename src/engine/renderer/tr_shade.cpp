@@ -34,28 +34,12 @@ This file deals with applying shaders to surface data in the tess struct.
 
 static void EnableAvailableFeatures()
 {
-	glConfig2.dynamicLight = r_dynamicLight.Get();
-	glConfig2.staticLight = r_staticLight.Get();
+	glConfig2.dynamicLight = r_dynamicLight->integer;
 
-	if ( r_dynamicLightRenderer.Get() == Util::ordinal( dynamicLightRenderer_t::TILED )
-		&& !glConfig2.textureFloatAvailable )
+	if ( glConfig2.dynamicLight > 0 && !glConfig2.textureFloatAvailable )
 	{
-		if ( glConfig2.dynamicLight || glConfig2.staticLight )
-		{
-			Log::Warn("Tiled dynamic light renderer not used because GL_ARB_texture_float is not available.");
-		}
-
-		glConfig2.dynamicLight = false;
-		glConfig2.staticLight = false;
-	}
-
-	glConfig2.shadowingMode = shadowingMode_t( r_shadows.Get() );
-
-	glConfig2.shadowMapping = glConfig2.shadowingMode >= shadowingMode_t::SHADOWING_ESM16;
-
-	if ( !glConfig2.textureFloatAvailable )
-	{
-		glConfig2.shadowMapping = false;
+		Log::Warn("Tiled dynamic light renderer not used because GL_ARB_texture_float is not available.");
+		glConfig2.dynamicLight = 0;
 	}
 }
 
@@ -81,43 +65,37 @@ static void GLSL_InitGPUShadersOrError()
 	// standard light mapping
 	gl_shaderManager.load( gl_lightMappingShader );
 
-	if ( glConfig2.dynamicLight )
+	/* Deprecated forward renderer uses r_dynamicLight -1
+
+	Dynamic shadowing code also needs this shader.
+	This code is not well known, so there may be a bug,
+	but commit a09f03bc8e775d83ac5e057593eff4e88cdea7eb mentions this:
+
+	> Use conventional shadow mapping code for inverse lights.
+	> This re-enables shadows for players in the tiled renderer.
+	> -- @gimhael
+
+	See also https://github.com/DaemonEngine/Daemon/pull/606#pullrequestreview-912402293 */
+	if ( glConfig2.dynamicLight < 0 || ( r_shadows->integer >= Util::ordinal(shadowingMode_t::SHADOWING_ESM16) ) )
 	{
-		dynamicLightRenderer_t dynamicLightRenderer = dynamicLightRenderer_t( r_dynamicLightRenderer.Get() );
+		// projective lighting ( Doom3 style )
+		gl_shaderManager.load( gl_forwardLightingShader_projXYZ );
+	}
 
-		switch( dynamicLightRenderer )
-		{
-		case dynamicLightRenderer_t::LEGACY:
-			// projective lighting ( Doom3 style )
-			gl_shaderManager.load( gl_forwardLightingShader_projXYZ );
+	// Deprecated forward renderer uses r_dynamicLight -1
+	if ( glConfig2.dynamicLight < 0 )
+	{
+		// omni-directional specular bump mapping ( Doom3 style )
+		gl_shaderManager.load( gl_forwardLightingShader_omniXYZ );
 
-			// omni-directional specular bump mapping ( Doom3 style )
-			gl_shaderManager.load( gl_forwardLightingShader_omniXYZ );
-
-			// directional sun lighting ( Doom3 style )
-			gl_shaderManager.load( gl_forwardLightingShader_directionalSun );
-			break;
-		case dynamicLightRenderer_t::TILED:
-			gl_shaderManager.load( gl_depthtile1Shader );
-			gl_shaderManager.load( gl_depthtile2Shader );
-			gl_shaderManager.load( gl_lighttileShader );
-			DAEMON_FALLTHROUGH;
-		default:
-			/* Dynamic shadowing code also needs this shader.
-			This code is not well known, so there may be a bug,
-			but commit a09f03bc8e775d83ac5e057593eff4e88cdea7eb mentions this:
-
-			> Use conventional shadow mapping code for inverse lights.
-			> This re-enables shadows for players in the tiled renderer.
-			> -- @gimhael
-
-			See also https://github.com/DaemonEngine/Daemon/pull/606#pullrequestreview-912402293 */
-			if ( glConfig2.shadowMapping )
-			{
-				// projective lighting ( Doom3 style )
-				gl_shaderManager.load( gl_forwardLightingShader_projXYZ );
-			}
-		}
+		// directional sun lighting ( Doom3 style )
+		gl_shaderManager.load( gl_forwardLightingShader_directionalSun );
+	}
+	else if ( glConfig2.dynamicLight > 0 )
+	{
+		gl_shaderManager.load( gl_depthtile1Shader );
+		gl_shaderManager.load( gl_depthtile2Shader );
+		gl_shaderManager.load( gl_lighttileShader );
 	}
 
 	// shadowmap distance compression
@@ -905,7 +883,7 @@ static void Render_lightMapping( shaderStage_t *pStage )
 	{
 		// Use fullbright on “surfaceparm nolightmap” materials.
 	}
-	else if ( pStage->type == stageType_t::ST_COLLAPSE_COLORMAP )
+	else if ( !pStage->implicitLightmap && pStage->type != stageType_t::ST_LIGHTMAP )
 	{
 		/* Use fullbright for collapsed stages without lightmaps,
 		for example:
@@ -985,7 +963,7 @@ static void Render_lightMapping( shaderStage_t *pStage )
 			// Deluxe mapping emulation from grid light for game models.
 			// Store lightGrid2 as deluxemap,
 			// the GLSL code will know how to deal with it.
-			deluxemap = tr.lightGrid2Image;
+		deluxemap = tr.lightGrid2Image;
 			break;
 
 		default:
@@ -1058,24 +1036,20 @@ static void Render_lightMapping( shaderStage_t *pStage )
 
 	gl_lightMappingShader->SetUniform_numLights( backEnd.refdef.numLights );
 
-	if( glConfig2.dynamicLight )
-	{
-		if ( backEnd.refdef.numShaderLights > 0 )
-		{	
-			if( glConfig2.uniformBufferObjectAvailable )
-			{
+	if ( glConfig2.dynamicLight ) {
+		if ( backEnd.refdef.numShaderLights > 0 ) {
+			if ( glConfig2.uniformBufferObjectAvailable ) {
 				gl_lightMappingShader->SetUniformBlock_Lights( tr.dlightUBO );
-			} else
-			{
+			} else {
 				GL_BindToTMU( gl_lightMappingShader->GetUniformLocation_LightsTexture(), tr.dlightImage );
 			}
 		}
+	}
 
-		// bind u_LightTiles
-		if ( r_dynamicLightRenderer.Get() == Util::ordinal( dynamicLightRenderer_t::TILED ) )
-		{
-			GL_BindToTMU( gl_lightMappingShader->GetUniformLocation_LightTiles(), tr.lighttileRenderImage );
-		}
+	// bind u_LightTiles
+	if ( glConfig2.dynamicLight > 0 )
+	{
+		GL_BindToTMU( gl_lightMappingShader->GetUniformLocation_LightTiles(), tr.lighttileRenderImage );
 	}
 
 	// u_DeformGen
@@ -1426,7 +1400,7 @@ static void Render_forwardLighting_DBS_omni( shaderStage_t *pStage,
 
 	GLimp_LogComment( "--- Render_forwardLighting_DBS_omni ---\n" );
 
-	bool shadowCompare = ( glConfig2.shadowMapping && !light->l.noShadows && light->shadowLOD >= 0 );
+	bool shadowCompare = ( r_shadows->integer >= Util::ordinal(shadowingMode_t::SHADOWING_ESM16) && !light->l.noShadows && light->shadowLOD >= 0 );
 
 	// choose right shader program ----------------------------------
 	gl_forwardLightingShader_omniXYZ->SetVertexSkinning( glConfig2.vboVertexSkinningAvailable && tess.vboVertexSkinning );
@@ -1608,7 +1582,7 @@ static void Render_forwardLighting_DBS_proj( shaderStage_t *pStage,
 
 	GLimp_LogComment( "--- Render_forwardLighting_DBS_proj ---\n" );
 
-	bool shadowCompare = ( glConfig2.shadowMapping && !light->l.noShadows && light->shadowLOD >= 0 );
+	bool shadowCompare = ( r_shadows->integer >= Util::ordinal(shadowingMode_t::SHADOWING_ESM16) && !light->l.noShadows && light->shadowLOD >= 0 );
 
 	// choose right shader program ----------------------------------
 	gl_forwardLightingShader_projXYZ->SetVertexSkinning( glConfig2.vboVertexSkinningAvailable && tess.vboVertexSkinning );
@@ -1789,7 +1763,7 @@ static void Render_forwardLighting_DBS_directional( shaderStage_t *pStage, trRef
 
 	GLimp_LogComment( "--- Render_forwardLighting_DBS_directional ---\n" );
 
-	bool shadowCompare = ( glConfig2.shadowMapping && !light->l.noShadows && light->shadowLOD >= 0 );
+	bool shadowCompare = ( r_shadows->integer >= Util::ordinal(shadowingMode_t::SHADOWING_ESM16) && !light->l.noShadows && light->shadowLOD >= 0 );
 
 	// choose right shader program ----------------------------------
 	gl_forwardLightingShader_directionalSun->SetVertexSkinning( glConfig2.vboVertexSkinningAvailable && tess.vboVertexSkinning );
@@ -2798,13 +2772,14 @@ void Tess_StageIteratorGeneric()
 
 			case stageType_t::ST_LIGHTMAP:
 			case stageType_t::ST_DIFFUSEMAP:
-			case stageType_t::ST_COLLAPSE_COLORMAP:
-			case stageType_t::ST_COLLAPSE_DIFFUSEMAP:
+			case stageType_t::ST_COLLAPSE_lighting_PHONG:
+			case stageType_t::ST_COLLAPSE_lighting_PBR:
 				Render_lightMapping( pStage );
+
 				break;
 
+			case stageType_t::ST_COLLAPSE_reflection_CB:
 			case stageType_t::ST_REFLECTIONMAP:
-			case stageType_t::ST_COLLAPSE_REFLECTIONMAP:
 				if ( r_reflectionMapping->integer )
 				{
 					Render_reflection_CB( pStage );
@@ -2844,7 +2819,7 @@ void Tess_StageIteratorGeneric()
 				{
 					/* FIXME: workaround to display something and not crash
 					when liquidMapping is enabled, until we fix liquidMap. */
-					pStage->type = stageType_t::ST_COLLAPSE_DIFFUSEMAP;
+					pStage->type = stageType_t::ST_DIFFUSEMAP;
 					pStage->bundle[ TB_DIFFUSEMAP ].image[ 0 ] = tr.whiteImage;
 					Render_lightMapping( pStage );
 				}
@@ -2914,10 +2889,10 @@ void Tess_StageIteratorPortal() {
 			case stageType_t::ST_COLORMAP:
 			case stageType_t::ST_LIGHTMAP:
 			case stageType_t::ST_DIFFUSEMAP:
-			case stageType_t::ST_COLLAPSE_COLORMAP:
-			case stageType_t::ST_COLLAPSE_DIFFUSEMAP:
+			case stageType_t::ST_COLLAPSE_lighting_PHONG:
+			case stageType_t::ST_COLLAPSE_lighting_PBR:
+			case stageType_t::ST_COLLAPSE_reflection_CB:
 			case stageType_t::ST_REFLECTIONMAP:
-			case stageType_t::ST_COLLAPSE_REFLECTIONMAP:
 			case stageType_t::ST_REFRACTIONMAP:
 			case stageType_t::ST_DISPERSIONMAP:
 			case stageType_t::ST_SKYBOXMAP:
@@ -2997,8 +2972,8 @@ void Tess_StageIteratorDepthFill()
 
 			case stageType_t::ST_LIGHTMAP:
 			case stageType_t::ST_DIFFUSEMAP:
-			case stageType_t::ST_COLLAPSE_COLORMAP:
-			case stageType_t::ST_COLLAPSE_DIFFUSEMAP:
+			case stageType_t::ST_COLLAPSE_lighting_PHONG:
+			case stageType_t::ST_COLLAPSE_lighting_PBR:
 				Render_depthFill( pStage );
 				break;
 
@@ -3074,8 +3049,8 @@ void Tess_StageIteratorShadowFill()
 
 			case stageType_t::ST_LIGHTMAP:
 			case stageType_t::ST_DIFFUSEMAP:
-			case stageType_t::ST_COLLAPSE_COLORMAP:
-			case stageType_t::ST_COLLAPSE_DIFFUSEMAP:
+			case stageType_t::ST_COLLAPSE_lighting_PHONG:
+			case stageType_t::ST_COLLAPSE_lighting_PBR:
 				Render_shadowFill( pStage );
 				break;
 
@@ -3188,7 +3163,8 @@ void Tess_StageIteratorLighting()
 			switch ( pStage->type )
 			{
 				case stageType_t::ST_DIFFUSEMAP:
-				case stageType_t::ST_COLLAPSE_DIFFUSEMAP:
+				case stageType_t::ST_COLLAPSE_lighting_PBR:
+				case stageType_t::ST_COLLAPSE_lighting_PHONG:
 					if ( light->l.rlType == refLightType_t::RL_OMNI )
 					{
 						Render_forwardLighting_DBS_omni( pStage, attenuationXYStage, attenuationZStage, light );
