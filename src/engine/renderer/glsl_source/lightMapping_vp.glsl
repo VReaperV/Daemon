@@ -98,4 +98,6 @@ void main()
 
 	// assign color
 	var_Color = color;
+
+	SETUP_SHADER_PARMS
 }

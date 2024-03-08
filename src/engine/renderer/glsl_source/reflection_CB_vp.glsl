@@ -67,5 +67,7 @@ void	main()
 
 	// transform normalmap texcoords
 	var_TexCoords = (u_TextureMatrix * vec4(texCoord, 0.0, 1.0)).st;
+
+	SETUP_SHADER_PARMS
 }
 

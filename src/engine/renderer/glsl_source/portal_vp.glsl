@@ -41,4 +41,6 @@ void	main()
 
 	// assign color
 	var_Color = attr_Color;
+
+	SETUP_SHADER_PARMS
 }

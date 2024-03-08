@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 // tr_surface.c
 #include "tr_local.h"
+#include "CommandQueue.h"
 
 /*
 ==============================================================================
@@ -171,6 +172,12 @@ static bool Tess_SurfaceVBO( VBO_t *vbo, IBO_t *ibo, int numIndexes, int firstIn
 
 	Tess_CheckVBOAndIBO( vbo, ibo );
 
+
+	/* if ( glConfig2.commandQueueAvailable ) {
+		globalCommandQueue.RegisterDrawcall( ( GLuint ) numIndexes, ( GLuint ) firstIndex );
+		return true;
+	} */
+
 	//lazy merge multidraws together
 	bool mergeBack = false;
 	bool mergeFront = false;
@@ -200,11 +207,13 @@ static bool Tess_SurfaceVBO( VBO_t *vbo, IBO_t *ibo, int numIndexes, int firstIn
 	else if ( mergeBack )
 	{
 		tess.multiDrawIndexes[ tess.multiDrawPrimitives - 1 ] = firstIndexOffset;
+		tess.multiDrawOffsets[ tess.multiDrawPrimitives - 1 ] = (GLuint) firstIndex;
 		tess.multiDrawCounts[ tess.multiDrawPrimitives - 1 ] += numIndexes;
 	}
 	else
 	{
 		tess.multiDrawIndexes[ tess.multiDrawPrimitives ] = firstIndexOffset;
+		tess.multiDrawOffsets[ tess.multiDrawPrimitives ] = (GLuint) firstIndex;
 		tess.multiDrawCounts[ tess.multiDrawPrimitives ] = numIndexes;
 
 		tess.multiDrawPrimitives++;

@@ -28,4 +28,6 @@ void	main()
 {
 	// no vertex transformation needed
 	gl_Position = vec4(attr_Position, 1.0);
+
+	SETUP_SHADER_PARMS
 }

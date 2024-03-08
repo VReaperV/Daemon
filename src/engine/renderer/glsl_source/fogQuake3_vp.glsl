@@ -99,4 +99,6 @@ void	main()
 	var_TexCoords = vec2(s, t);
 
 	var_Color = color;
+
+	SETUP_SHADER_PARMS
 }

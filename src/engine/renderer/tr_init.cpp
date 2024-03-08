@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_init.c -- functions that are not called every frame
 #include "tr_local.h"
 #include "framework/CvarSystem.h"
+#include "CommandQueue.h"
 
 	glconfig_t  glConfig;
 	glconfig2_t glConfig2;
@@ -105,6 +106,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 	cvar_t      *r_arb_texture_gather;
 	cvar_t      *r_arb_gpu_shader5;
 	cvar_t      *r_arb_bindless_texture;
+	cvar_t      *r_arb_shader_draw_parameters;
+	cvar_t      *r_arb_shader_storage_buffer_object;
+	cvar_t      *r_arb_multi_draw_indirect;
 
 	cvar_t      *r_checkGLErrors;
 	cvar_t      *r_logFile;
@@ -1103,6 +1107,9 @@ ScreenshotCmd screenshotPNGRegistration("screenshotPNG", ssFormat_t::SSF_PNG, "p
 		r_arb_texture_gather = Cvar_Get( "r_arb_texture_gather", "1", CVAR_CHEAT | CVAR_LATCH );
 		r_arb_gpu_shader5 = Cvar_Get( "r_arb_gpu_shader5", "1", CVAR_CHEAT | CVAR_LATCH );
 		r_arb_bindless_texture = Cvar_Get( "r_arb_bindless_texture", "1", CVAR_CHEAT | CVAR_LATCH );
+		r_arb_shader_draw_parameters = Cvar_Get( "r_arb_shader_draw_parameters", "1", CVAR_CHEAT | CVAR_LATCH );
+		r_arb_shader_storage_buffer_object = Cvar_Get( "r_arb_shader_storage_buffer_object", "1", CVAR_CHEAT | CVAR_LATCH );
+		r_arb_multi_draw_indirect = Cvar_Get( "r_arb_multi_draw_indirect", "1", CVAR_CHEAT | CVAR_LATCH );
 
 		r_picMip = Cvar_Get( "r_picMip", "0",  CVAR_LATCH | CVAR_ARCHIVE );
 		r_imageMaxDimension = Cvar_Get( "r_imageMaxDimension", "0",  CVAR_LATCH | CVAR_ARCHIVE );
@@ -1509,6 +1516,8 @@ ScreenshotCmd screenshotPNGRegistration("screenshotPNG", ssFormat_t::SSF_PNG, "p
 
 		// print info
 		GfxInfo_f();
+
+		globalCommandQueue.Init();
 
 		Log::Debug("----- finished R_Init -----" );
 

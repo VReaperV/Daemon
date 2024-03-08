@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // gl_shader.cpp -- GLSL shader handling
 
 #include <common/FileSystem.h>
+#include "CommandQueue.h"
 #include "gl_shader.h"
 
 // We currently write GLBinaryHeader to a file and memcpy all over it.
@@ -62,6 +63,18 @@ GLShader_depthtile2                      *gl_depthtile2Shader = nullptr;
 GLShader_lighttile                       *gl_lighttileShader = nullptr;
 GLShader_fxaa                            *gl_fxaaShader = nullptr;
 GLShaderManager                           gl_shaderManager;
+
+const GLuint GLUniform::GetSTD430Size() const {
+	return _std430Size;
+}
+
+const GLuint GLUniform::GetSTD430Alignment() const {
+	return _std430Alignment;
+}
+
+uint32_t* GLUniform::WriteToBuffer( uint32_t* buffer ) {
+	return buffer;
+}
 
 namespace // Implementation details
 {
@@ -408,9 +421,11 @@ static void AddConst( std::string& str, const std::string& name, float v1, float
 
 static std::string GenVersionDeclaration() {
 	// Basic version declaration
+	glConfig2.shadingLanguageVersion = 460;
 	std::string str = Str::Format( "#version %d %s\n",
 				       glConfig2.shadingLanguageVersion,
 				       glConfig2.shadingLanguageVersion >= 150 ? (glConfig2.glCoreProfile ? "core" : "compatibility") : "");
+	str += "\n#extension GL_ARB_gpu_shader_int64 : require\n";
 
 	// add supported GLSL extensions
 	addExtension( str, glConfig2.textureGatherAvailable, 400,
@@ -423,6 +438,10 @@ static std::string GenVersionDeclaration() {
 		      GLEW_ARB_uniform_buffer_object, "ARB_uniform_buffer_object" );
 	addExtension( str, glConfig2.bindlessTexturesAvailable, -1,
 		      GLEW_ARB_bindless_texture, "ARB_bindless_texture" );
+	addExtension( str, glConfig2.shaderDrawParametersAvailable, 460,
+			  GLEW_ARB_shader_draw_parameters, "ARB_shader_draw_parameters" );
+	addExtension( str, glConfig2.SSBOAvailable, 430,
+			  GLEW_ARB_shader_storage_buffer_object, "ARB_shader_storage_buffer_object" );
 
 	return str;
 }
@@ -454,6 +473,11 @@ static std::string GenVertexHeader() {
 			"#define OUT(mode) varying\n";
 	}
 
+	if ( glConfig2.shaderDrawParametersAvailable ) {
+		str += "OUT(flat) int in_drawID;\n";
+		str += "OUT(flat) int in_baseInstance;\n";
+	}
+
 	return str;
 }
 
@@ -479,6 +503,11 @@ static std::string GenFragmentHeader() {
 
 	if ( glConfig2.bindlessTexturesAvailable ) {
 		str += "layout(bindless_sampler) uniform;\n";
+	}
+
+	if ( glConfig2.shaderDrawParametersAvailable ) {
+		str += "IN(flat) int in_drawID;\n";
+		str += "IN(flat) int in_baseInstance;\n";
 	}
 
 	return str;
@@ -737,7 +766,7 @@ std::string     GLShaderManager::BuildGPUShaderText( Str::StringRef mainShaderNa
 		// We added a lot of stuff but if we do something bad
 		// in the GLSL shaders then we want the proper line
 		// so we have to reset the line counting.
-		libs += "#line 0\n";
+		// libs += "#line 0\n";
 	}
 
 	// load main() program
@@ -774,7 +803,7 @@ std::string     GLShaderManager::BuildGPUShaderText( Str::StringRef mainShaderNa
 	// We added a lot of stuff but if we do something bad
 	// in the GLSL shaders then we want the proper line
 	// so we have to reset the line counting.
-	env += "#line 0\n";
+	// env += "#line 0\n";
 
 	std::string shaderText = env + libs + GetShaderText(filename);
 
@@ -870,9 +899,9 @@ void GLShaderManager::buildPermutation( GLShader *shader, int macroIndex, int de
 		}
 
 		UpdateShaderProgramUniformLocations( shader, shaderProgram );
-		GL_BindProgram( shaderProgram );
-		shader->SetShaderProgramUniforms( shaderProgram );
-		GL_BindProgram( nullptr );
+		// GL_BindProgram( shaderProgram );
+		// shader->SetShaderProgramUniforms( shaderProgram );
+		// GL_BindProgram( nullptr );
 
 		GL_CheckErrors();
 
@@ -907,6 +936,8 @@ void GLShaderManager::InitShader( GLShader *shader )
 {
 	shader->_shaderPrograms = std::vector<shaderProgram_t>( static_cast<size_t>(1) << shader->_compileMacros.size() );
 
+	shader->PostProcessUniforms();
+
 	shader->_uniformStorageSize = 0;
 	for ( std::size_t i = 0; i < shader->_uniforms.size(); i++ )
 	{
@@ -923,6 +954,9 @@ void GLShaderManager::InitShader( GLShader *shader )
 	}
 
 	std::string vertexInlines;
+	if ( glConfig2.shaderDrawParametersAvailable ) {
+		vertexInlines = "commandQueue ";
+	}
 	shader->BuildShaderVertexLibNames( vertexInlines );
 
 	std::string fragmentInlines;
@@ -930,6 +964,10 @@ void GLShaderManager::InitShader( GLShader *shader )
 
 	shader->_vertexShaderText = BuildGPUShaderText( shader->GetMainShaderName(), vertexInlines, GL_VERTEX_SHADER );
 	shader->_fragmentShaderText = BuildGPUShaderText( shader->GetMainShaderName(), fragmentInlines, GL_FRAGMENT_SHADER );
+	if ( glConfig2.shaderDrawParametersAvailable && glConfig2.SSBOAvailable ) {
+		shader->_vertexShaderText = ShaderPostProcess( shader, shader->_vertexShaderText, true );
+		shader->_fragmentShaderText = ShaderPostProcess( shader, shader->_fragmentShaderText, false );
+	}
 	std::string combinedShaderText =
 		GLVersionDeclaration.getText()
 		+ GLCompatHeader.getText()
@@ -1143,6 +1181,84 @@ void GLShaderManager::CompileAndLinkGPUShaderProgram( GLShader *shader, shaderPr
 
 	BindAttribLocations( program->program );
 	LinkProgram( program->program );
+}
+
+std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::string& shaderText, const bool isVertexShader ) {
+	std::string newShaderText;
+	std::string drawcallStateStruct = "\nstruct DrawcallState {\n";
+	std::string drawcallStateBlock = "layout(std430, binding = 0) readonly buffer drawcallStateSSBO {\n"
+									 "  DrawcallState drawcallStates[];\n"
+									 "};\n\n";
+	std::string drawcallStateDefines;
+	if ( isVertexShader ) {
+		drawcallStateDefines = "#define drawID gl_DrawID\n";
+		drawcallStateDefines += "#define baseInstance gl_BaseInstance\n\n";
+	} else {
+		drawcallStateDefines = "#define drawID in_drawID\n";
+		drawcallStateDefines += "#define baseInstance in_baseInstance\n\n";
+	}
+
+	for( GLUniform* uniform : shader->_uniforms ) {
+		if ( uniform->IsTexture() && false ) {
+			drawcallStateStruct += "  ivec2 ";
+			drawcallStateStruct += uniform->GetName();
+			drawcallStateStruct += "_padding;\n";
+		}
+		if ( uniform->IsTexture() ) {
+			drawcallStateStruct += "  uint64_t ";
+			drawcallStateStruct += uniform->GetName();
+		} else {
+			drawcallStateStruct += "  " + uniform->GetType() + " " + uniform->GetName();
+		}
+
+		if ( uniform->GetComponentSize() ) {
+			drawcallStateStruct += "[ " + std::to_string( uniform->GetComponentSize() ) + " ]";
+		}
+		drawcallStateStruct += ";\n";
+
+		// vec3 has weird alignment, so just pad it with int
+		if ( uniform->GetSTD430Size() == 3 ) {
+			drawcallStateStruct += "  int ";
+			drawcallStateStruct += uniform->GetName();
+			drawcallStateStruct += "_padding;\n";
+		}
+
+		drawcallStateDefines += "#define ";
+		drawcallStateDefines += uniform->GetName();
+		if ( uniform->IsTexture() ) {
+			drawcallStateDefines += " " + uniform->GetType() + "(";
+		}
+		drawcallStateDefines += " drawcallStates[baseInstance].";
+		drawcallStateDefines += uniform->GetName();
+		if ( uniform->IsTexture() ) {
+			drawcallStateDefines += " )";
+		}
+		drawcallStateDefines += "\n";
+	}
+
+	// Array of structs is aligned to the largest member of the struct
+	for ( int i = 0; i < shader->padding; i++ ) {
+		drawcallStateStruct += "  int drawcallState_padding" + std::to_string( i );
+		drawcallStateStruct += ";\n";
+	}
+
+	drawcallStateStruct += "};\n\n";
+	drawcallStateDefines += "\n";
+
+	std::istringstream shaderTextStream( shaderText );
+	std::string shaderMain;
+
+	std::string line;
+	
+	while( std::getline( shaderTextStream, line, '\n' ) ) {
+		// Try to avoid removing uniform/storage blocks
+		if( line.find( "uniform" ) == std::string::npos || line.find( ";" ) == std::string::npos ) {
+			shaderMain += line + "\n";
+		}
+	}
+
+	newShaderText = drawcallStateStruct + drawcallStateBlock + drawcallStateDefines + shaderMain;
+	return newShaderText;
 }
 
 GLuint GLShaderManager::CompileShader( Str::StringRef programName,
@@ -1470,9 +1586,118 @@ bool GLCompileMacro_USE_BSP_SURFACE::HasConflictingMacros(size_t permutation, co
 	return false;
 }
 
+void GLShader::RegisterUniform( GLUniform* uniform ) {
+	_uniforms.push_back( uniform );
+	// std430Size += uniform->GetSTD430Size();
+	textureCount += uniform->IsTexture();
+}
+
 GLint GLShader::GetUniformLocation( const GLchar *uniformName ) const {
 	shaderProgram_t* p = GetProgram();
 	return glGetUniformLocation( p->program, uniformName );
+}
+
+void GLShader::PostProcessUniforms() {
+	std::vector<GLUniform*> tmp;
+
+	int currentBlockSize = 0;
+	int numUniforms = _uniforms.size();
+	GLuint structAlignment = 0;
+	GLuint structSize = 0;
+	while ( tmp.size() < numUniforms ) {
+		GLuint highestAlignment = 0;
+		int highestUniform = 0;
+		bool requirePadding = true;
+		
+		/* for ( int i = 0; i < _uniforms.size(); i++ ) {
+			GLuint blockSize = _uniforms[i]->GetSTD430Size();
+
+			// Try to add lower-alignment uniforms after higher-alignment ones
+			if ( currentBlockSize > 0 && currentBlockSize - blockSize >= 0 ) {
+				highestAlignment = _uniforms[i]->GetSTD430Alignment();
+				highestUniform = i;
+				requirePadding = false;
+				break;
+			}
+			if ( _uniforms[i]->GetSTD430Alignment() > highestAlignment ) {
+				highestAlignment = _uniforms[i]->GetSTD430Alignment();
+				highestUniform = i;
+				requirePadding = currentBlockSize == 0;
+				if ( highestAlignment == 4 ) {
+					break; // 4-component is the highest alignment in std430
+				}
+			}
+
+		} */
+
+		// Higher-alignment uniforms first to avoid wasting memory
+		if ( currentBlockSize == 0 || true ) {
+			GLuint highestAlignment = 0;
+			int highestUniform = 0;
+			for( int i = 0; i < _uniforms.size(); i++ ) {
+				if ( _uniforms[i]->GetSTD430Alignment() > highestAlignment ) {
+					highestAlignment = _uniforms[i]->GetSTD430Alignment();
+					highestUniform = i;
+				}
+				if ( highestAlignment > structAlignment ) {
+					structAlignment = highestAlignment;
+				}
+				if ( highestAlignment == 4 ) {
+					break; // 4-component is the highest alignment in std430
+				}
+			}
+			
+			const GLuint size = _uniforms[highestUniform]->GetSTD430Size();
+			if ( _uniforms[highestUniform]->GetComponentSize() != 0 ) {
+				currentBlockSize = ( size == 3 ) ? 4 * _uniforms[highestUniform]->GetComponentSize() : 
+													size * _uniforms[highestUniform]->GetComponentSize();
+			} else {
+				currentBlockSize = ( size == 3 ) ? 4 : size;
+			}
+
+			structSize += currentBlockSize;
+			tmp.emplace_back( _uniforms[highestUniform] );
+			_uniforms.erase( _uniforms.begin() + highestUniform );
+			continue;
+		}
+
+		// Try to add lower-alignment uniforms after higher-alignment ones
+		/* GLuint highestBlockSize = 0;
+		GLuint highestBlockSizePadded = 0;
+		int highestUniform = -1;
+		int highestUniformPadded = -1;
+		for ( int i = 0; i < _uniforms.size(); i++ ) {
+			GLuint blockSize = _uniforms[i]->GetSTD430Size();
+			if ( blockSize > highestBlockSize && blockSize <= currentBlockSize ) {
+				highestBlockSize = blockSize;
+				highestUniform = i;
+			}
+			if ( blockSize > highestBlockSizePadded && blockSize > currentBlockSize ) {
+				highestBlockSizePadded = blockSize;
+				highestUniformPadded = i;
+			}
+		}
+
+		if ( highestUniform >= 0 ) {
+			tmp.emplace_back( _uniforms[highestUniform] );
+			_uniforms.erase( _uniforms.begin() + highestUniform );
+		} else {
+
+			tmp.emplace_back( _uniforms[highestUniformPadded] );
+			_uniforms.erase( _uniforms.begin() + highestUniformPadded );
+		} */
+	}
+	_uniforms = tmp;
+
+	// padding = ( ( structSize / structAlignment ) + ( structSize % structAlignment != 0 ) ) * structAlignment;
+	padding = ( structAlignment - ( structSize % structAlignment ) ) % structAlignment;
+	std430Size = structSize;
+
+	Log::Warn( _name );
+	Log::Warn( "size: %i alignment: %i padding: %i", structSize, structAlignment, padding );
+	for ( GLUniform* uniform : _uniforms ) {
+		Log::Warn( uniform->GetName() );
+	}
 }
 
 bool GLShader::GetCompileMacrosString( size_t permutation, std::string &compileMacrosOut ) const
@@ -1519,6 +1744,7 @@ int GLShader::SelectProgram()
 
 void GLShader::BindProgram( int deformIndex )
 {
+	globalCommandQueue.SetDrawcallShader( this );
 	int macroIndex = SelectProgram();
 	size_t index = macroIndex + ( size_t(deformIndex) << _compileMacros.size() );
 
@@ -1586,11 +1812,19 @@ void GLShader::SetRequiredVertexPointers()
 	GL_VertexAttribsState( ( _vertexAttribsRequired | _vertexAttribs | macroVertexAttribs ) );  // & ~_vertexAttribsUnsupported);
 }
 
+void GLShader::WriteUniformsToBuffer( uint32_t* buffer ) {
+	uint32_t* bufPtr = buffer;
+	for ( GLUniform* uniform : _uniforms ) {
+		// buffer = (byte*) _currentProgram->uniformFirewall[uniform->GetFireWallIndex()];
+		// buffer++;
+		bufPtr = uniform->WriteToBuffer( bufPtr );
+	}
+}
+
 GLShader_generic2D::GLShader_generic2D( GLShaderManager *manager ) :
 	GLShader( "generic2D", "generic", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
-	u_EnvironmentMap1( this ),
 	u_TextureMatrix( this ),
 	u_AlphaThreshold( this ),
 	u_ModelMatrix( this ),
@@ -1671,7 +1905,10 @@ GLShader_lightMapping::GLShader_lightMapping( GLShaderManager *manager ) :
 	u_GlowMap( this ),
 	u_EnvironmentMap0( this ),
 	u_EnvironmentMap1( this ),
+	u_LightGrid1( this ),
+	u_LightGrid2( this ),
 	u_LightTiles( this ),
+	u_LightTilesInt( this ),
 	u_LightsTexture( this ),
 	u_TextureMatrix( this ),
 	u_SpecularExponent( this ),
@@ -2030,7 +2267,7 @@ void GLShader_reflection::SetShaderProgramUniforms( shaderProgram_t *shaderProgr
 
 GLShader_skybox::GLShader_skybox( GLShaderManager *manager ) :
 	GLShader( "skybox", ATTR_POSITION, manager ),
-	u_ColorMap( this ),
+	u_ColorMapCube( this ),
 	u_CloudMap( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
@@ -2180,7 +2417,7 @@ void GLShader_contrast::SetShaderProgramUniforms( shaderProgram_t *shaderProgram
 
 GLShader_cameraEffects::GLShader_cameraEffects( GLShaderManager *manager ) :
 	GLShader( "cameraEffects", ATTR_POSITION | ATTR_TEXCOORD, manager ),
-	u_ColorMap( this ),
+	u_ColorMap3D( this ),
 	u_CurrentMap( this ),
 	u_ColorModulate( this ),
 	u_TextureMatrix( this ),

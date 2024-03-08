@@ -70,4 +70,6 @@ void	main()
 
 	// assign color
 	var_Color = u_Color;
+
+	SETUP_SHADER_PARMS
 }

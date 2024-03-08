@@ -94,6 +94,58 @@ void TextureManager::UpdateAdjustedPriorities() {
 	totalFrameTextureBinds = 0;
 }
 
+GLuint64 TextureManager::RecordTexture( Texture* texture ) {
+	if ( std::find( textures.begin(), textures.end(), texture ) == textures.end() ) {
+		textures.push_back( texture );
+	}
+
+	if ( !texture->hasBindlessHandle ) {
+		texture->GenBindlessHandle();
+	}
+
+	return texture->bindlessTextureHandle;
+}
+
+void TextureManager::ClearTextureQueue() {
+	texQueue = std::queue<Texture*>();
+}
+
+bool TextureManager::MakeTextureResident( Texture* texture, const bool force ) {
+	if ( texture->IsResident() ) {
+		texQueue.push( texture );
+		return false;
+	}
+
+	if ( !texture->hasBindlessHandle ) {
+		texture->GenBindlessHandle();
+	}
+
+	texture->MakeResident();
+
+	// Make lowest priority textures non-resident first
+	while ( !glIsTextureHandleResidentARB( texture->bindlessTextureHandle ) ) {
+		if ( texQueue.empty() ) {
+			Sys::Drop( "No texture space available" );
+		}
+
+		if ( !force ) {
+			return true;
+		}
+
+		if ( texQueue.front()->IsResident() ) {
+			texQueue.front()->MakeNonResident();
+			texQueue.pop();
+			texture->MakeResident();
+		}
+	}
+
+	texQueue.push( texture );
+
+	GL_CheckErrors();
+
+	return false;
+}
+
 void TextureManager::BindTexture( const GLint location, Texture *texture ) {
 	texture->frameBindCounter++;
 	texture->totalBindCounter++;

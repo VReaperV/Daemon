@@ -30,4 +30,6 @@ void	main()
 {
 	// transform vertex position into homogenous clip-space
 	gl_Position = u_ModelViewProjectionMatrix * vec4(attr_Position, 1.0);
+
+	SETUP_SHADER_PARMS
 }

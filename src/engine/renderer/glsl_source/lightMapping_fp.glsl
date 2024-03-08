@@ -36,19 +36,23 @@ IN(smooth) vec3		var_Tangent;
 IN(smooth) vec3		var_Binormal;
 IN(smooth) vec3		var_Normal;
 
-#if defined(USE_LIGHT_MAPPING)
+/* #if defined(USE_LIGHT_MAPPING)
 	uniform sampler2D u_LightMap;
 #elif defined(USE_GRID_LIGHTING)
 	uniform sampler3D u_LightMap;
 	#define u_LightGrid1 u_LightMap
-#endif
+#endif */
+uniform sampler2D u_LightMap;
+uniform sampler3D u_LightGrid1;
 
-#if defined(USE_DELUXE_MAPPING)
+/* #if defined(USE_DELUXE_MAPPING)
 	uniform sampler2D u_DeluxeMap;
 #elif defined(USE_GRID_DELUXE_MAPPING)
 	uniform sampler3D u_DeluxeMap;
 	#define u_LightGrid2 u_DeluxeMap
-#endif
+#endif */
+uniform sampler2D u_DeluxeMap;
+uniform sampler3D u_LightGrid2;
 
 #if defined(USE_LIGHT_MAPPING) || defined(USE_DELUXE_MAPPING)
 	IN(smooth) vec2 var_TexLight;

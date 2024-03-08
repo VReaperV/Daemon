@@ -1934,6 +1934,18 @@ static void GLimp_InitExtensions()
 	// not required by any OpenGL version
 	glConfig2.bindlessTexturesAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_NONE, ARB_bindless_texture, r_arb_bindless_texture->value );
 
+	// made required in OpenGL 4.6
+	glConfig2.shaderDrawParametersAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_CORE, ARB_shader_draw_parameters, r_arb_shader_draw_parameters->value );
+
+	// made required in OpenGL 4.3
+	glConfig2.SSBOAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_CORE, ARB_shader_storage_buffer_object, r_arb_shader_storage_buffer_object->value );
+
+	// made required in OpenGL 4.0
+	glConfig2.multiDrawIndirectAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_CORE, ARB_multi_draw_indirect, r_arb_multi_draw_indirect->value );
+
+	glConfig2.commandQueueAvailable = glConfig2.shaderDrawParametersAvailable && glConfig2.SSBOAvailable &&
+									  glConfig2.multiDrawIndirectAvailable;
+
 	GL_CheckErrors();
 }
 

@@ -2993,6 +2993,9 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	extern cvar_t *r_arb_texture_gather;
 	extern cvar_t *r_arb_gpu_shader5;
 	extern cvar_t *r_arb_bindless_texture;
+	extern cvar_t *r_arb_shader_draw_parameters;
+	extern cvar_t *r_arb_shader_storage_buffer_object;
+	extern cvar_t *r_arb_multi_draw_indirect;
 
 	extern cvar_t *r_nobind; // turns off binding to appropriate textures
 	extern cvar_t *r_singleShader; // make most world faces use default shader
@@ -3255,10 +3258,10 @@ inline bool checkGLErrors()
 	void GL_Bind( image_t *image );
 	void GL_BindNearestCubeMap( GLint location, const vec3_t xyz );
 	void GL_Unbind( image_t *image );
-	void BindAnimatedImage( GLint location, textureBundle_t *bundle );
+	GLuint64 BindAnimatedImage( int unit, textureBundle_t *bundle );
 	void GL_TextureFilter( image_t *image, filterType_t filterType );
 	void GL_BindProgram( shaderProgram_t *program );
-	void GL_BindToTMU( GLint unit, image_t *image );
+	GLuint64 GL_BindToTMU( int unit, image_t *image );
 	void GL_BindNullProgram();
 	void GL_SetDefaultState();
 	void GL_SelectTexture( int unit );
@@ -3476,6 +3479,7 @@ inline bool checkGLErrors()
 		int         multiDrawPrimitives;
 		glIndex_t    *multiDrawIndexes[ MAX_MULTIDRAW_PRIMITIVES ];
 		int         multiDrawCounts[ MAX_MULTIDRAW_PRIMITIVES ];
+		uint        multiDrawOffsets[ MAX_MULTIDRAW_PRIMITIVES ];
 
 		bool    vboVertexSkinning;
 		int         numBones;
@@ -3683,7 +3687,7 @@ inline bool checkGLErrors()
 	void     R_AttachFBOTexture3D( int texId, int attachmentIndex, int zOffset );
 	void     R_AttachFBOTextureDepth( int texId );
 
-	void     R_BindFBO( FBO_t *fbo );
+	void     R_BindFBO( FBO_t *fbo, bool force = false );
 	void     R_BindNullFBO();
 
 	void     R_InitFBOs();

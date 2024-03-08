@@ -47,7 +47,7 @@ layout(std140) uniform u_Lights {
 };
 #define GetLight(idx, component) lights[idx].component
 #else // !HAVE_ARB_uniform_buffer_object
-uniform sampler2D u_Lights;
+uniform sampler2D u_LightsTexture;
 #define idxToTC( idx, w, h ) vec2( floor( ( idx * ( 1.0 / w ) ) + 0.5 ) * ( 1.0 / h ), \
 				   fract( ( idx + 0.5 ) * (1.0 / w ) ) )
 const struct GetLightOffsets {
@@ -55,7 +55,7 @@ const struct GetLightOffsets {
   int color_type;
   int direction_angle;
 } getLightOffsets = GetLightOffsets(0, 1, 2);
-#define GetLight(idx, component) texture2D( u_Lights, idxToTC(3 * idx + getLightOffsets.component, 64.0, float( 3 * MAX_REF_LIGHTS / 64 ) ) )
+#define GetLight(idx, component) texture2D( u_LightsTexture, idxToTC(3 * idx + getLightOffsets.component, 64.0, float( 3 * MAX_REF_LIGHTS / 64 ) ) )
 #endif // HAVE_ARB_uniform_buffer_object
 
 uniform int u_numLights;
@@ -148,10 +148,10 @@ void computeDeluxeLight( vec3 lightDir, vec3 normal, vec3 viewDir, vec3 lightCol
 
 #if defined(TEXTURE_INTEGER)
 const int lightsPerLayer = 16;
-uniform usampler3D u_LightTiles;
+uniform usampler3D u_LightTilesInt;
 #define idxs_t uvec4
 idxs_t fetchIdxs( in vec3 coords ) {
-  return texture3D( u_LightTiles, coords );
+  return texture3D( u_LightTilesInt, coords );
 }
 int nextIdx( inout idxs_t idxs ) {
   uvec4 tmp = ( idxs & uvec4( 3 ) ) * uvec4( 0x40, 0x10, 0x04, 0x01 );

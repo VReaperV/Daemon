@@ -36,4 +36,6 @@ void	main()
 	gl_Position = u_ModelViewProjectionMatrix * vec4(attr_Position, 1.0);
 
 	var_TexCoords = (u_TextureMatrix * vec4(attr_TexCoord0, 0.0, 1.0)).st;
+
+	SETUP_SHADER_PARMS
 }

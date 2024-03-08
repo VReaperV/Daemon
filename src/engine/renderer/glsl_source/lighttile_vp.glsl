@@ -46,4 +46,6 @@ void main() {
 
   vPosition = attr_Position;
   vTexCoord = attr_TexCoord0;
+
+	SETUP_SHADER_PARMS
 }

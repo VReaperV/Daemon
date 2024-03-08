@@ -47,6 +47,11 @@ enum {
 	TEXTURE_PRIORITY_PERSISTENT = 5,
 };
 
+struct TextureHandles {
+	GLuint64 bindlessHandle;
+	GLuint textureUnit;
+};
+
 class Texture {
 	public:
 	GLuint textureHandle = 0;
@@ -92,6 +97,9 @@ class TextureManager {
 
 	void UpdateAdjustedPriorities();
 
+	GLuint64 RecordTexture( Texture* texture );
+	void ClearTextureQueue();
+	bool MakeTextureResident( Texture* texture, const bool force );
 	void BindTexture( const GLint location, Texture* texture );
 	void AllNonResident();
 	void BindReservedTexture( const GLenum target, const GLuint handle );
@@ -101,6 +109,7 @@ class TextureManager {
 
 	private:
 		std::vector<const Texture*> textureUnits;
+		std::queue<Texture*> texQueue;
 		std::vector<Texture*> textures;
 		std::unordered_set<const Texture*> textureSequence;
 

@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 // tr_vbo.c
 #include "tr_local.h"
+#include "CommandQueue.h"
 
 // "templates" for VBO vertex data layouts
 
@@ -833,6 +834,9 @@ void R_BindVBO( VBO_t *vbo )
 		glState.vertexAttribsOldFrame = 0;
 		glState.vertexAttribsNewFrame = 0;
 
+		if ( glConfig2.commandQueueAvailable ) {
+			globalCommandQueue.RegisterVBO( vbo->vertexesVBO );
+		}
 		glBindBuffer( GL_ARRAY_BUFFER, vbo->vertexesVBO );
 
 		backEnd.pc.c_vboVertexBuffers++;
@@ -877,9 +881,13 @@ void R_BindIBO( IBO_t *ibo )
 
 	if ( glState.currentIBO != ibo )
 	{
+		if( glConfig2.commandQueueAvailable ) {
+			globalCommandQueue.RegisterIBO( ibo->indexesVBO );
+		}
 		glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, ibo->indexesVBO );
 
 		glState.currentIBO = ibo;
+
 
 		backEnd.pc.c_vboIndexBuffers++;
 	}
@@ -1013,6 +1021,16 @@ static void R_InitLightUBO()
 	}
 }
 
+static void R_InitCommandQueueBuffers() {
+	if( glConfig2.SSBOAvailable ) {
+		drawcallStateSSBO.GenBuffer();
+	}
+
+	if( glConfig2.multiDrawIndirectAvailable ) {
+		commandQueueBuffer.GenBuffer();
+	}
+}
+
 /*
 ============
 R_InitVBOs
@@ -1055,6 +1073,8 @@ void R_InitVBOs()
 	glBindBuffer( GL_PIXEL_PACK_BUFFER, 0 );
 
 	R_InitLightUBO();
+
+	R_InitCommandQueueBuffers();
 
 	GL_CheckErrors();
 }
@@ -1130,6 +1150,14 @@ void R_ShutdownVBOs()
 	if( glConfig2.uniformBufferObjectAvailable ) {
 		glDeleteBuffers( 1, &tr.dlightUBO );
 		tr.dlightUBO = 0;
+	}
+
+	if ( glConfig2.SSBOAvailable ) {
+		drawcallStateSSBO.DelBuffer();
+	}
+
+	if ( glConfig2.multiDrawIndirectAvailable ) {
+		commandQueueBuffer.DelBuffer();
 	}
 
 	tess.verts = tess.vertsBuffer = nullptr;

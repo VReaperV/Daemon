@@ -84,4 +84,6 @@ void	main()
 	var_TexCoords = (u_TextureMatrix * vec4(texCoord, 0.0, 1.0)).st;
 
 	var_Color = color;
+
+	SETUP_SHADER_PARMS
 }

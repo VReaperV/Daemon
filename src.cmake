@@ -100,6 +100,8 @@ set(RENDERERLIST
     ${ENGINE_DIR}/renderer/tr_fbo.cpp
     ${ENGINE_DIR}/renderer/tr_flares.cpp
     ${ENGINE_DIR}/renderer/tr_font.cpp
+    ${ENGINE_DIR}/renderer/CommandQueue.cpp
+    ${ENGINE_DIR}/renderer/CommandQueue.h
     ${ENGINE_DIR}/renderer/InternalImage.cpp
     ${ENGINE_DIR}/renderer/InternalImage.h
     ${ENGINE_DIR}/renderer/TextureManager.cpp
@@ -143,6 +145,7 @@ set(RENDERERLIST
 )
 
 set(GLSLSOURCELIST
+    ${ENGINE_DIR}/renderer/glsl_source/commandQueue_vp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/skybox_vp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/ssao_fp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/ssao_vp.glsl

@@ -76,5 +76,7 @@ void	main()
 		// transform normal into world space
 		var_Normal = (u_ModelMatrix * vec4(attr_Normal, 0.0)).xyz;
 	}
+
+	SETUP_SHADER_PARMS
 }
 

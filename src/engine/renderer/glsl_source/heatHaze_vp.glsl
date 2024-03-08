@@ -73,4 +73,6 @@ void	main()
 
 	// clamp the distance, so the deformations don't get too wacky near the view
 	var_Deform = min(d1 * (1.0 / max(d2, 1.0)), 0.02) * u_DeformMagnitude;
+
+	SETUP_SHADER_PARMS
 }

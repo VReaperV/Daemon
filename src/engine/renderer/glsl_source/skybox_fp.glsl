@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 const float radiusWorld = 4096.0; // Value used by quake 3 skybox code
 
-uniform samplerCube	u_ColorMap;
+uniform samplerCube	u_ColorMapCube;
 uniform sampler2D	u_CloudMap;
 
 uniform bool        u_UseCloudMap;
@@ -55,7 +55,7 @@ void	main()
 	vec4 color;
 
 	if( !u_UseCloudMap ) {
-		color = textureCube(u_ColorMap, incidentRay).rgba;
+		color = textureCube(u_ColorMapCube, incidentRay).rgba;
 	} else {
 		incidentRay *= ComputeCloudParametric( incidentRay, radiusWorld, u_CloudHeight );
 		incidentRay.z += radiusWorld;

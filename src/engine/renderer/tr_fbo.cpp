@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 // tr_fbo.c
 #include "tr_local.h"
+#include "CommandQueue.h"
 
 /*
 =============
@@ -360,7 +361,7 @@ void R_AttachFBOTexturePackedDepthStencil( int texId )
 R_BindFBO
 ============
 */
-void R_BindFBO( FBO_t *fbo )
+void R_BindFBO( FBO_t *fbo, bool force )
 {
 	if ( !fbo )
 	{
@@ -376,7 +377,12 @@ void R_BindFBO( FBO_t *fbo )
 
 	if ( glState.currentFBO != fbo )
 	{
-		GL_fboShim.glBindFramebuffer( GL_FRAMEBUFFER, fbo->frameBuffer );
+		if ( glConfig2.commandQueueAvailable ) {
+			globalCommandQueue.RegisterFBO( fbo->frameBuffer );
+		} 
+		if( !glConfig2.commandQueueAvailable || force ) {
+			GL_fboShim.glBindFramebuffer( GL_FRAMEBUFFER, fbo->frameBuffer );
+		}
 
 		glState.currentFBO = fbo;
 	}
@@ -396,8 +402,12 @@ void R_BindNullFBO()
 
 	if ( glState.currentFBO )
 	{
-		GL_fboShim.glBindFramebuffer( GL_FRAMEBUFFER, 0 );
-		GL_fboShim.glBindRenderbuffer( GL_RENDERBUFFER, 0 );
+		if ( glConfig2.commandQueueAvailable ) {
+			globalCommandQueue.RegisterFBO( 0 );
+		} else {
+			GL_fboShim.glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+			GL_fboShim.glBindRenderbuffer( GL_RENDERBUFFER, 0 );
+		}
 		glState.currentFBO = nullptr;
 	}
 }
@@ -425,13 +435,13 @@ void R_InitFBOs()
 	height = glConfig.vidHeight;
 
 	tr.mainFBO[0] = R_CreateFBO( "_main[0]", width, height );
-	R_BindFBO( tr.mainFBO[0] );
+	R_BindFBO( tr.mainFBO[0], true );
 	R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.currentRenderImage[0]->texnum, 0 );
 	R_AttachFBOTexturePackedDepthStencil( tr.currentDepthImage->texnum );
 	R_CheckFBO( tr.mainFBO[0] );
 
 	tr.mainFBO[1] = R_CreateFBO( "_main[1]", width, height );
-	R_BindFBO( tr.mainFBO[1] );
+	R_BindFBO( tr.mainFBO[1], true );
 	R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.currentRenderImage[1]->texnum, 0 );
 	R_AttachFBOTexturePackedDepthStencil( tr.currentDepthImage->texnum );
 	R_CheckFBO( tr.mainFBO[1] );
@@ -443,17 +453,17 @@ void R_InitFBOs()
 		tiled dynamic lighting renderer when this feature is enabled. */
 
 		tr.depthtile1FBO = R_CreateFBO( "_depthtile1", tr.depthtile1RenderImage->width, tr.depthtile1RenderImage->height );
-		R_BindFBO( tr.depthtile1FBO );
+		R_BindFBO( tr.depthtile1FBO, true );
 		R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.depthtile1RenderImage->texnum, 0 );
 		R_CheckFBO( tr.depthtile1FBO );
 
 		tr.depthtile2FBO = R_CreateFBO( "_depthtile2", tr.depthtile2RenderImage->width, tr.depthtile2RenderImage->height );
-		R_BindFBO( tr.depthtile2FBO );
+		R_BindFBO( tr.depthtile2FBO, true );
 		R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.depthtile2RenderImage->texnum, 0 );
 		R_CheckFBO( tr.depthtile2FBO );
 
 		tr.lighttileFBO = R_CreateFBO( "_lighttile", tr.lighttileRenderImage->width, tr.lighttileRenderImage->height );
-		R_BindFBO( tr.lighttileFBO );
+		R_BindFBO( tr.lighttileFBO, true );
 		R_AttachFBOTexture3D( tr.lighttileRenderImage->texnum, 0, 0 );
 		R_CheckFBO( tr.lighttileFBO );
 	}
@@ -466,7 +476,7 @@ void R_InitFBOs()
 			width = height = shadowMapResolutions[ i ];
 
 			tr.shadowMapFBO[ i ] = R_CreateFBO( va( "_shadowMap%d", i ), width, height );
-			R_BindFBO( tr.shadowMapFBO[ i ] );
+			R_BindFBO( tr.shadowMapFBO[ i ], true );
 			R_AttachFBOTexture2D( GL_TEXTURE_2D,
 					      tr.shadowMapFBOImage[ i ]->texnum,
 					      0 );
@@ -482,7 +492,7 @@ void R_InitFBOs()
 			width = height = sunShadowMapResolutions[ i ];
 
 			tr.sunShadowMapFBO[ i ] = R_CreateFBO( va( "_sunShadowMap%d", i ), width, height );
-			R_BindFBO( tr.sunShadowMapFBO[ i ] );
+			R_BindFBO( tr.sunShadowMapFBO[ i ], true );
 			R_AttachFBOTexture2D( GL_TEXTURE_2D,
 					      tr.sunShadowMapFBOImage[ i ]->texnum,
 					      0 );
@@ -513,7 +523,7 @@ void R_InitFBOs()
 
 		// portalRender FBO for portals, mirrors, water, cameras et cetera
 		tr.portalRenderFBO = R_CreateFBO( "_portalRender", width, height );
-		R_BindFBO( tr.portalRenderFBO );
+		R_BindFBO( tr.portalRenderFBO, true );
 
 		R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.portalRenderImage->texnum, 0 );
 
@@ -525,13 +535,13 @@ void R_InitFBOs()
 		height = glConfig.vidHeight * 0.25f;
 
 		tr.downScaleFBO_quarter = R_CreateFBO( "_downScale_quarter", width, height );
-		R_BindFBO( tr.downScaleFBO_quarter );
+		R_BindFBO( tr.downScaleFBO_quarter, true );
 
 		R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.downScaleFBOImage_quarter->texnum, 0 );
 		R_CheckFBO( tr.downScaleFBO_quarter );
 
 		tr.downScaleFBO_64x64 = R_CreateFBO( "_downScale_64x64", 64, 64 );
-		R_BindFBO( tr.downScaleFBO_64x64 );
+		R_BindFBO( tr.downScaleFBO_64x64, true );
 
 		R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.downScaleFBOImage_64x64->texnum, 0 );
 		R_CheckFBO( tr.downScaleFBO_64x64 );
@@ -540,7 +550,7 @@ void R_InitFBOs()
 		height = glConfig.vidHeight * 0.25f;
 
 		tr.contrastRenderFBO = R_CreateFBO( "_contrastRender", width, height );
-		R_BindFBO( tr.contrastRenderFBO );
+		R_BindFBO( tr.contrastRenderFBO, true );
 
 		R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.contrastRenderFBOImage->texnum, 0 );
 
@@ -549,7 +559,7 @@ void R_InitFBOs()
 		for ( i = 0; i < 2; i++ )
 		{
 			tr.bloomRenderFBO[ i ] = R_CreateFBO( va( "_bloomRender%d", i ), width, height );
-			R_BindFBO( tr.bloomRenderFBO[ i ] );
+			R_BindFBO( tr.bloomRenderFBO[ i ], true );
 
 			R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.bloomRenderFBOImage[ i ]->texnum, 0 );
 
