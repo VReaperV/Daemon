@@ -332,7 +332,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 			// OpenGL driver constants
 			glGetIntegerv( GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &temp );
-			glConfig.maxTextureUnits = temp;
+			glConfig2.maxTextureUnits = temp;
 
 			glGetIntegerv( GL_MAX_TEXTURE_SIZE, &temp );
 			glConfig.maxTextureSize = temp;
@@ -833,7 +833,7 @@ ScreenshotCmd screenshotPNGRegistration("screenshotPNG", ssFormat_t::SSF_PNG, "p
 		// in a multitexture environment
 		if ( glConfig.driverType == glDriverType_t::GLDRV_OPENGL3 )
 		{
-			for ( i = glConfig.maxTextureUnits - 1; i >= 0; i-- )
+			for ( i = glConfig2.maxTextureUnits - 1; i >= 0; i-- )
 			{
 				GL_SelectTexture( i );
 				GL_TextureMode( r_textureMode->string );
