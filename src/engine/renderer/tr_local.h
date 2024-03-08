@@ -710,7 +710,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 
 		GLenum         type;
 		GLuint         texnum; // gl texture binding
-		Texture        *texture;
+		Texture        texture;
 
 		uint16_t       width, height; // source image
 		uint16_t       uploadWidth, uploadHeight; // after power of two and picmip but not including clamp to MAX_TEXTURE_SIZE
@@ -2984,6 +2984,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	extern cvar_t *r_ext_texture_float;
 	extern cvar_t *r_ext_texture_integer;
 	extern cvar_t *r_ext_texture_rg;
+	extern cvar_t* r_ext_bindless_textures;
 	extern cvar_t *r_ext_texture_filter_anisotropic;
 	extern cvar_t *r_ext_gpu_shader4;
 	extern cvar_t *r_arb_buffer_storage;
@@ -2992,7 +2993,6 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	extern cvar_t *r_arb_uniform_buffer_object;
 	extern cvar_t *r_arb_texture_gather;
 	extern cvar_t *r_arb_gpu_shader5;
-	extern cvar_t *r_arb_bindless_texture;
 
 	extern cvar_t *r_nobind; // turns off binding to appropriate textures
 	extern cvar_t *r_singleShader; // make most world faces use default shader

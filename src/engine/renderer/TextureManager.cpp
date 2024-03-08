@@ -84,7 +84,6 @@ void TextureManager::UpdateAdjustedPriorities() {
 	for ( Texture* texture : textures ) {
 		texture->UpdateAdjustedPriority( totalFrameTextureBinds, totalTextureBinds );
 	}
-	// std::sort( textures.begin(), textures.end(), Texture::Compare() );
 
 	totalFrameTextureBinds = 0;
 }
@@ -144,7 +143,7 @@ void TextureManager::BindTexture( const GLint location, Texture *texture ) {
 	GLint handle;
 
 	// Do a loop once so we don't have to search through it many times for each case
-	for ( size_t i = 0; i < textureUnits.size(); i++ ) {
+	for ( int i = 0; i < textureUnits.size(); i++ ) {
 		// Already bound
 		if ( textureUnits[i] == texture ) {
 			glUniform1i( location, i + 1 );
@@ -166,7 +165,7 @@ void TextureManager::BindTexture( const GLint location, Texture *texture ) {
 	}
 
 	// Slot 0 is reserved for non-rendering OpenGL calls that require textures to be bound
-	if ( textureUnits.size() + 1 < (size_t) glConfig.maxTextureUnits ) {
+	if ( textureUnits.size() + 1 < glConfig.maxTextureUnits ) {
 		textureUnits.push_back( texture );
 		glActiveTexture( GL_TEXTURE1 + textureUnits.size() - 1 );
 		handle = textureUnits.size() - 1;
@@ -188,29 +187,17 @@ void TextureManager::BindTexture( const GLint location, Texture *texture ) {
 	GL_CheckErrors();
 }
 
-void TextureManager::AllNonResident() {
-	for ( Texture* texture : textures ) {
-		if ( texture->IsResident() ) {
-			texture->MakeNonResident();
-		}
-	}
-}
-
 void TextureManager::BindReservedTexture( const GLenum target, const GLuint handle ) {
 	glActiveTexture( GL_TEXTURE0 );
 	glBindTexture( target, handle );
 }
 
-// Texture units used within a texture sequence will not be bound to anything else until the texture sequence ends
 void TextureManager::StartTextureSequence() {
 	textureSequenceStarted = true;
 }
 
 void TextureManager::EndTextureSequence() {
 	textureSequenceStarted = false;
-	/* for ( const Texture* texture : textureSequence ) {
-		const_cast< Texture* >( texture )->MakeNonResident();
-	} */
 	textureSequence.clear();
 }
 

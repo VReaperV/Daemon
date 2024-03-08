@@ -176,7 +176,7 @@ void GL_SelectTexture( int unit )
 
 void GL_BindToTMU( GLint unit, image_t *image )
 {
-	tr.textureManager.BindTexture( unit, image->texture );
+	tr.textureManager.BindTexture( unit, &image->texture );
 	return;
 
 	/* int texnum = image->texnum;
@@ -3182,13 +3182,12 @@ void RB_RenderMotionBlur()
 	GL_State( GLS_DEPTHTEST_DISABLE );
 	GL_Cull( cullType_t::CT_TWO_SIDED );
 
-	gl_motionblurShader->BindProgram( 0 );
-
 	// Swap main FBOs
 	GL_BindToTMU( gl_motionblurShader->GetUniformLocation_ColorMap(), tr.currentRenderImage[backEnd.currentMainFBO] );
 	backEnd.currentMainFBO = 1 - backEnd.currentMainFBO;
 	R_BindFBO( tr.mainFBO[ backEnd.currentMainFBO ] );
 
+	gl_motionblurShader->BindProgram( 0 );
 	gl_motionblurShader->SetUniform_blurVec(tr.refdef.blurVec);
 
 	GL_BindToTMU( gl_motionblurShader->GetUniformLocation_DepthMap(), tr.currentDepthImage );
@@ -4913,7 +4912,7 @@ void RE_UploadCinematic( int cols, int rows, const byte *data, int client, bool 
 
 		// Getting bindless handle makes the texture immutable, so generate it again because we used glTexParameter*
 		if ( glConfig2.bindlessTexturesAvailable ) {
-			tr.cinematicImage[ client ]->texture->GenBindlessHandle();
+			tr.cinematicImage[ client ]->texture.GenBindlessHandle();
 		}
 	}
 	else
@@ -5927,7 +5926,6 @@ void RB_ExecuteRenderCommands( const void *data )
 	{
 		cmd = cmd->ExecuteSelf();
 	}
-	// tr.textureManager.AllNonResident();
 	// stop rendering on this thread
 	t2 = ri.Milliseconds();
 	backEnd.pc.msec = t2 - t1;
