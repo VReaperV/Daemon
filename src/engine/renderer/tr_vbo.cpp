@@ -942,13 +942,10 @@ static void R_InitUnitCubeVBO()
 
 static void R_InitTileVBO()
 {
-	if ( !glConfig2.dynamicLight )
-	{
-		return;
-	}
+	int       x, y, w, h;
+	vboData_t data;
 
-	if ( r_dynamicLightRenderer.Get() != Util::ordinal( dynamicLightRenderer_t::TILED ) )
-	{
+	if ( glConfig2.dynamicLight < 1 ) {
 		/* This computation is part of the tiled dynamic lighting renderer,
 		it's better to not run it and save CPU cycles when such effects
 		are disabled.
@@ -960,8 +957,6 @@ static void R_InitTileVBO()
 	}
 
 	R_SyncRenderThread();
-	int       x, y, w, h;
-	vboData_t data;
 
 	w = tr.depthtile2RenderImage->width;
 	h = tr.depthtile2RenderImage->height;
@@ -992,26 +987,6 @@ static void R_InitTileVBO()
 
 const int vertexCapacity = DYN_BUFFER_SIZE / sizeof( shaderVertex_t );
 const int indexCapacity = DYN_BUFFER_SIZE / sizeof( glIndex_t );
-
-static void R_InitLightUBO()
-{
-	if ( !glConfig2.dynamicLight )
-	{
-		return;
-	}
-
-	if( glConfig2.uniformBufferObjectAvailable ) {
-		glGenBuffers( 1, &tr.dlightUBO );
-		glBindBuffer( GL_UNIFORM_BUFFER, tr.dlightUBO );
-		glBufferData( GL_UNIFORM_BUFFER, MAX_REF_LIGHTS * sizeof( shaderLight_t ), nullptr, GL_DYNAMIC_DRAW );
-		glBindBuffer( GL_UNIFORM_BUFFER, 0 );
-	} else {
-		glGenBuffers( 1, &tr.dlightUBO );
-		glBindBuffer( GL_PIXEL_UNPACK_BUFFER, tr.dlightUBO );
-		glBufferData( GL_PIXEL_UNPACK_BUFFER, MAX_REF_LIGHTS * sizeof( shaderLight_t ), nullptr, GL_DYNAMIC_DRAW );
-		glBindBuffer( GL_PIXEL_UNPACK_BUFFER, 0 );
-	}
-}
 
 /*
 ============
@@ -1054,7 +1029,17 @@ void R_InitVBOs()
 		      nullptr, GL_STREAM_COPY );
 	glBindBuffer( GL_PIXEL_PACK_BUFFER, 0 );
 
-	R_InitLightUBO();
+	if( glConfig2.uniformBufferObjectAvailable ) {
+		glGenBuffers( 1, &tr.dlightUBO );
+		glBindBuffer( GL_UNIFORM_BUFFER, tr.dlightUBO );
+		glBufferData( GL_UNIFORM_BUFFER, MAX_REF_LIGHTS * sizeof( shaderLight_t ), nullptr, GL_DYNAMIC_DRAW );
+		glBindBuffer( GL_UNIFORM_BUFFER, 0 );
+	} else {
+		glGenBuffers( 1, &tr.dlightUBO );
+		glBindBuffer( GL_PIXEL_UNPACK_BUFFER, tr.dlightUBO );
+		glBufferData( GL_PIXEL_UNPACK_BUFFER, MAX_REF_LIGHTS * sizeof( shaderLight_t ), nullptr, GL_DYNAMIC_DRAW );
+		glBindBuffer( GL_PIXEL_UNPACK_BUFFER, 0 );
+	}
 
 	GL_CheckErrors();
 }

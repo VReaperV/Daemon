@@ -99,10 +99,7 @@ struct glconfig2_t
 	bool mapBufferRangeAvailable;
 	bool syncAvailable;
 
-	bool dynamicLight;
-	bool staticLight;
-	bool shadowMapping;
-	shadowingMode_t shadowingMode;
+	int dynamicLight;
 };
 
 //

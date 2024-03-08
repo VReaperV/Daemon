@@ -2012,17 +2012,14 @@ static void RB_SetupLightForLighting( trRefLight_t *light )
 
 static void RB_BlurShadowMap( const trRefLight_t *light, int i )
 {
-	if ( !glConfig2.shadowMapping )
-	{
-		return;
-	}
+	vec4_t  verts[ 4 ];
+	int     index;
+	image_t **images;
+	FBO_t   **fbos;
+	vec2_t  texScale;
+	matrix_t ortho;
 
-	if ( light->l.inverseShadows )
-	{
-		return;
-	}
-
-	if ( !r_softShadowsPP->integer )
+	if ( light->l.inverseShadows || r_shadows->integer < Util::ordinal(shadowingMode_t::SHADOWING_VSM16) || !r_softShadowsPP->integer )
 	{
 		return;
 	}
@@ -2031,13 +2028,6 @@ static void RB_BlurShadowMap( const trRefLight_t *light, int i )
 	{
 		return;
 	}
-
-	vec4_t  verts[ 4 ];
-	int     index;
-	image_t **images;
-	FBO_t   **fbos;
-	vec2_t  texScale;
-	matrix_t ortho;
 
 	fbos = ( light->l.rlType == refLightType_t::RL_DIRECTIONAL ) ? tr.sunShadowMapFBO : tr.shadowMapFBO;
 	images = ( light->l.rlType == refLightType_t::RL_DIRECTIONAL ) ? tr.sunShadowMapFBOImage : tr.shadowMapFBOImage;
@@ -2128,7 +2118,11 @@ static void RB_RenderInteractionsShadowMapped()
 	                               0.5,     0.5, 0.5, 1.0
 	                      };
 
-	DAEMON_ASSERT( glConfig2.shadowMapping );
+	if ( !glConfig2.textureFloatAvailable )
+	{
+		RB_RenderInteractions();
+		return;
+	}
 
 	GLimp_LogComment( "--- RB_RenderInteractionsShadowMapped ---\n" );
 
@@ -2824,12 +2818,18 @@ void RB_RunVisTests( )
 
 void RB_RenderPostDepthLightTile()
 {
-	if ( !glConfig2.dynamicLight )
-	{
-		return;
-	}
+	static vec4_t quadVerts[4] = {
+		{ -1.0f, -1.0f, 0.0f, 1.0f },
+		{  1.0f, -1.0f, 0.0f, 1.0f },
+		{  1.0f,  1.0f, 0.0f, 1.0f },
+		{ -1.0f,  1.0f, 0.0f, 1.0f }
+	};
+	vec3_t zParams;
+	int w, h;
 
-	if ( r_dynamicLightRenderer.Get() != Util::ordinal( dynamicLightRenderer_t::TILED ) )
+	GLimp_LogComment( "--- RB_RenderPostDepthLightTile ---\n" );
+
+	if ( glConfig2.dynamicLight < 1 )
 	{
 		/* Do not run lightTile code when the tiled renderer is not used.
 
@@ -2852,17 +2852,6 @@ void RB_RenderPostDepthLightTile()
 
 		return;
 	}
-
-	static vec4_t quadVerts[4] = {
-		{ -1.0f, -1.0f, 0.0f, 1.0f },
-		{  1.0f, -1.0f, 0.0f, 1.0f },
-		{  1.0f,  1.0f, 0.0f, 1.0f },
-		{ -1.0f,  1.0f, 0.0f, 1.0f }
-	};
-	vec3_t zParams;
-	int w, h;
-
-	GLimp_LogComment( "--- RB_RenderPostDepthLightTile ---\n" );
 
 	if ( ( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
@@ -3546,7 +3535,7 @@ static void RB_RenderDebugUtils()
 			GL_LoadModelViewMatrix( backEnd.orientation.modelViewMatrix );
 			gl_genericShader->SetUniform_ModelViewProjectionMatrix( glState.modelViewProjectionMatrix[ glState.stackIndex ] );
 
-			if ( glConfig2.shadowMapping && light->l.rlType == refLightType_t::RL_OMNI )
+			if ( r_shadows->integer >= Util::ordinal(shadowingMode_t::SHADOWING_ESM16) && light->l.rlType == refLightType_t::RL_OMNI )
 			{
 				// count how many cube sides are in use for this interaction
 				cubeSides = 0;
@@ -4802,7 +4791,7 @@ static void RB_RenderView( bool depthPass )
 		backEnd.pc.c_forwardAmbientTime += endTime - startTime;
 	}
 
-	if ( glConfig2.shadowMapping )
+	if ( r_shadows->integer >= Util::ordinal(shadowingMode_t::SHADOWING_ESM16) )
 	{
 		// render dynamic shadowing and lighting using shadow mapping
 		RB_RenderInteractionsShadowMapped();
@@ -5414,8 +5403,17 @@ RB_SetupLights
 */
 const RenderCommand *SetupLightsCommand::ExecuteSelf( ) const
 {
-	if ( !glConfig2.dynamicLight )
+	if ( glConfig2.dynamicLight < 1 )
 	{
+		/* Do not run lightTile code when the tiled renderer is not used.
+
+		This computation is part of the tiled dynamic lighting renderer,
+		it's better to not run it and save CPU cycles when such effects
+		are disabled.
+
+		The tr.dlightImage image is also not created when the tiled renderer
+		is not used, meaning this code would crash. */
+
 		return this + 1;
 	}
 

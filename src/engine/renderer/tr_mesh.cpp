@@ -303,7 +303,7 @@ void R_AddMDVSurfaces( trRefEntity_t *ent )
 	}
 
 	// set up lighting now that we know we aren't culled
-	if ( !personalModel || glConfig2.shadowMapping )
+	if ( !personalModel || r_shadows->integer > Util::ordinal(shadowingMode_t::SHADOWING_BLOB) )
 	{
 		R_SetupEntityLighting( &tr.refdef, ent, nullptr );
 	}

@@ -2490,25 +2490,7 @@ static void R_CreateCurrentRenderImage()
 
 static void R_CreateDepthRenderImage()
 {
-	if ( !glConfig2.dynamicLight )
-	{
-		return;
-	}
-
-	if( !glConfig2.uniformBufferObjectAvailable )
-	{
-		int w = 64;
-		int h = 3 * MAX_REF_LIGHTS / w;
-
-		imageParams_t imageParams = {};
-		imageParams.filterType = filterType_t::FT_NEAREST;
-		imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
-		imageParams.bits = IF_NOPICMIP | IF_RGBA32F;
-
-		tr.dlightImage = R_CreateImage("_dlightImage", nullptr, w, h, 4, imageParams );
-	}
-
-	if ( r_dynamicLightRenderer.Get() != Util::ordinal( dynamicLightRenderer_t::TILED ) )
+	if ( glConfig2.dynamicLight < 1 )
 	{
 		/* Do not create lightTile images when the tiled renderer is not used.
 
@@ -2524,39 +2506,44 @@ static void R_CreateDepthRenderImage()
 		return;
 	}
 
-	{
-		int width = glConfig.vidWidth;
-		int height = glConfig.vidHeight;
+	int  width, height, w, h;
 
-		int w = (width + TILE_SIZE_STEP1 - 1) >> TILE_SHIFT_STEP1;
-		int h = (height + TILE_SIZE_STEP1 - 1) >> TILE_SHIFT_STEP1;
+	width = glConfig.vidWidth;
+	height = glConfig.vidHeight;
 
-		imageParams_t imageParams = {};
+	w = (width + TILE_SIZE_STEP1 - 1) >> TILE_SHIFT_STEP1;
+	h = (height + TILE_SIZE_STEP1 - 1) >> TILE_SHIFT_STEP1;
+
+	imageParams_t imageParams = {};
+	imageParams.bits = IF_NOPICMIP | IF_RGBA32F;
+	imageParams.filterType = filterType_t::FT_NEAREST;
+	imageParams.wrapType = wrapTypeEnum_t::WT_ONE_CLAMP;
+
+	tr.depthtile1RenderImage = R_CreateImage( "_depthtile1Render", nullptr, w, h, 1, imageParams );
+
+	w = (width + TILE_SIZE - 1) >> TILE_SHIFT;
+	h = (height + TILE_SIZE - 1) >> TILE_SHIFT;
+
+	imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+
+	tr.depthtile2RenderImage = R_CreateImage( "_depthtile2Render", nullptr, w, h, 1, imageParams );
+
+	if ( glConfig2.textureIntegerAvailable ) {
+		imageParams.bits = IF_NOPICMIP | IF_RGBA32UI;
+
+		tr.lighttileRenderImage = R_Create3DImage( "_lighttileRender", nullptr, w, h, 4, imageParams );
+	} else {
+		imageParams.bits = IF_NOPICMIP;
+
+		tr.lighttileRenderImage = R_Create3DImage( "_lighttileRender", nullptr, w, h, 4, imageParams );
+	}
+
+	if( !glConfig2.uniformBufferObjectAvailable ) {
+		w = 64; h = 3 * MAX_REF_LIGHTS / w;
+
 		imageParams.bits = IF_NOPICMIP | IF_RGBA32F;
-		imageParams.filterType = filterType_t::FT_NEAREST;
-		imageParams.wrapType = wrapTypeEnum_t::WT_ONE_CLAMP;
 
-		tr.depthtile1RenderImage = R_CreateImage( "_depthtile1Render", nullptr, w, h, 1, imageParams );
-
-		w = (width + TILE_SIZE - 1) >> TILE_SHIFT;
-		h = (height + TILE_SIZE - 1) >> TILE_SHIFT;
-
-		imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
-
-		tr.depthtile2RenderImage = R_CreateImage( "_depthtile2Render", nullptr, w, h, 1, imageParams );
-
-		if ( glConfig2.textureIntegerAvailable )
-		{
-			imageParams.bits = IF_NOPICMIP | IF_RGBA32UI;
-
-			tr.lighttileRenderImage = R_Create3DImage( "_lighttileRender", nullptr, w, h, 4, imageParams );
-		}
-		else
-		{
-			imageParams.bits = IF_NOPICMIP;
-
-			tr.lighttileRenderImage = R_Create3DImage( "_lighttileRender", nullptr, w, h, 4, imageParams );
-		}
+		tr.dlightImage = R_CreateImage("_dlightImage", nullptr, w, h, 4, imageParams );
 	}
 }
 
@@ -2598,60 +2585,55 @@ static void R_CreateDownScaleFBOImages()
 // *INDENT-OFF*
 static void R_CreateShadowMapFBOImage()
 {
-	if ( !glConfig2.shadowMapping )
+	int  i;
+	int  width, height;
+	int numShadowMaps = ( r_softShadowsPP->integer && r_shadows->integer >= Util::ordinal(shadowingMode_t::SHADOWING_VSM16)) ? MAX_SHADOWMAPS * 2 : MAX_SHADOWMAPS;
+	int format;
+	filterType_t filter;
+
+	if ( !glConfig2.textureFloatAvailable || r_shadows->integer < Util::ordinal(shadowingMode_t::SHADOWING_ESM16))
 	{
 		return;
 	}
 
-	int numFactor = 1;
-	int format = IF_NOPICMIP;
-
-	switch( glConfig2.shadowingMode )
+	if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_ESM32))
 	{
-		case shadowingMode_t::SHADOWING_ESM16:
-			format |= IF_ONECOMP16F;
-			break;
-		case shadowingMode_t::SHADOWING_ESM32:
-			format |= IF_ONECOMP32F;
-			break;
-		case shadowingMode_t::SHADOWING_VSM16:
-			numFactor = 2;
-			format |= IF_TWOCOMP16F;
-			break;
-		case shadowingMode_t::SHADOWING_VSM32:
-			numFactor = 2;
-			format |= IF_TWOCOMP32F;
-			break;
-		case shadowingMode_t::SHADOWING_EVSM32:
-			numFactor = 2;
-			if ( r_evsmPostProcess->integer )
-			{
-				format |= IF_ONECOMP32F;
-			}
-			else
-			{
-				format |= IF_RGBA32F;
-			}
-			break;
-		case shadowingMode_t::SHADOWING_NONE:
-		case shadowingMode_t::SHADOWING_BLOB:
-		default:
-			DAEMON_ASSERT( false );
-			return;
+		format = IF_NOPICMIP | IF_ONECOMP32F;
 	}
-
-	int numShadowMaps = MAX_SHADOWMAPS;
-
-	if ( r_softShadowsPP->integer )
+	else if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_VSM32))
 	{
-		numShadowMaps *= numFactor;
+		format = IF_NOPICMIP | IF_TWOCOMP32F;
 	}
-
-	filterType_t filter = filterType_t::FT_NEAREST;
-
+	else if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_EVSM32))
+	{
+		if ( r_evsmPostProcess->integer )
+		{
+			format = IF_NOPICMIP | IF_ONECOMP32F;
+		}
+		else
+		{
+			format = IF_NOPICMIP | IF_RGBA32F;
+		}
+	}
+	else if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_ESM16))
+	{
+		format = IF_NOPICMIP | IF_ONECOMP16F;
+	}
+	else if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_VSM16))
+	{
+		format = IF_NOPICMIP | IF_TWOCOMP16F;
+	}
+	else
+	{
+		format = IF_NOPICMIP | IF_RGBA16F;
+	}
 	if( r_shadowMapLinearFilter->integer )
 	{
 		filter = filterType_t::FT_LINEAR;
+	}
+	else
+	{
+		filter = filterType_t::FT_NEAREST;
 	}
 
 	imageParams_t imageParams = {};
@@ -2659,21 +2641,21 @@ static void R_CreateShadowMapFBOImage()
 	imageParams.filterType = filter;
 	imageParams.wrapType = wrapTypeEnum_t::WT_ONE_CLAMP;
 
-	for ( int i = 0; i < numShadowMaps; i++ )
+	for ( i = 0; i < numShadowMaps; i++ )
 	{
-		int size = shadowMapResolutions[ i % MAX_SHADOWMAPS ];
+		width = height = shadowMapResolutions[ i % MAX_SHADOWMAPS ];
 
-		tr.shadowMapFBOImage[ i ] = R_CreateImage( va( "_shadowMapFBO%d", i ), nullptr, size, size, 1, imageParams );
-		tr.shadowClipMapFBOImage[ i ] = R_CreateImage( va( "_shadowClipMapFBO%d", i ), nullptr, size, size, 1, imageParams );
+		tr.shadowMapFBOImage[ i ] = R_CreateImage( va( "_shadowMapFBO%d", i ), nullptr, width, height, 1, imageParams );
+		tr.shadowClipMapFBOImage[ i ] = R_CreateImage( va( "_shadowClipMapFBO%d", i ), nullptr, width, height, 1, imageParams );
 	}
 
 	// sun shadow maps
-	for ( int i = 0; i < numShadowMaps; i++ )
+	for ( i = 0; i < numShadowMaps; i++ )
 	{
-		int size = sunShadowMapResolutions[ i % MAX_SHADOWMAPS ];
+		width = height = sunShadowMapResolutions[ i % MAX_SHADOWMAPS ];
 
-		tr.sunShadowMapFBOImage[ i ] = R_CreateImage( va( "_sunShadowMapFBO%d", i ), nullptr, size, size, 1, imageParams );
-		tr.sunShadowClipMapFBOImage[ i ] = R_CreateImage( va( "_sunShadowClipMapFBO%d", i ), nullptr, size, size, 1, imageParams );
+		tr.sunShadowMapFBOImage[ i ] = R_CreateImage( va( "_sunShadowMapFBO%d", i ), nullptr, width, height, 1, imageParams );
+		tr.sunShadowClipMapFBOImage[ i ] = R_CreateImage( va( "_sunShadowClipMapFBO%d", i ), nullptr, width, height, 1, imageParams );
 	}
 }
 
@@ -2682,49 +2664,54 @@ static void R_CreateShadowMapFBOImage()
 // *INDENT-OFF*
 static void R_CreateShadowCubeFBOImage()
 {
-	if ( !glConfig2.shadowMapping )
+	int  j;
+	int  width, height;
+	int format;
+	filterType_t filter;
+
+	if ( !glConfig2.textureFloatAvailable || r_shadows->integer < Util::ordinal(shadowingMode_t::SHADOWING_ESM16))
 	{
 		return;
 	}
 
-	int format = IF_NOPICMIP;
-
-	switch( glConfig2.shadowingMode )
+	if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_ESM32))
 	{
-		case shadowingMode_t::SHADOWING_ESM16:
-			format |= IF_ONECOMP16F;
-			break;
-		case shadowingMode_t::SHADOWING_ESM32:
-			format |= IF_ONECOMP32F;
-			break;
-		case shadowingMode_t::SHADOWING_VSM16:
-			format |= IF_TWOCOMP16F;
-			break;
-		case shadowingMode_t::SHADOWING_VSM32:
-			format |= IF_TWOCOMP32F;
-			break;
-		case shadowingMode_t::SHADOWING_EVSM32:
-			if ( r_evsmPostProcess->integer )
-			{
-				format |= IF_ONECOMP32F;
-			}
-			else
-			{
-				format |= IF_RGBA32F;
-			}
-			break;
-		case shadowingMode_t::SHADOWING_NONE:
-		case shadowingMode_t::SHADOWING_BLOB:
-		default:
-			DAEMON_ASSERT( false );
-			return;
+		format = IF_NOPICMIP | IF_ONECOMP32F;
 	}
-
-	filterType_t filter = filterType_t::FT_NEAREST;
-
-	if ( r_shadowMapLinearFilter->integer )
+	else if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_VSM32))
+	{
+		format = IF_NOPICMIP | IF_TWOCOMP32F;
+	}
+	else if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_EVSM32))
+	{
+		if ( r_evsmPostProcess->integer )
+		{
+			format = IF_NOPICMIP | IF_ONECOMP32F;
+		}
+		else
+		{
+			format = IF_NOPICMIP | IF_RGBA32F;
+		}
+	}
+	else if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_ESM16))
+	{
+		format = IF_NOPICMIP | IF_ONECOMP16F;
+	}
+	else if ( r_shadows->integer == Util::ordinal(shadowingMode_t::SHADOWING_VSM16))
+	{
+		format = IF_NOPICMIP | IF_TWOCOMP16F;
+	}
+	else
+	{
+		format = IF_NOPICMIP | IF_RGBA16F;
+	}
+	if( r_shadowMapLinearFilter->integer )
 	{
 		filter = filterType_t::FT_LINEAR;
+	}
+	else
+	{
+		filter = filterType_t::FT_NEAREST;
 	}
 
 	imageParams_t imageParams = {};
@@ -2732,12 +2719,12 @@ static void R_CreateShadowCubeFBOImage()
 	imageParams.filterType = filter;
 	imageParams.wrapType = wrapTypeEnum_t::WT_EDGE_CLAMP;
 
-	for ( int i = 0; i < 5; i++ )
+	for ( j = 0; j < 5; j++ )
 	{
-		int size = shadowMapResolutions[ i ];
+		width = height = shadowMapResolutions[ j ];
 
-		tr.shadowCubeFBOImage[ i ] = R_CreateCubeImage( va( "_shadowCubeFBO%d", i ), nullptr, size, size, imageParams );
-		tr.shadowClipCubeFBOImage[ i ] = R_CreateCubeImage( va( "_shadowClipCubeFBO%d", i ), nullptr, size, size, imageParams );
+		tr.shadowCubeFBOImage[ j ] = R_CreateCubeImage( va( "_shadowCubeFBO%d", j ), nullptr, width, height, imageParams );
+		tr.shadowClipCubeFBOImage[ j ] = R_CreateCubeImage( va( "_shadowClipCubeFBO%d", j ), nullptr, width, height, imageParams );
 	}
 }
 
