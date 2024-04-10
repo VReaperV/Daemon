@@ -3343,6 +3343,8 @@ void RB_FXAA()
 
 void RB_CameraPostFX()
 {
+	return;
+
 	matrix_t ortho;
 
 	GLimp_LogComment( "--- RB_CameraPostFX ---\n" );
