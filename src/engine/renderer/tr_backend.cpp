@@ -5924,6 +5924,7 @@ const RenderCommand *SwapBuffersCommand::ExecuteSelf( ) const
 		RB_ShowImages();
 	}
 
+	globalCommandQueue.PrintAll();
 	globalCommandQueue.Execute();
 	globalCommandQueue.Clear();
 

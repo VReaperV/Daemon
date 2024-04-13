@@ -321,8 +321,22 @@ class GlobalCommandQueue {
 	}
 
 	void PrintAll() {
+		struct ShaderInfo {
+			uint count = 0;
+			uint size = 0;
+		};
+		std::unordered_map<const GLShader*, ShaderInfo> shaders;
 		for ( std::set<DrawcallState, DrawcallStateCompare>::iterator dc = drawcalls.begin(); dc != drawcalls.end(); dc++ ) {
-			Log::Warn( "dc: %u", const_cast<DrawcallState*>(&*dc)->GetInfo());
+			// Log::Warn( "dc: %u", const_cast<DrawcallState*>(&*dc)->GetInfo());
+			/* if ( shaders.find(const_cast< DrawcallState* >( &*dc )->shader) == shaders.end() ) {
+				shaders[const_cast< DrawcallState* >( &*dc )->shader].count = 1;
+				shaders[const_cast< DrawcallState* >( &*dc )->shader].size += const_cast< DrawcallState* >( &*dc )->shader->GetSTD430Size();
+			} */
+			shaders[const_cast< DrawcallState* >( &*dc )->shader].count++;
+			shaders[const_cast< DrawcallState* >( &*dc )->shader].size += const_cast< DrawcallState* >( &*dc )->shader->GetSTD430Size();
+		}
+		for ( const std::pair<const GLShader*, ShaderInfo>& info : shaders ) {
+			Log::Warn( "Shader: %s, count: %u, size: %u", info.first->GetName(), info.second.count, info.second.size );
 		}
 	}
 
