@@ -321,6 +321,7 @@ class GlobalCommandQueue {
 	}
 
 	void PrintAll() {
+		return;
 		struct ShaderInfo {
 			uint count = 0;
 			uint size = 0;

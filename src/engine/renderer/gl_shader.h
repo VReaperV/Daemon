@@ -2951,13 +2951,13 @@ class u_Bones :
 {
 public:
 	u_Bones( GLShader *shader ) :
-		GLUniform4fv( shader, "u_Bones", MAX_BONES )
+		GLUniform4fv( shader, "u_Bones", MAX_BONES * 0 + 1 )
 	{
 	}
 
 	void SetUniform_Bones( int numBones, transform_t bones[ MAX_BONES ] )
 	{
-		this->SetValue( 2 * numBones, &bones[ 0 ].rot );
+		// this->SetValue( 2 * numBones, &bones[ 0 ].rot );
 	}
 };
 
