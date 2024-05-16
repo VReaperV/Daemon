@@ -42,6 +42,9 @@ ShaderKind shaderKind = ShaderKind::Unknown;
 GLShader_generic2D                       *gl_generic2DShader = nullptr;
 GLShader_generic                         *gl_genericShader = nullptr;
 GLShader_genericMaterial                 *gl_genericShaderMaterial = nullptr;
+GLShader_cull                            *gl_cullShader = nullptr;
+GLShader_clearSurfaces                   *gl_clearSurfacesShader = nullptr;
+GLShader_processSurfaces                 *gl_processSurfacesShader = nullptr;
 GLShader_lightMapping                    *gl_lightMappingShader = nullptr;
 GLShader_lightMappingMaterial            *gl_lightMappingShaderMaterial = nullptr;
 GLShader_forwardLighting_omniXYZ         *gl_forwardLightingShader_omniXYZ = nullptr;
@@ -464,6 +467,8 @@ static std::string GenComputeVersionDeclaration() {
 			  GLEW_ARB_explicit_uniform_location, "ARB_explicit_uniform_location" );
 	addExtension( str, glConfig2.shaderImageLoadStoreAvailable, 420,
 			  GLEW_ARB_shader_image_load_store, "ARB_shader_image_load_store" );
+	addExtension( str, glConfig2.shaderAtomicCountersAvailable, 420,
+			  GLEW_ARB_shader_atomic_counters, "ARB_shader_atomic_counters" );
 
 	return str;
 }
@@ -3054,4 +3059,23 @@ void GLShader_fxaa::SetShaderProgramUniforms( shaderProgram_t *shaderProgram )
 void GLShader_fxaa::BuildShaderFragmentLibNames( std::string& fragmentInlines )
 {
 	fragmentInlines += "fxaa3_11";
+}
+
+GLShader_cull::GLShader_cull( GLShaderManager* manager ) :
+	GLShader( "cull", ATTR_POSITION, manager, false, false, true ),
+	u_TotalDrawSurfs( this ),
+	u_SurfaceCommandsOffset( this ),
+	u_Frustum( this ) {
+}
+
+GLShader_clearSurfaces::GLShader_clearSurfaces( GLShaderManager* manager ) :
+	GLShader( "clearSurfaces", ATTR_POSITION, manager, false, false, true ),
+	u_Frame( this ) {
+}
+
+GLShader_processSurfaces::GLShader_processSurfaces( GLShaderManager* manager ) :
+	GLShader( "processSurfaces", ATTR_POSITION, manager, false, false, true ),
+	u_Frame( this ),
+	u_SurfaceCommandsOffset( this ),
+	u_CulledCommandsOffset( this ) {
 }

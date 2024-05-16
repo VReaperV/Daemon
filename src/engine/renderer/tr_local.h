@@ -1668,6 +1668,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		uint materialIDs[ MAX_SHADER_STAGES ];
 		uint materialPackIDs[ MAX_SHADER_STAGES ];
 		bool texturesDynamic[ MAX_SHADER_STAGES ];
+		uint drawCommandIDs[ MAX_SHADER_STAGES ];
 
 		inline int index() const {
 			return int( ( sort & SORT_INDEX_MASK ) );
@@ -2927,6 +2928,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	extern cvar_t *r_arb_shading_language_420pack;
 	extern cvar_t *r_arb_explicit_uniform_location;
 	extern cvar_t *r_arb_shader_image_load_store;
+	extern cvar_t *r_arb_shader_atomic_counters;
 
 	extern cvar_t *r_nobind; // turns off binding to appropriate textures
 	extern cvar_t *r_singleShader; // make most world faces use default shader

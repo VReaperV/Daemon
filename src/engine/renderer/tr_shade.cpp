@@ -86,6 +86,9 @@ static void GLSL_InitGPUShadersOrError()
 		gl_shaderManager.load( gl_skyboxShaderMaterial );
 		gl_shaderManager.load( gl_fogQuake3ShaderMaterial );
 		gl_shaderManager.load( gl_heatHazeShaderMaterial );
+		gl_shaderManager.load( gl_cullShader );
+		gl_shaderManager.load( gl_clearSurfacesShader );
+		gl_shaderManager.load( gl_processSurfacesShader );
 	}
 
 	// standard light mapping
