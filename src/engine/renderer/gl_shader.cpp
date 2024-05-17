@@ -892,8 +892,17 @@ std::string     GLShaderManager::BuildGPUShaderText( Str::StringRef mainShaderNa
 	std::string line;
 
 	while ( std::getline( shaderTextStream, line, '\n' ) ) {
-		std::string::size_type position = line.find( "#insert" );
+		const std::string::size_type position = line.find( "#insert" );
 		if ( position == std::string::npos ) {
+			shaderMain += line + "\n";
+			continue;
+		}
+
+		const std::string::iterator beginIt = std::find_if( line.begin(), line.end(),
+			[]( unsigned char character ) {
+				return !std::isspace( character );
+			} );
+		if ( beginIt - line.begin() != position ) {
 			shaderMain += line + "\n";
 			continue;
 		}
@@ -901,13 +910,13 @@ std::string     GLShaderManager::BuildGPUShaderText( Str::StringRef mainShaderNa
 		std::string shaderInsertPath = line.substr( position + 8, std::string::npos );
 		switch ( shaderType ) {
 			case GL_VERTEX_SHADER:
-				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + "_vp.glsl" );
+				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + ".glsl" );
 				break;
 			case GL_FRAGMENT_SHADER:
-				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + "_fp.glsl" );
+				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + ".glsl" );
 				break;
 			case GL_COMPUTE_SHADER:
-				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + "_cp.glsl" );
+				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + ".glsl" );
 				break;
 			default:
 				break;

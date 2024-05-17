@@ -49,6 +49,10 @@ struct SurfaceCommand {
     GLIndirectCommand drawCommand;
 };
 
+struct SurfaceCommandBatch {
+    uvec2 materialIDs[2];
+};
+
 layout(std430, binding = 2) readonly buffer surfaceCommandsSSBO {
     SurfaceCommand surfaceCommands[];
 };
@@ -57,21 +61,12 @@ layout(std430, binding = 3) writeonly buffer culledCommandsSSBO {
     GLIndirectCommand culledCommands[];
 };
 
-// #define MAX_SURFACE_COMMAND_BATCHES 2048
-
-struct SurfaceCommandBatch {
-    uvec2 materialIDs[2];
-};
-
 layout(std140, binding = 0) uniform ub_SurfaceBatches {
     SurfaceCommandBatch surfaceBatches[MAX_SURFACE_COMMAND_BATCHES];
 };
 
-/* #define MAX_COMMAND_COUNTERS 64
-#define MAX_VIEWS 10
-#define MAX_FRAMES 2 */
-
 layout (binding = 4) uniform atomic_uint atomicCommandCounters[MAX_COMMAND_COUNTERS * MAX_VIEWS * MAX_FRAMES];
+
 uniform uint u_Frame;
 uniform uint u_SurfaceCommandsOffset;
 uniform uint u_CulledCommandsOffset;

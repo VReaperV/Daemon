@@ -36,10 +36,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-#define MAX_COMMAND_COUNTERS 64
-#define MAX_VIEWS 10
-#define MAX_FRAMES 2
-
 layout(std430, binding = 4) writeonly buffer atomicCommandCountersBuffer {
     uint atomicCommandCounters[MAX_COMMAND_COUNTERS * MAX_VIEWS * MAX_FRAMES];
 };
