@@ -47,11 +47,11 @@ layout(std430, binding = 4) writeonly buffer atomicCommandCountersBuffer {
 uniform uint u_Frame;
 
 void main() {
-    const uint globalGroupID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
+    const uint globalInvocationID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
                              + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x
                              + gl_GlobalInvocationID.x;
-    if( globalGroupID >= MAX_COMMAND_COUNTERS * MAX_VIEWS ) {
+    if( globalInvocationID >= MAX_COMMAND_COUNTERS * MAX_VIEWS ) {
         return;
     }
-    atomicCommandCounters[globalGroupID + MAX_COMMAND_COUNTERS * MAX_VIEWS * u_Frame] = 0;
+    atomicCommandCounters[globalInvocationID + MAX_COMMAND_COUNTERS * MAX_VIEWS * u_Frame] = 0;
 }

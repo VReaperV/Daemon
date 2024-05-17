@@ -43,8 +43,6 @@ struct BoundingSphere {
     float radius;
 };
 
-#define MAX_SURFACE_COMMANDS 4
-
 struct SurfaceDescriptor {
     BoundingSphere boundingSphere;
     uint surfaceCommandIDs[MAX_SURFACE_COMMANDS];
@@ -81,7 +79,7 @@ uniform uint u_SurfaceCommandsOffset;
 uniform vec4 u_Frustum[6]; // xyz - normal, w - distance
 
 bool CullSurface( in BoundingSphere boundingSphere ) {
-    for( int i = 0; i < 5; i++ ) {
+    for( int i = 0; i < 5; i++ ) { // Skip far plane for now because we always have it set to { 0, 0, 0, 0 } for some reason
         const float distance = dot( u_Frustum[i].xyz, boundingSphere.center ) - u_Frustum[i].w;
 
         if( distance < -boundingSphere.radius ) {
@@ -99,13 +97,13 @@ void ProcessSurfaceCommands( const in SurfaceDescriptor surface, const in bool e
 }
 
 void main() {
-    const uint globalGroupID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
+    const uint globalInvocationID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
                              + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x
                              + gl_GlobalInvocationID.x;
-    if( globalGroupID >= u_TotalDrawSurfs ) {
+    if( globalInvocationID >= u_TotalDrawSurfs ) {
         return;
     }
-    SurfaceDescriptor surface = surfaces[globalGroupID];
+    SurfaceDescriptor surface = surfaces[globalInvocationID];
     bool culled = CullSurface( surface.boundingSphere );
 
     ProcessSurfaceCommands( surface, !culled );

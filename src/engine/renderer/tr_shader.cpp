@@ -5903,8 +5903,12 @@ static shader_t *FinishShader()
 	// Copy the current global shader to a newly allocated shader.
 	shader_t *ret = MakeShaderPermanent();
 
-	if ( glConfig2.materialSystemAvailable ) {
-		materialSystem.maxStages = ret->numStages > materialSystem.maxStages ? ret->numStages : materialSystem.maxStages;
+	if ( glConfig2.materialSystemAvailable && !tr.worldLoaded ) {
+		uint8_t maxStages = ret->numStages;
+		if ( maxStages % 4 != 0 ) { // Aligned to 4 components
+			maxStages = ( maxStages / 4 + 1 ) * 4;
+		}
+		materialSystem.maxStages = maxStages > materialSystem.maxStages ? maxStages : materialSystem.maxStages;
 	}
 
 	// generate depth-only shader if necessary

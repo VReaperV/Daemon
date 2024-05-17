@@ -141,21 +141,19 @@ struct drawSurfBoundingSphere {
 #define MAX_COMMAND_COUNTERS 64
 #define SURFACE_COMMANDS_PER_BATCH 64
 
-#define MAX_SURFACE_COMMAND_BATCHES 2048 * 2
+#define MAX_SURFACE_COMMAND_BATCHES 2048
 
-#define SURFACE_DESCRIPTOR_SIZE 8
+#define BOUNDING_SPHERE_SIZE 4
+
 #define INDIRECT_COMMAND_SIZE 5
 #define SURFACE_COMMAND_SIZE 6
-#define SURFACE_COMMAND_BATCH_SIZE 4
+#define SURFACE_COMMAND_BATCH_SIZE 4 // Aligned to 4 components
 
 #define MAX_FRAMES 2
 #define MAX_VIEWFRAMES MAX_VIEWS * MAX_FRAMES // Buffer 2 frames for each view
 
 struct ViewFrame {
-	// view id, compute fence
 	uint viewID = 0;
-	GLsync cullSync = nullptr;
-	// GLsync cullSync; // TODO: Occlusion culling
 	uint portalViews[MAX_VIEWS];
 	frustum_t frustum;
 };

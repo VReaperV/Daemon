@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <common/FileSystem.h>
 #include "gl_shader.h"
+#include "Material.h"
 
 // We currently write GLBinaryHeader to a file and memcpy all over it.
 // Make sure it's a pod, so we don't put a std::string in it or something
@@ -544,6 +545,28 @@ static std::string GenFragmentHeader() {
 	return str;
 }
 
+static std::string GenComputeHeader() {
+	std::string str;
+
+	// Compute shader compatibility defines
+	AddDefine( str, "MAX_VIEWS", MAX_VIEWS );
+	AddDefine( str, "MAX_FRAMES", MAX_FRAMES );
+	AddDefine( str, "MAX_VIEWFRAMES", MAX_VIEWFRAMES );
+	AddDefine( str, "MAX_SURFACE_COMMAND_BATCHES", MAX_SURFACE_COMMAND_BATCHES );
+	AddDefine( str, "MAX_COMMAND_COUNTERS", MAX_COMMAND_COUNTERS );
+
+	return str;
+}
+
+static std::string GenWorldHeader() {
+	std::string str;
+
+	// Shader compatibility defines that use map data for compile-time values
+	AddDefine( str, "MAX_SURFACE_COMMANDS", materialSystem.maxStages );
+
+	return str;
+}
+
 static std::string GenEngineConstants() {
 	// Engine constants
 	std::string str;
@@ -730,7 +753,13 @@ void GLShaderManager::GenerateBuiltinHeaders() {
 	GLCompatHeader = GLHeader("GLCompatHeader", GenCompatHeader(), this);
 	GLVertexHeader = GLHeader("GLVertexHeader", GenVertexHeader(), this);
 	GLFragmentHeader = GLHeader("GLFragmentHeader", GenFragmentHeader(), this);
+	GLComputeHeader = GLHeader( "GLComputeHeader", GenComputeHeader(), this );
+	GLWorldHeader = GLHeader( "GLWorldHeader", GenWorldHeader(), this );
 	GLEngineConstants = GLHeader("GLEngineConstants", GenEngineConstants(), this);
+}
+
+void GLShaderManager::GenerateWorldHeaders() {
+	GLWorldHeader = GLHeader( "GLWorldHeader", GenWorldHeader(), this );
 }
 
 std::string GLShaderManager::BuildDeformShaderText( const std::string& steps )
@@ -1069,6 +1098,8 @@ void GLShaderManager::InitShader( GLShader *shader )
 		combinedShaderText =
 			GLComputeVersionDeclaration.getText()
 			+ GLCompatHeader.getText()
+			+ GLComputeHeader.getText()
+			+ GLWorldHeader.getText()
 			+ GLEngineConstants.getText();
 	}
 
@@ -1281,7 +1312,8 @@ void GLShaderManager::CompileGPUShaders( GLShader *shader, shaderProgram_t *prog
 		program->CS = CompileShader( shader->GetName(),
 						 computeShaderTextWithMacros,
 						 { &GLComputeVersionDeclaration,
-						   // &GLComputeHeader,
+						   &GLComputeHeader,
+						   &GLWorldHeader,
 						   &GLCompatHeader,
 						   &GLEngineConstants },
 						 GL_COMPUTE_SHADER );

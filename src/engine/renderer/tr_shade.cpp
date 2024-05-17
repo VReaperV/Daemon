@@ -60,6 +60,23 @@ static void EnableAvailableFeatures()
 	}
 }
 
+// For shaders that require map data for compile-time values 
+void GLSL_InitWorldShadersOrError() {
+	// make sure the render thread is stopped
+	R_SyncRenderThread();
+
+	GL_CheckErrors();
+
+	gl_shaderManager.GenerateWorldHeaders();
+
+	// Material system shaders that are always loaded if material system is available
+	if ( glConfig2.materialSystemAvailable ) {
+		gl_shaderManager.load( gl_cullShader );
+	}
+
+	gl_shaderManager.buildAll();
+}
+
 static void GLSL_InitGPUShadersOrError()
 {
 	// make sure the render thread is stopped

@@ -2656,6 +2656,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		deluxeMode_t worldDeluxe;
 		deluxeMode_t modelDeluxe;
 
+		bool worldLoaded;
 		world_t    *world;
 
 		TextureManager textureManager;
@@ -3436,6 +3437,7 @@ inline bool checkGLErrors()
 	extern shaderCommands_t tess;
 
 	void                    GLSL_InitGPUShaders();
+	void                    GLSL_InitWorldShadersOrError();
 	void                    GLSL_ShutdownGPUShaders();
 	void                    GLSL_FinishGPUShaders();
 

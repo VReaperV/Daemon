@@ -351,6 +351,8 @@ public:
 	GLHeader GLCompatHeader;
 	GLHeader GLVertexHeader;
 	GLHeader GLFragmentHeader;
+	GLHeader GLComputeHeader;
+	GLHeader GLWorldHeader;
 	GLHeader GLEngineConstants;
 
 	GLShaderManager() : _totalBuildTime( 0 )
@@ -361,6 +363,7 @@ public:
 	void InitDriverInfo();
 
 	void GenerateBuiltinHeaders();
+	void GenerateWorldHeaders();
 
 	template< class T >
 	void load( T *& shader )

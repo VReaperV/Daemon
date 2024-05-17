@@ -1014,7 +1014,7 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 
 	surfaceDescriptorsSSBO.BindBuffer();
 	surfaceDescriptorsCount = totalDrawSurfs;
-	descriptorSize = 4 + maxStages;
+	descriptorSize = BOUNDING_SPHERE_SIZE + maxStages;
 	glBufferData( GL_SHADER_STORAGE_BUFFER, surfaceDescriptorsCount * descriptorSize * sizeof( uint32_t ),
 				  nullptr, GL_STATIC_DRAW );
 	uint32_t* surfaceDescriptors = surfaceDescriptorsSSBO.MapBufferRange( surfaceDescriptorsCount * descriptorSize );
@@ -1037,11 +1037,12 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	culledCommandsBuffer.FlushAll( GL_SHADER_STORAGE_BUFFER );
 
 	surfaceBatchesUBO.BindBuffer();
-	glBufferData( GL_UNIFORM_BUFFER, MAX_SURFACE_COMMAND_BATCHES * sizeof( SurfaceCommandBatch ), nullptr, GL_STATIC_DRAW );
+	// Multiply by 2 because we write a uvec2, which is aligned as vec4
+	glBufferData( GL_UNIFORM_BUFFER, MAX_SURFACE_COMMAND_BATCHES * 2 * sizeof( SurfaceCommandBatch ), nullptr, GL_STATIC_DRAW );
 	SurfaceCommandBatch* surfaceCommandBatches =
-		( SurfaceCommandBatch* ) surfaceBatchesUBO.MapBufferRange( MAX_SURFACE_COMMAND_BATCHES * SURFACE_COMMAND_BATCH_SIZE );
+		( SurfaceCommandBatch* ) surfaceBatchesUBO.MapBufferRange( MAX_SURFACE_COMMAND_BATCHES * 2 * SURFACE_COMMAND_BATCH_SIZE );
 
-	memset( surfaceCommandBatches, 0, MAX_SURFACE_COMMAND_BATCHES * sizeof( SurfaceCommandBatch ) );
+	memset( surfaceCommandBatches, 0, MAX_SURFACE_COMMAND_BATCHES * 2 * sizeof( SurfaceCommandBatch ) );
 
 	uint id = 0;
 	uint matID = 0;
@@ -1102,11 +1103,6 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		surface.boundingSphere.radius = ( ( srfGeneric_t* ) drawSurf->surface )->radius;
 
 		for ( int stage = 0; stage < drawSurf->shader->numStages; stage++ ) {
-			/* if ( stage > 3 ) {
-				Log::Warn( "skipping stage" );
-				continue;
-			} */
-
 			const Material* material = &materialPacks[drawSurf->materialPackIDs[stage]].materials[drawSurf->materialIDs[stage]];
 			uint cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + drawSurf->drawCommandIDs[stage];
 			cmdID++; // Add 1 because the first surface command is always reserved as a fake command
