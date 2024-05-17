@@ -294,6 +294,9 @@ void GLSL_ShutdownGPUShaders()
 
 	gl_genericShader = nullptr;
 	gl_genericShaderMaterial = nullptr;
+	gl_cullShader = nullptr;
+	gl_clearSurfacesShader = nullptr;
+	gl_processSurfacesShader = nullptr;
 	gl_lightMappingShader = nullptr;
 	gl_lightMappingShaderMaterial = nullptr;
 	gl_forwardLightingShader_omniXYZ = nullptr;

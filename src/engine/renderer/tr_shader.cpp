@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 #include "gl_shader.h"
 #include "framework/CvarSystem.h"
+#include "Material.h"
 #include <iomanip>
 
 static const int MAX_SHADERTABLE_HASH = 1024;
@@ -5901,6 +5902,10 @@ static shader_t *FinishShader()
 
 	// Copy the current global shader to a newly allocated shader.
 	shader_t *ret = MakeShaderPermanent();
+
+	if ( glConfig2.materialSystemAvailable ) {
+		materialSystem.maxStages = ret->numStages > materialSystem.maxStages ? ret->numStages : materialSystem.maxStages;
+	}
 
 	// generate depth-only shader if necessary
 	if( !shader.isSky &&
