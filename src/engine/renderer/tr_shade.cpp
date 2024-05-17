@@ -74,6 +74,7 @@ static void GLSL_InitGPUShadersOrError()
 	EnableAvailableFeatures();
 
 	gl_shaderManager.GenerateBuiltinHeaders();
+	gl_shaderManager.GenerateWorldDataShaders();
 
 	// single texture rendering
 	gl_shaderManager.load( gl_generic2DShader );

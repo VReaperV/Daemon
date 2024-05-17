@@ -43,7 +43,7 @@ struct BoundingSphere {
     float radius;
 };
 
-#define MAX_SURFACE_COMMANDS 4
+// #define MAX_SURFACE_COMMANDS 4
 
 struct SurfaceDescriptor {
     BoundingSphere boundingSphere;

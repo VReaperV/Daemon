@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <common/FileSystem.h>
 #include "gl_shader.h"
+#include "Material.h"
 
 // We currently write GLBinaryHeader to a file and memcpy all over it.
 // Make sure it's a pod, so we don't put a std::string in it or something
@@ -237,6 +238,11 @@ void GLShaderManager::freeAll()
 
 	_deformShaders.clear();
 	_deformShaderLookup.clear();
+
+	for ( GLint shader : _worldDataShaders ) {
+		glDeleteShader( shader );
+	}
+	_worldDataShaders.clear();
 
 	while ( !_shaderBuildQueue.empty() )
 	{
@@ -544,6 +550,19 @@ static std::string GenFragmentHeader() {
 	return str;
 }
 
+static std::string GenComputeHeader() {
+	std::string str;
+
+	// Fragment shader compatibility defines
+	if ( glConfig2.bindlessTexturesAvailable ) {
+		// str += "layout(bindless_sampler) uniform;\n";
+	}
+
+	// AddDefine( str, "MAX_SURFACE_COMMANDS", materialSystem.maxStages );
+
+	return str;
+}
+
 static std::string GenEngineConstants() {
 	// Engine constants
 	std::string str;
@@ -730,6 +749,7 @@ void GLShaderManager::GenerateBuiltinHeaders() {
 	GLCompatHeader = GLHeader("GLCompatHeader", GenCompatHeader(), this);
 	GLVertexHeader = GLHeader("GLVertexHeader", GenVertexHeader(), this);
 	GLFragmentHeader = GLHeader("GLFragmentHeader", GenFragmentHeader(), this);
+	GLComputeHeader = GLHeader( "GLComputeHeader", GenComputeHeader(), this );
 	GLEngineConstants = GLHeader("GLEngineConstants", GenEngineConstants(), this);
 }
 
@@ -766,6 +786,14 @@ int GLShaderManager::getDeformShaderIndex( deformStage_t *deforms, int numDeform
 	}
 
 	return index;
+}
+
+void GLShaderManager::GenerateWorldDataShaders() {
+	for ( int surfCommandCount = 0; surfCommandCount < MAX_SHADER_STAGES; surfCommandCount++ ) {
+		std::string shaderText = "";
+		AddDefine( shaderText, "MAX_SURFACE_COMMANDS", surfCommandCount );
+		_worldDataShaders.push_back( CompileShader( "worldData", shaderText, {}, GL_COMPUTE_SHADER ) );
+	}
 }
 
 std::string     GLShaderManager::BuildGPUShaderText( Str::StringRef mainShaderName,
@@ -959,8 +987,10 @@ void GLShaderManager::buildPermutation( GLShader *shader, int macroIndex, int de
 		if( deformIndex > 0 )
 		{
 			shaderProgram_t *baseShader = &shader->_shaderPrograms[ macroIndex ];
-			if( ( !baseShader->VS && shader->_hasVertexShader ) || ( !baseShader->FS && shader->_hasFragmentShader ) )
+			if ( ( !baseShader->VS && shader->_hasVertexShader ) || ( !baseShader->FS && shader->_hasFragmentShader )
+				 || ( !baseShader->CS && shader->_hasComputeShader ) ) {
 				CompileGPUShaders( shader, baseShader, compileMacros );
+			}
 
 			shaderProgram->program = glCreateProgram();
 			if ( shader->_hasVertexShader ) {
@@ -970,13 +1000,17 @@ void GLShaderManager::buildPermutation( GLShader *shader, int macroIndex, int de
 			if ( shader->_hasFragmentShader ) {
 				glAttachShader( shaderProgram->program, baseShader->FS );
 			}
+			if ( shader->_hasComputeShader ) {
+				glAttachShader( shaderProgram->program, baseShader->CS );
+				glAttachShader( shaderProgram->program, _worldDataShaders[deformIndex] );
+			}
 
 			BindAttribLocations( shaderProgram->program );
 			LinkProgram( shaderProgram->program );
 		}
 		else if ( !LoadShaderBinary( shader, i ) )
 		{
-			CompileAndLinkGPUShaderProgram(	shader, shaderProgram, compileMacros, deformIndex );
+			CompileAndLinkGPUShaderProgram(	shader, shaderProgram, compileMacros, 0 );
 			SaveShaderBinary( shader, i );
 		}
 
@@ -1069,6 +1103,7 @@ void GLShaderManager::InitShader( GLShader *shader )
 		combinedShaderText =
 			GLComputeVersionDeclaration.getText()
 			+ GLCompatHeader.getText()
+			+ GLComputeHeader.getText()
 			+ GLEngineConstants.getText();
 	}
 
@@ -1281,7 +1316,7 @@ void GLShaderManager::CompileGPUShaders( GLShader *shader, shaderProgram_t *prog
 		program->CS = CompileShader( shader->GetName(),
 						 computeShaderTextWithMacros,
 						 { &GLComputeVersionDeclaration,
-						   // &GLComputeHeader,
+						   &GLComputeHeader,
 						   &GLCompatHeader,
 						   &GLEngineConstants },
 						 GL_COMPUTE_SHADER );
@@ -1303,6 +1338,7 @@ void GLShaderManager::CompileAndLinkGPUShaderProgram( GLShader *shader, shaderPr
 	}
 	if ( shader->_hasComputeShader ) {
 		glAttachShader( program->program, program->CS );
+		glAttachShader( program->program, _worldDataShaders[deformIndex] );
 	}
 
 	BindAttribLocations( program->program );
