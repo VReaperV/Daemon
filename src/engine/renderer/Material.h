@@ -137,7 +137,7 @@ struct drawSurfBoundingSphere {
 	uint drawSurfID;
 };
 
-#define MAX_SURFACE_COMMANDS 4
+#define MAX_SURFACE_COMMANDS 16
 #define MAX_COMMAND_COUNTERS 64
 #define SURFACE_COMMANDS_PER_BATCH 64
 
@@ -172,7 +172,7 @@ struct BoundingSphere {
 
 struct SurfaceDescriptor {
 	BoundingSphere boundingSphere;
-	uint surfaceCommandIDs[MAX_SURFACE_COMMANDS] { 0, 0, 0, 0 };
+	uint surfaceCommandIDs[MAX_SURFACE_COMMANDS] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 };
 
 struct SurfaceCommand {
@@ -191,6 +191,9 @@ class MaterialSystem {
 	bool skipSurface;
 	bool generatingWorldCommandBuffer = false;
 	vec3_t worldViewBounds[2] = {};
+
+	uint8_t maxStages = 0;
+	uint descriptorSize = 0;
 
 	std::vector<DrawCommand> drawCommands;
 

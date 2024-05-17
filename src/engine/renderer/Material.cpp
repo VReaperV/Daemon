@@ -1014,9 +1014,10 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 
 	surfaceDescriptorsSSBO.BindBuffer();
 	surfaceDescriptorsCount = totalDrawSurfs;
-	glBufferData( GL_SHADER_STORAGE_BUFFER, surfaceDescriptorsCount * SURFACE_DESCRIPTOR_SIZE * sizeof(uint32_t), nullptr, GL_STATIC_DRAW );
-	SurfaceDescriptor* surfaceDescriptors =
-		( SurfaceDescriptor* ) surfaceDescriptorsSSBO.MapBufferRange( surfaceDescriptorsCount * SURFACE_DESCRIPTOR_SIZE );
+	descriptorSize = 4 + maxStages;
+	glBufferData( GL_SHADER_STORAGE_BUFFER, surfaceDescriptorsCount * descriptorSize * sizeof( uint32_t ),
+				  nullptr, GL_STATIC_DRAW );
+	uint32_t* surfaceDescriptors = surfaceDescriptorsSSBO.MapBufferRange( surfaceDescriptorsCount * descriptorSize );
 
 	culledCommandsCount = totalBatchCount * SURFACE_COMMANDS_PER_BATCH;
 	surfaceCommandsCount = totalBatchCount * SURFACE_COMMANDS_PER_BATCH + 1;
@@ -1101,10 +1102,10 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		surface.boundingSphere.radius = ( ( srfGeneric_t* ) drawSurf->surface )->radius;
 
 		for ( int stage = 0; stage < drawSurf->shader->numStages; stage++ ) {
-			if ( stage > 3 ) {
+			/* if ( stage > 3 ) {
 				Log::Warn( "skipping stage" );
 				continue;
-			}
+			} */
 
 			const Material* material = &materialPacks[drawSurf->materialPackIDs[stage]].materials[drawSurf->materialIDs[stage]];
 			uint cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + drawSurf->drawCommandIDs[stage];
@@ -1116,8 +1117,8 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			surfaceCommand.drawCommand = material->drawCommands[drawSurf->drawCommandIDs[stage]].cmd;
 			surfaceCommands[cmdID] = surfaceCommand;
 		}
-		memcpy( surfaceDescriptors, &surface, sizeof( SurfaceDescriptor ) );
-		surfaceDescriptors++;
+		memcpy( surfaceDescriptors, &surface, descriptorSize * sizeof( uint32_t ) );
+		surfaceDescriptors += descriptorSize;
 	}
 
 	for ( int i = 0; i < MAX_VIEWFRAMES; i++ ) {
@@ -1939,7 +1940,8 @@ void MaterialSystem::Free() {
 	atomicCommandCountersBuffer.UnmapBuffer();
 
 	currentFrame = 0;
-	nextFrame = 0;
+	nextFrame = 1;
+	maxStages = 0;
 
 	for ( MaterialPack& pack : materialPacks ) {
 		for ( Material& material : pack.materials ) {

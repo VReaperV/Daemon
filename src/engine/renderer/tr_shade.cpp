@@ -74,7 +74,6 @@ static void GLSL_InitGPUShadersOrError()
 	EnableAvailableFeatures();
 
 	gl_shaderManager.GenerateBuiltinHeaders();
-	gl_shaderManager.GenerateWorldDataShaders();
 
 	// single texture rendering
 	gl_shaderManager.load( gl_generic2DShader );
@@ -295,6 +294,9 @@ void GLSL_ShutdownGPUShaders()
 
 	gl_genericShader = nullptr;
 	gl_genericShaderMaterial = nullptr;
+	gl_cullShader = nullptr;
+	gl_clearSurfacesShader = nullptr;
+	gl_processSurfacesShader = nullptr;
 	gl_lightMappingShader = nullptr;
 	gl_lightMappingShaderMaterial = nullptr;
 	gl_forwardLightingShader_omniXYZ = nullptr;
