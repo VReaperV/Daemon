@@ -1153,33 +1153,6 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	GL_CheckErrors();
 }
 
-static void testTexture() {
-	int width = 1920;
-	int height = 1080;
-	byte* data = new byte[width * height * 4];
-
-	uint tex, tex2;
-	glGenTextures( 1, &tex );
-	glBindTexture( GL_TEXTURE_2D, tex );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0 );
-	// glTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data );
-	glTexStorage2D( GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32, width, height );
-	// glGenerateMipmap( GL_TEXTURE_2D );
-	glGenTextures( 1, &tex2 );
-	glTextureView( tex2, GL_TEXTURE_2D, tex, GL_R32I, 0, 1, 0, 1 );
-	GL_CheckErrors();
-	/* GLuint64 test = glGetTextureHandleARB(tex);
-	glMakeTextureHandleResidentARB( test );
-	GL_CheckErrors();
-	GLuint64 depthInImageHandle = glGetImageHandleARB( tex, 0, GL_FALSE, 0, GL_RGBA8UI );
-	GL_CheckErrors();
-	glMakeTextureHandleNonResidentARB( test ); */
-}
-
 void MaterialSystem::GenerateDepthImages( const int width, const int height, imageParams_t imageParms ) {
 	int size = std::max( width, height );
 	imageParams_t oldParms = imageParms;
@@ -1194,7 +1167,6 @@ void MaterialSystem::GenerateDepthImages( const int width, const int height, ima
 	Log::Warn( "%u", depthImageLevels );
 
 	byte* data = new byte[width * height * 4];
-	// testTexture();
 	for ( uint i = 0; i < MAX_FRAMES; i++ ) {
 		Frame* frame = &frames[i];
 
@@ -1204,30 +1176,10 @@ void MaterialSystem::GenerateDepthImages( const int width, const int height, ima
 		int mipmapWidth = width;
 		int mipmapHeight = height;
 		for ( int j = 0; j < depthImageLevels; j++ ) {
-			// glTexImage2D( GL_TEXTURE_2D, j, GL_DEPTH24_STENCIL8, mipmapWidth, mipmapHeight, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data );
 			glTexImage2D( GL_TEXTURE_2D, j, GL_R32F, mipmapWidth, mipmapHeight, 0, GL_RED, GL_FLOAT, data );
 			mipmapWidth >>= 1;
 			mipmapHeight >>= 1;
 		}
-		/* GL_CheckErrors();
-		glTexStorage2D( GL_TEXTURE_2D, depthImageLevels, GL_DEPTH_COMPONENT32, width, height );
-		GL_CheckErrors();
-		glGenTextures( 1, &testTex[i] );
-		GL_CheckErrors();
-		glTextureView( testTex[i], GL_TEXTURE_2D, frame->depthImage->texnum, GL_R32I, 0, depthImageLevels, 0, 1 );
-		GL_CheckErrors(); */
-		/* glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-		glGenerateMipmap( GL_TEXTURE_2D );
-		GLuint64 test = glGetTextureHandleARB( frame->depthImage->texnum );
-		glMakeTextureHandleResidentARB( test );
-		glBindImageTexture( 0, frame->depthImage->texnum, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R8 );
-		GL_CheckErrors();
-		GLuint64 depthInImageHandle = glGetImageHandleARB( frame->depthImage->texnum, 0, GL_FALSE, 0, GL_R32I );
-		glMakeTextureHandleNonResidentARB( test );
-		// glGenerateMipmap( GL_TEXTURE_2D );
-		GL_Unbind( frame->depthImage );
-		GL_CheckErrors(); */
 	}
 	delete[] data;
 
@@ -1855,7 +1807,7 @@ void MaterialSystem::UpdateDynamicSurfaces() {
 	materialsSSBO.BindBuffer();
 	uint32_t* materialsData = materialsSSBO.MapBufferRange( dynamicDrawSurfsOffset, dynamicDrawSurfsSize );
 	// Shader uniforms are set to 0 if they're not specified, so make sure we do that here too
-	memset( materialsData, 0, 4 * dynamicDrawSurfsSize );
+	memset( materialsData, 0, dynamicDrawSurfsSize * sizeof( uint32_t ) );
 	for ( drawSurf_t& drawSurf : dynamicDrawSurfs ) {
 		for ( int stage = 0; stage < drawSurf.shader->numStages; stage++ ) {
 			shaderStage_t* pStage = drawSurf.shader->stages[stage];
@@ -1951,7 +1903,6 @@ void MaterialSystem::DepthReduction() {
 	uint globalWorkgroupX = width % 8 == 0 ? width / 8 : width / 8 + 1;
 	uint globalWorkgroupY = height % 8 == 0 ? height / 8 : height / 8 + 1;
 
-	// GL_Bind( frames[nextFrame].depthTexture );
 	GL_Bind( tr.currentDepthImage );
 	glBindImageTexture( 2, frames[nextFrame].depthImage->texnum, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F );
 
@@ -1968,7 +1919,7 @@ void MaterialSystem::DepthReduction() {
 		globalWorkgroupY = height % 8 == 0 ? height / 8 : height / 8 + 1;
 
 		glBindImageTexture( 1, frames[nextFrame].depthImage->texnum, i, GL_FALSE, 0, GL_READ_ONLY, GL_R32F );
-		glBindImageTexture( 2, frames[nextFrame].depthImage->texnum,i + 1, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F );
+		glBindImageTexture( 2, frames[nextFrame].depthImage->texnum, i + 1, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F );
 
 		gl_depthReductionShader->SetUniform_InitialDepthLevel( false );
 		gl_depthReductionShader->SetUniform_ViewWidth( width );
