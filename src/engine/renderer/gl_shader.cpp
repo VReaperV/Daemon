@@ -897,37 +897,32 @@ std::string     GLShaderManager::BuildGPUShaderText( Str::StringRef mainShaderNa
 	std::string shaderMain;
 
 	std::string line;
+	uint insertCount = 0;
+	uint mainLine = 0;
 
 	while ( std::getline( shaderTextStream, line, '\n' ) ) {
 		const std::string::size_type position = line.find( "#insert" );
 		if ( position == std::string::npos ) {
 			shaderMain += line + "\n";
+			mainLine++;
 			continue;
 		}
 
-		const std::string::iterator beginIt = std::find_if( line.begin(), line.end(),
-			[]( unsigned char character ) {
-				return !std::isspace( character );
-			} );
-		if ( beginIt - line.begin() != int( position ) ) { // Signed/unsigned CI bullshit
+		if ( line.find_first_not_of( " \t" ) != position ) {
 			shaderMain += line + "\n";
+			mainLine++;
 			continue;
 		}
+
+		shaderMain += "#line -1\n";
+		// Inserted shader lines will start at 10000, 20000 etc. to easily tell them apart from the main shader code
+		shaderMain += "#line " + std::to_string( ( insertCount + 1 ) * 10000 ) + "\n";
+		insertCount++;
 
 		std::string shaderInsertPath = line.substr( position + 8, std::string::npos );
-		switch ( shaderType ) {
-			case GL_VERTEX_SHADER:
-				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + ".glsl" );
-				break;
-			case GL_FRAGMENT_SHADER:
-				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + ".glsl" );
-				break;
-			case GL_COMPUTE_SHADER:
-				shaderMain += GetShaderText( "glsl/" + shaderInsertPath + ".glsl" );
-				break;
-			default:
-				break;
-		}
+		shaderMain += GetShaderText( "glsl/" + shaderInsertPath + ".glsl" );
+		
+		shaderMain += "#line -1\n";
 	}
 
 	return shaderMain;
@@ -1528,17 +1523,32 @@ void GLShaderManager::PrintShaderSource( Str::StringRef programName, GLuint obje
 
 	ri.Hunk_FreeTempMemory( dump );
 
-	int i = 0;
+	int lineNumber = 0;
 	size_t pos = 0;
+	int lineMarker = -1;
 	while ( ( pos = src.find(delim) ) != std::string::npos )
 	{
 		std::string line = src.substr( 0, pos );
-		if ( line.compare( "#line 0" ) == 0 )
-		{
-			i = 0;
+		
+		const std::string::size_type position = line.find( "#line" );
+		if ( ( position != std::string::npos ) && ( line.find_first_not_of( " \t" ) == position ) ) {
+			const int newLineNumber = std::stoi( line.substr( 5, std::string::npos ) );
+
+			if ( newLineNumber == -1 ) {
+				if ( lineMarker == -1 ) {
+					lineMarker = lineNumber;
+					line = "#LINE_MARKER_START";
+				} else {
+					lineNumber = lineMarker + 1;
+					lineMarker = -1;
+					line = "#LINE_MARKER_END";
+				}
+			} else {
+				lineNumber = newLineNumber;
+			}
 		}
 
-		std::string number = std::to_string(i);
+		std::string number = std::to_string( lineNumber );
 
 		int p = 4 - number.length();
 		p = p < 0 ? 0 : p;
@@ -1551,7 +1561,7 @@ void GLShaderManager::PrintShaderSource( Str::StringRef programName, GLuint obje
 
 		src.erase(0, pos + delim.length());
 
-		i++;
+		lineNumber++;
 	}
 
 	Log::Warn("Source for shader program %s:\n%s", programName, buffer.c_str());

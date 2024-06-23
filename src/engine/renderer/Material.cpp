@@ -1106,6 +1106,12 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			continue;
 		}
 
+		Tess_MapVBOs( false );
+
+		for ( int j = 0; j < 10; j++ ) {
+			Log::Warn( "%u", tess.indexes[j] );
+		}
+
 		SurfaceDescriptor surface;
 		VectorCopy( ( ( srfGeneric_t* ) drawSurf->surface )->origin, surface.boundingSphere.origin );
 		surface.boundingSphere.radius = ( ( srfGeneric_t* ) drawSurf->surface )->radius;

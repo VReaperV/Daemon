@@ -656,7 +656,7 @@ VBO_t *R_CreateStaticVBO2( const char *name, int numVertexes, shaderVertex_t *ve
 #ifdef GL_ARB_buffer_storage
 	if( glConfig2.bufferStorageAvailable ) {
 		glBufferStorage( GL_ARRAY_BUFFER, vbo->vertexesSize,
-				 verts, 0 );
+			verts, ( glConfig2.materialSystemAvailable ? GL_MAP_READ_BIT : 0 ) );
 	} else
 #endif
 	{
@@ -795,7 +795,7 @@ IBO_t *R_CreateStaticIBO2( const char *name, int numTriangles, glIndex_t *indexe
 #ifdef GL_ARB_buffer_storage
 	if( glConfig2.bufferStorageAvailable ) {
 		glBufferStorage( GL_ELEMENT_ARRAY_BUFFER, ibo->indexesSize,
-				 indexes, 0 );
+				 indexes, ( glConfig2.materialSystemAvailable ? GL_MAP_READ_BIT : 0 ) );
 	} else
 #endif
 	{
@@ -1251,7 +1251,8 @@ void Tess_MapVBOs( bool forceCPU ) {
 				GL_ARRAY_BUFFER, tess.vertsWritten * sizeof( shaderVertex_t ),
 				SHADER_MAX_VERTEXES * sizeof( shaderVertex_t ),
 				GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT |
-				GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_FLUSH_EXPLICIT_BIT );
+				GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_FLUSH_EXPLICIT_BIT
+				| ( materialSystem.generatingWorldCommandBuffer ? GL_MAP_READ_BIT : 0 ) );
 		}
 	}
 
@@ -1278,7 +1279,8 @@ void Tess_MapVBOs( bool forceCPU ) {
 				GL_ELEMENT_ARRAY_BUFFER, tess.indexesWritten * sizeof( glIndex_t ),
 				SHADER_MAX_INDEXES * sizeof( glIndex_t ),
 				GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT |
-				GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_FLUSH_EXPLICIT_BIT );
+				GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_FLUSH_EXPLICIT_BIT
+				| ( materialSystem.generatingWorldCommandBuffer ? GL_MAP_READ_BIT : 0 ) );
 		}
 	}
 }
