@@ -1081,6 +1081,12 @@ static void R_InitMaterialBuffers() {
 		culledCommandsBuffer.GenBuffer();
 		surfaceBatchesUBO.GenBuffer();
 		atomicCommandCountersBuffer.GenBuffer();
+
+		drawCommandBuffer.GenBuffer();
+		clusterIndexesSSBO.GenBuffer();
+		globalIndexesSSBO.GenBuffer();
+		clustersUBO.GenBuffer();
+		clusterSurfaceTypesUBO.GenBuffer();
 	}
 }
 
@@ -1206,10 +1212,80 @@ void R_ShutdownVBOs()
 		culledCommandsBuffer.DelBuffer();
 		surfaceBatchesUBO.DelBuffer();
 		atomicCommandCountersBuffer.DelBuffer();
+
+		drawCommandBuffer.DelBuffer();
+		clusterIndexesSSBO.DelBuffer();
+		globalIndexesSSBO.DelBuffer();
+		clustersUBO.DelBuffer();
+		clusterSurfaceTypesUBO.DelBuffer();
 	}
 
 	tess.verts = tess.vertsBuffer = nullptr;
 	tess.indexes = tess.indexesBuffer = nullptr;
+}
+
+void Tess_MapVBO( VBO_t* VBO ) {
+	if ( VBO->mapped ) {
+		Log::Warn( "VBO %s is already mapped!", VBO->name );
+		return;
+	}
+
+	R_BindVBO( VBO );
+
+	void* data = glMapBufferRange(
+		GL_ARRAY_BUFFER, 0,
+		VBO->vertexesSize,
+		GL_MAP_READ_BIT );
+
+	if ( data == nullptr ) {
+		Sys::Drop( "Failed to map VBO: %s", VBO->name );
+	}
+
+	VBO->data = data;
+	VBO->mapped = true;
+}
+
+void Tess_UnMapVBO( VBO_t* VBO ) {
+	if ( !VBO->mapped ) {
+		Log::Warn( "VBO %s is not mapped!", VBO->name );
+		return;
+	}
+
+	R_BindVBO( VBO );
+	glUnmapBuffer( GL_ARRAY_BUFFER );
+	VBO->mapped = false;
+}
+
+void Tess_MapIBO( IBO_t* IBO ) {
+	if ( IBO->mapped ) {
+		Log::Warn( "IBO %s is already mapped!", IBO->name );
+		return;
+	}
+
+	R_BindIBO( IBO );
+
+	void* data = glMapBufferRange(
+		GL_ELEMENT_ARRAY_BUFFER, 0,
+		IBO->indexesSize,
+		GL_MAP_READ_BIT );
+
+	if ( data == nullptr ) {
+		Sys::Drop( "Failed to map IBO: %s", IBO->name );
+	}
+
+	IBO->data = data;
+	IBO->mapped = true;
+}
+
+void Tess_UnMapIBO( IBO_t* IBO ) {
+	if ( !IBO->mapped ) {
+		Log::Warn( "IBO %s is not mapped!", IBO->name );
+		return;
+	}
+
+	R_BindIBO( IBO );
+	glUnmapBuffer( GL_ELEMENT_ARRAY_BUFFER );
+	IBO->mapped = false;
 }
 
 /*

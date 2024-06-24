@@ -750,6 +750,10 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	{
 		char     name[ MAX_QPATH ];
 
+		bool mapped = false;
+
+		void* data;
+
 		uint32_t vertexesVBO;
 
 		uint32_t vertexesSize; // total amount of memory data allocated for this vbo
@@ -767,6 +771,10 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	struct IBO_t
 	{
 		char     name[ MAX_QPATH ];
+
+		bool mapped = false;
+
+		void* data;
 
 		uint32_t indexesVBO;
 		uint32_t indexesSize; // amount of memory data allocated for all triangles in bytes
@@ -2936,6 +2944,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	extern cvar_t *r_arb_explicit_uniform_location;
 	extern cvar_t *r_arb_shader_image_load_store;
 	extern cvar_t *r_arb_shader_atomic_counters;
+	extern cvar_t *r_arb_shader_atomic_counter_ops;
 
 	extern cvar_t *r_nobind; // turns off binding to appropriate textures
 	extern cvar_t *r_singleShader; // make most world faces use default shader
@@ -3493,6 +3502,11 @@ inline bool checkGLErrors()
 	void Tess_AddCubeWithNormals( const vec3_t position, const vec3_t minSize, const vec3_t maxSize, const Color::Color& color );
 
 	void Tess_InstantQuad( const float x, const float y, const float width, const float height );
+
+	void Tess_MapVBO( VBO_t* VBO );
+	void Tess_UnMapVBO( VBO_t* VBO );
+	void Tess_MapIBO( IBO_t* IBO );
+	void Tess_UnMapIBO( IBO_t* IBO );
 	void Tess_MapVBOs( bool forceCPU );
 	void Tess_UpdateVBOs();
 

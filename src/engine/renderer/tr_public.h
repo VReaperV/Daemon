@@ -93,6 +93,7 @@ struct glconfig2_t
 	bool explicitUniformLocationAvailable;
 	bool shaderImageLoadStoreAvailable;
 	bool shaderAtomicCountersAvailable;
+	bool shaderAtomicCounterOpsAvailable;
 	bool materialSystemAvailable;
 	bool gpuShader4Available;
 	bool textureGatherAvailable;

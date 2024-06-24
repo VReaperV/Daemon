@@ -149,6 +149,9 @@ struct drawSurfBoundingSphere {
 #define SURFACE_COMMAND_SIZE 6
 #define SURFACE_COMMAND_BATCH_SIZE 4 // Aligned to 4 components
 
+#define MAX_CLUSTERS 65536/24
+#define MAX_MATERIALS 128
+
 #define MAX_FRAMES 2
 #define MAX_VIEWFRAMES MAX_VIEWS * MAX_FRAMES // Buffer 2 frames for each view
 
@@ -289,6 +292,13 @@ extern GLSSBO surfaceCommandsSSBO; // Per viewframe, GPU updated
 extern GLBuffer culledCommandsBuffer; // Per viewframe
 extern GLUBO surfaceBatchesUBO; // Global
 extern GLBuffer atomicCommandCountersBuffer; // Per viewframe
+
+extern GLBuffer drawCommandBuffer; // Per viewframe
+extern GLBuffer clusterIndexesBuffer; // Per viewframe
+extern GLSSBO globalIndexesSSBO; // Per viewframe
+extern GLUBO clustersUBO; // Global
+extern GLUBO clusterSurfaceTypesUBO; // Global
+
 extern MaterialSystem materialSystem;
 
 #endif // MATERIAL_H

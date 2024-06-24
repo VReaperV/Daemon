@@ -1473,6 +1473,10 @@ class GLSSBO : public GLBuffer {
 		GLBuffer::BindBuffer( GL_SHADER_STORAGE_BUFFER );
 	}
 
+	void UnBindBuffer() {
+		GLBuffer::UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+	}
+
 	void BufferStorage( const GLsizeiptr areaSize, const GLsizeiptr areaCount, const void* data ) {
 		GLBuffer::BufferStorage( GL_SHADER_STORAGE_BUFFER, areaSize, areaCount, data );
 	}
@@ -4693,6 +4697,8 @@ public:
 
 class GLShader_cull :
 	public GLShader,
+	public u_Frame,
+	public u_ViewID,
 	public u_TotalDrawSurfs,
 	public u_SurfaceCommandsOffset,
 	public u_UseFrustumCulling,

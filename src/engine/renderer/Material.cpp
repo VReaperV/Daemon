@@ -42,6 +42,13 @@ GLSSBO surfaceCommandsSSBO( "surfaceCommands", 2, GL_MAP_WRITE_BIT | GL_MAP_PERS
 GLBuffer culledCommandsBuffer( "culledCommands", 3, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
 GLUBO surfaceBatchesUBO( "surfaceBatches", 0, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 GLBuffer atomicCommandCountersBuffer( "atomicCommandCounters", 4, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+
+GLBuffer drawCommandBuffer( "drawCommands", 6, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer clusterIndexesBuffer( "clusterIndexes", 7, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLSSBO globalIndexesSSBO( "globalIndexes", 8, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLUBO clustersUBO( "clusters", 1, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLUBO clusterSurfaceTypesUBO( "clusterSurfaceTypes", 2, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+
 MaterialSystem materialSystem;
 
 static void ComputeDynamics( shaderStage_t* pStage ) {
@@ -1072,6 +1079,40 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	uint32_t* atomicCommandCounters = (uint32_t*) atomicCommandCountersBuffer.GetData();
 	memset( atomicCommandCounters, 0, MAX_COMMAND_COUNTERS * MAX_VIEWFRAMES * sizeof(uint32_t) );
 
+	//
+
+	drawCommandBuffer.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_MATERIALS * MAX_VIEWFRAMES * INDIRECT_COMMAND_SIZE * sizeof( uint32_t ),
+				  nullptr, GL_STATIC_DRAW );
+	drawCommandBuffer.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+
+	clusterIndexesBuffer.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_MATERIALS * MAX_VIEWFRAMES * INDIRECT_COMMAND_SIZE * sizeof( uint32_t ),
+		nullptr, GL_STATIC_DRAW );
+	clusterIndexesBuffer.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+
+	globalIndexesSSBO.BindBuffer();
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_MATERIALS * MAX_VIEWFRAMES * INDIRECT_COMMAND_SIZE * sizeof( uint32_t ),
+		nullptr, GL_STATIC_DRAW );
+	globalIndexesSSBO.UnBindBuffer();
+
+	clustersUBO.BindBuffer();
+	clustersUBO.BufferStorage( MAX_COMMAND_COUNTERS * MAX_VIEWS, MAX_FRAMES, nullptr );
+	clustersUBO.MapAll();
+	uint32_t* clusters = ( uint32_t* ) clustersUBO.GetData();
+	memset( clusters, 0, MAX_COMMAND_COUNTERS * MAX_VIEWFRAMES * sizeof( uint32_t ) );
+
+	clusterSurfaceTypesUBO.BindBuffer();
+	clusterSurfaceTypesUBO.BufferStorage( MAX_COMMAND_COUNTERS* MAX_VIEWS, MAX_FRAMES, nullptr );
+	clusterSurfaceTypesUBO.MapAll();
+	uint32_t* atomicCommandCounters = ( uint32_t* ) clusterSurfaceTypesUBO.GetData();
+	memset( atomicCommandCounters, 0, MAX_COMMAND_COUNTERS* MAX_VIEWFRAMES * sizeof( uint32_t ) );
+
+	//
+
+	VBO_t* lastVBO = nullptr;
+	IBO_t* lastIBO = nullptr;
+
 	for ( int i = 0; i < tr.refdef.numDrawSurfs; i++ ) {
 		drawSurf = &tr.refdef.drawSurfs[i];
 		if ( drawSurf->entity != &tr.worldEntity ) {
@@ -1106,11 +1147,23 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			continue;
 		}
 
-		Tess_MapVBOs( false );
-
-		for ( int j = 0; j < 10; j++ ) {
-			Log::Warn( "%u", tess.indexes[j] );
+		if ( !glState.currentVBO->mapped ) {
+			if ( lastVBO != nullptr && lastVBO->mapped ) {
+				Tess_UnMapVBO( lastVBO );
+			}
+			Tess_MapVBO( glState.currentVBO );
+			lastVBO = glState.currentVBO;
 		}
+		if ( !glState.currentIBO->mapped ) {
+			if ( lastIBO != nullptr && lastIBO->mapped ) {
+				Tess_UnMapIBO( lastIBO );
+			}
+			Tess_MapIBO( glState.currentIBO );
+			lastIBO = glState.currentIBO;
+		}
+
+		shaderVertex_t* verts = ( shaderVertex_t* ) lastVBO->data;
+		glIndex_t* indices = ( glIndex_t* ) lastIBO->data;
 
 		SurfaceDescriptor surface;
 		VectorCopy( ( ( srfGeneric_t* ) drawSurf->surface )->origin, surface.boundingSphere.origin );
@@ -1144,6 +1197,14 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		}
 		memcpy( surfaceDescriptors, &surface, descriptorSize * sizeof( uint32_t ) );
 		surfaceDescriptors += descriptorSize;
+	}
+
+	if ( lastVBO != nullptr && lastVBO->mapped ) {
+		Tess_UnMapVBO( lastVBO );
+	}
+	
+	if ( lastIBO != nullptr && lastIBO->mapped ) {
+		Tess_UnMapIBO( lastIBO );
 	}
 
 	for ( int i = 0; i < MAX_VIEWFRAMES; i++ ) {
@@ -1945,6 +2006,8 @@ void MaterialSystem::CullSurfaces() {
 	surfaceBatchesUBO.BindBufferBase();
 	atomicCommandCountersBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
 
+	drawCommandBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+
 	for ( uint view = 0; view < frames[nextFrame].viewCount; view++ ) {
 		frustum_t* frustum = &frames[nextFrame].viewFrames[view].frustum;
 
@@ -1958,6 +2021,8 @@ void MaterialSystem::CullSurfaces() {
 		uint globalWorkGroupX = totalDrawSurfs % MAX_COMMAND_COUNTERS == 0 ?
 			totalDrawSurfs / MAX_COMMAND_COUNTERS : totalDrawSurfs / MAX_COMMAND_COUNTERS + 1;
 		GL_Bind( frames[nextFrame].depthImage );
+		gl_cullShader->SetUniform_Frame( nextFrame );
+		gl_cullShader->SetUniform_ViewID( view );
 		gl_cullShader->SetUniform_TotalDrawSurfs( totalDrawSurfs );
 		gl_cullShader->SetUniform_UseFrustumCulling( r_gpuFrustumCulling->integer );
 		gl_cullShader->SetUniform_CameraPosition( backEnd.viewParms.pvsOrigin );
@@ -2002,6 +2067,8 @@ void MaterialSystem::CullSurfaces() {
 	culledCommandsBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
 	surfaceBatchesUBO.UnBindBufferBase();
 	atomicCommandCountersBuffer.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+
+	drawCommandBuffer.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
 
 	GL_CheckErrors();
 }

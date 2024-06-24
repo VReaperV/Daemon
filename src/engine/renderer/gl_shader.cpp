@@ -471,6 +471,9 @@ static std::string GenComputeVersionDeclaration() {
 			  GLEW_ARB_shader_image_load_store, "ARB_shader_image_load_store" );
 	addExtension( str, glConfig2.shaderAtomicCountersAvailable, 420,
 			  GLEW_ARB_shader_atomic_counters, "ARB_shader_atomic_counters" );
+	// ARB_shader_atomic_counter_ops set to -1, because we might get a 4.6 GL context, where the core functions have different names
+	addExtension( str, glConfig2.shaderAtomicCounterOpsAvailable, -1,
+			  GLEW_ARB_shader_atomic_counter_ops, "ARB_shader_atomic_counter_ops" );
 	addExtension( str, glConfig2.bindlessTexturesAvailable, -1,
 		      GLEW_ARB_bindless_texture, "ARB_bindless_texture" );
 
@@ -3122,6 +3125,8 @@ void GLShader_fxaa::BuildShaderFragmentLibNames( std::string& fragmentInlines )
 
 GLShader_cull::GLShader_cull( GLShaderManager* manager ) :
 	GLShader( "cull", ATTR_POSITION, manager, false, false, true ),
+	u_Frame( this ),
+	u_ViewID( this ),
 	u_TotalDrawSurfs( this ),
 	u_SurfaceCommandsOffset( this ),
 	u_UseFrustumCulling( this ),
