@@ -70,12 +70,16 @@ layout(std430, binding = 2) writeonly restrict buffer surfaceCommandsSSBO {
 };
 
 
-layout(std430, binding = 6) readonly restrict buffer clusterIndexesSSBO {
+layout(std430, binding = 7) readonly restrict buffer clusterIndexesSSBO {
     ivec3 clusterIndexes[];
 };
 
-layout(std430, binding = 7) writeonly restrict buffer globalIndexesSSBO {
+layout(std430, binding = 8) writeonly restrict buffer globalIndexesSSBO {
     ivec3 globalIndexes[];
+};
+
+layout(std430, binding = 9) writeonly restrict buffer materialIDsSSBO {
+    uint materialIDs[];
 };
 
 #define MAX_CLUSTERS 65536/24
@@ -88,12 +92,26 @@ layout(std140, binding = 2) uniform ub_ClusterSurfaceTypes {
     uvec4 clusterSurfaceTypes[MAX_CLUSTERS];
 };
 
+layout(std140, binding = 3) uniform ub_ClusterBaseOffsets {
+    uvec4 clusterBaseOffsets[MAX_CLUSTERS];
+};
+
+layout(std140, binding = 4) uniform ub_GlobalClusters {
+    uvec4 globalClusters[MAX_CLUSTERS];
+};
+
+layout(std140, binding = 5) uniform ub_ClusterOffsets {
+    uvec4 clusterOffsets[MAX_CLUSTERS];
+};
+
 #define MAX_MATERIALS 128
 
 layout (binding = 0) uniform atomic_uint atomicClusterCounters[MAX_MATERIALS * MAX_VIEWS * MAX_FRAMES];
 
 uniform uint u_Frame;
 uniform uint u_ViewID;
+uniform uint u_MaxViewFrameTriangles;
+
 uniform uint u_TotalDrawSurfs;
 uniform uint u_SurfaceCommandsOffset;
 uniform bool u_UseFrustumCulling;
@@ -194,14 +212,15 @@ uvec2 uintIDToUvec4( const in uint id ) {
 struct Cluster {
     uint triangleCount;
     uint materialCount;
-    uint materialID;
+    uint indexOffset;
+    // uint materialID;
     uint surfaceTypeID;
 };
 
 Cluster UnpackCluster( const in uint clusterID ) {
     Cluster cluster;
 
-    const uvec2 clusterHalf0 = uintIDToUvec4( ( clusterID & 1 ) == 0 ?
+    /* const uvec2 clusterHalf0 = uintIDToUvec4( ( clusterID & 1 ) == 0 ?
                                                uint( clusterID * 1.5 )
                                              : uint( ( clusterID - 1 ) * 1.5 ) + 1 );
     const uvec2 clusterHalf1 = uintIDToUvec4( ( clusterID & 1 ) == 0 ?
@@ -211,24 +230,46 @@ Cluster UnpackCluster( const in uint clusterID ) {
     const uint clusterData0 = clusters[clusterHalf0.x][clusterHalf0.y];
     const uint clusterData1 = clusters[clusterHalf1.x][clusterHalf1.y];
 
-    /* uint matID = ( clusterID & 1 ) == 0 ? clusters[clusterID * 1.5]
-                 : ( ( clusters[( clusterID - 1 ) * 1.5 + 1] & 0xFFFF ) << 16 )
-                 + ( clusters[( clusterID - 1 ) * 1.5 + 2] >> 16 ); */
     uint matID = ( clusterID & 1 ) == 0 ? clusterData0
                  : ( ( clusterData0 & 0xFFFF ) << 16 )
-                 + ( clusterData1 >> 16 );
-    cluster.materialID = matID & 0xFFFFF;
+                 + ( clusterData1 >> 16 ); */
+
+    uvec2 clusterIDs = uintIDToUvec4( clusterID * 2 );
+    uint surfaceTypeID = clusters[clusterIDs.x][clusterIDs.y];
+
+    cluster.surfaceTypeID = surfaceTypeID & 0x3FFF;
+    cluster.materialCount = ( surfaceTypeID >> 20 ) & 0xF;
+    cluster.triangleCount = surfaceTypeID >> 24;
+    
+    clusterIDs = uintIDToUvec4( clusterID * 2 + 1 );
+    cluster.indexOffset = clusters[clusterIDs.x][clusterIDs.y];
+
+    /* cluster.materialID = matID & 0xFFFFF;
     matID = matID >> 20;
     cluster.materialCount = matID & 0xF;
     matID = matID >> 4;
     cluster.triangleCount = matID;
     
-    // cluster.surfaceTypeID = ( clusterID & 1 ) == 0 ? clusters[clusterID * 1.5 + 1] & 0xFFFF
-    //                     : clusters[( clusterID - 1 ) * 1.5 + 2] & 0xFFFF;
     cluster.surfaceTypeID = ( clusterID & 1 ) == 0 ? ( clusterData1 & 0xFFFF ) >> 16
-                            : clusterData1 & 0xFFFF;
+                            : clusterData1 & 0xFFFF; */
     return cluster;
 }
+
+/* struct Cluster {
+    uint triangleCount;
+    uint materialCount;
+};
+
+Cluster UnpackCluster( const in uint clusterID ) {
+    Cluster cluster;
+
+    const uvec2 clusterIDs = uintIDToUvec4( clusterID );
+    const uint data = clusters[clusterIDs.x][clusterIDs.y];
+    cluster.triangleCount = data >> 24;
+    cluster.materialCount = ( data >> 20 ) & 0xFF0;
+
+    return cluster;
+} */
 
 /* #define MAX_CLUSTER_TRIANGLES 256
 
@@ -238,35 +279,83 @@ struct ClusterTriangles {
 
 ClusterTriangles GetClusterTriangles( const in uint indexOffset, ) */
 
-void CopyClusterTriangles( const in uint clusterID, const in uint clusterOffset, const in uint globalID, const in uint triangleCount ) {
+void CopyClusterTriangles( const in uint clusterBase, const in uint clusterOffset, const in uint globalID, const in uint triangleCount,
+                           const in uint triangleMaterialID ) {
     for( uint i = 0; i < triangleCount; i++ ) {
-        globalIndexes[globalID] = clusterIndexes[clusterID] + ivec3( clusterOffset, clusterOffset, clusterOffset );
+        globalIndexes[globalID + ( u_Frame * MAX_VIEWS + u_ViewID ) * u_MaxViewFrameTriangles + i] = clusterIndexes[clusterBase + i]
+                                                                                    + ivec3( clusterOffset, clusterOffset, clusterOffset );
+        materialIDs[globalID + ( u_Frame * MAX_VIEWS + u_ViewID ) * u_MaxViewFrameTriangles + i] = triangleMaterialID;
     }
 }
 
-void ProcessCluster( const in Cluster cluster, const in uint clusterID, const in uint clusterOffset ) {
+void ProcessCluster( const in Cluster cluster, const in uint clusterBase, const in uint clusterOffset, const in uint triangleMaterialID ) {
     for( uint i = 0; i < cluster.materialCount; i++ ) {
         const uvec2 clusterIDs = uintIDToUvec4( cluster.surfaceTypeID + i );
         const uint materialID = clusterSurfaceTypes[clusterIDs.x][clusterIDs.y];
+        const uint atomicTriangleID = atomicCounterAddARB( atomicClusterCounters[( materialID
+                                                         + MAX_MATERIALS * ( MAX_VIEWS * u_Frame + u_ViewID ) ) * 5],
+                                                         cluster.triangleCount );
+        CopyClusterTriangles( clusterBase, clusterOffset, atomicTriangleID, cluster.triangleCount, triangleMaterialID );
+    }
+}
+
+/* void ProcessCluster( const in Cluster cluster, const in uint clusterID, const in uint clusterOffset ) {
+    uvec2 clusterIDs = uintIDToUvec4( clusterID );
+    uint data = clusters[clusterIDs.x][clusterIDs.y];
+    
+    for( uint i = 0; i < min( 2, cluster.materialCount ); i++ ) {
+        const uint materialID = ( data >> ( i * 8 ) ) & 0xFFFFFF00;
         const uint atomicTriangleID = atomicCounterAddARB( atomicClusterCounters[materialID
                                                          + MAX_MATERIALS * ( MAX_VIEWS * u_Frame + u_ViewID )],
                                                          cluster.triangleCount );
         CopyClusterTriangles( clusterID, clusterOffset, atomicTriangleID, cluster.triangleCount );
     }
-}
+    
+    const uint extraMaterials = cluster.materialCount > 2 ? cluster.materialCount - 2 : 0;
+    for( uint i = 0; i < extraMaterials > 0 ? ( extraMaterials - 1 ) / 4 + 1; i++ ) {
+        clusterIDs = uintIDToUvec4( clusterID + i );
+        data = clusters[clusterIDs.x][clusterIDs.y];
+        for( uint j = 0; j < extraMaterials % 4 == 0 ? 4 : extraMaterials % 4; j++ ) {
+            const uint materialID = ( data >> ( j * 8 ) ) & 0xFFFFFF00;
+            const uint atomicTriangleID = atomicCounterAddARB( atomicClusterCounters[materialID
+                                                             + MAX_MATERIALS * ( MAX_VIEWS * u_Frame + u_ViewID )],
+                                                             cluster.triangleCount );
+            CopyClusterTriangles( clusterID, clusterOffset, atomicTriangleID, cluster.triangleCount );
+        }
+    }
+} */
 
 void main() {
     const uint globalInvocationID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
-                             + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x
-                             + gl_GlobalInvocationID.x;
+                                  + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x
+                                  + gl_GlobalInvocationID.x;
     if( globalInvocationID >= u_TotalDrawSurfs ) {
         return;
     }
     SurfaceDescriptor surface = surfaces[globalInvocationID];
     const bool culled = CullSurface( surface.boundingSphere );
 
+    /* const uvec2 globalCluster = uintIDToUvec4( globalInvocationID );
+    uint clusterID = globalClusters[globalCluster.x][globalCluster.y];
+    const uint materialID = clusterID & 0x3FFFF;
+    clusterID = clusterID >> 18;
+    const uint clusterOffset = clusterOffsets[globalCluster.x][globalCluster.y]; */
+
+    /* const uvec2 clusterIDs = uintIDToUvec4( globalInvocationID );
+    const uint clusterOffset = clusterOffsets[clusterIDs.x][clusterIDs.y];
+    
+    uint clusterMaterial = globalClusters[clusterIDs.x][clusterIDs.y];
+    const uint baseClusterID = clusterMaterial >> 18;
+    clusterMaterial = clusterMaterial & 0x3FFFF;
+
+    // const uvec2 clusterBaseOffestsIDs = uintIDToUvec4( baseClusterID );
+    // const uint clusterBaseOffset = clusterBaseOffsets[clusterBaseOffestsIDs.x][clusterBaseOffestsIDs.y];
+
+    Cluster cluster = UnpackCluster( baseClusterID ); */
+
     if( !culled ) {
-        // ProcessCluster( cluster, surface.clusterIndex, surface.clusterOffset );
+        // ProcessCluster( cluster, cluster.indexOffset, clusterOffset, clusterMaterial );
+        // ProcessCluster( cluster, clusterID, clusterOffset );
     }
 
     ProcessSurfaceCommands( surface, !culled );

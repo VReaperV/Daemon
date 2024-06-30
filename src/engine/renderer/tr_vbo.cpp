@@ -1083,10 +1083,15 @@ static void R_InitMaterialBuffers() {
 		atomicCommandCountersBuffer.GenBuffer();
 
 		drawCommandBuffer.GenBuffer();
-		clusterIndexesSSBO.GenBuffer();
+		clusterIndexesBuffer.GenBuffer();
 		globalIndexesSSBO.GenBuffer();
+		materialIDsSSBO.GenBuffer();
+
 		clustersUBO.GenBuffer();
 		clusterSurfaceTypesUBO.GenBuffer();
+		clusterBaseOffsetsUBO.GenBuffer();
+		globalClustersUBO.GenBuffer();
+		clusterOffsetsUBO.GenBuffer();
 	}
 }
 
@@ -1214,10 +1219,15 @@ void R_ShutdownVBOs()
 		atomicCommandCountersBuffer.DelBuffer();
 
 		drawCommandBuffer.DelBuffer();
-		clusterIndexesSSBO.DelBuffer();
+		clusterIndexesBuffer.DelBuffer();
 		globalIndexesSSBO.DelBuffer();
+		materialIDsSSBO.DelBuffer();
+
 		clustersUBO.DelBuffer();
 		clusterSurfaceTypesUBO.DelBuffer();
+		clusterBaseOffsetsUBO.DelBuffer();
+		globalClustersUBO.DelBuffer();
+		clusterOffsetsUBO.DelBuffer();
 	}
 
 	tess.verts = tess.vertsBuffer = nullptr;

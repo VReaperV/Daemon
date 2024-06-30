@@ -44,10 +44,15 @@ GLUBO surfaceBatchesUBO( "surfaceBatches", 0, GL_MAP_WRITE_BIT, GL_MAP_INVALIDAT
 GLBuffer atomicCommandCountersBuffer( "atomicCommandCounters", 4, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
 
 GLBuffer drawCommandBuffer( "drawCommands", 6, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
-GLBuffer clusterIndexesBuffer( "clusterIndexes", 7, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
-GLSSBO globalIndexesSSBO( "globalIndexes", 8, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLSSBO clusterIndexesBuffer( "clusterIndexes", 7, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer globalIndexesSSBO( "globalIndexes", 8, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLSSBO materialIDsSSBO( "materialIDs", 9, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+
 GLUBO clustersUBO( "clusters", 1, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
 GLUBO clusterSurfaceTypesUBO( "clusterSurfaceTypes", 2, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLUBO clusterBaseOffsetsUBO( "clusterBaseOffsets", 3, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLUBO globalClustersUBO( "globalClusters", 4, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLUBO clusterOffsetsUBO( "clusterOffsets", 5, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
 
 MaterialSystem materialSystem;
 
@@ -1086,27 +1091,50 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 				  nullptr, GL_STATIC_DRAW );
 	drawCommandBuffer.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
 
-	clusterIndexesBuffer.BindBuffer( GL_SHADER_STORAGE_BUFFER );
-	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_MATERIALS * MAX_VIEWFRAMES * INDIRECT_COMMAND_SIZE * sizeof( uint32_t ),
+	clusterIndexesBuffer.BindBuffer();
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_VIEWFRAME_TRIANGLES * 3 * sizeof( uint32_t ),
 		nullptr, GL_STATIC_DRAW );
-	clusterIndexesBuffer.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+	clusterIndexesBuffer.UnBindBuffer();
 
-	globalIndexesSSBO.BindBuffer();
+	globalIndexesSSBO.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_VIEWFRAME_TRIANGLES * MAX_VIEWFRAMES * 3 * sizeof( uint32_t ),
+		nullptr, GL_STATIC_DRAW );
+	globalIndexesSSBO.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+
+	materialIDsSSBO.BindBuffer();
 	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_MATERIALS * MAX_VIEWFRAMES * INDIRECT_COMMAND_SIZE * sizeof( uint32_t ),
 		nullptr, GL_STATIC_DRAW );
-	globalIndexesSSBO.UnBindBuffer();
+	materialIDsSSBO.UnBindBuffer();
 
 	clustersUBO.BindBuffer();
-	clustersUBO.BufferStorage( MAX_COMMAND_COUNTERS * MAX_VIEWS, MAX_FRAMES, nullptr );
+	clustersUBO.BufferStorage( MAX_CLUSTERS, 1, nullptr );
 	clustersUBO.MapAll();
 	uint32_t* clusters = ( uint32_t* ) clustersUBO.GetData();
-	memset( clusters, 0, MAX_COMMAND_COUNTERS * MAX_VIEWFRAMES * sizeof( uint32_t ) );
+	memset( clusters, 0, MAX_CLUSTERS * sizeof( uint32_t ) );
 
 	clusterSurfaceTypesUBO.BindBuffer();
-	clusterSurfaceTypesUBO.BufferStorage( MAX_COMMAND_COUNTERS* MAX_VIEWS, MAX_FRAMES, nullptr );
+	clusterSurfaceTypesUBO.BufferStorage( MAX_CLUSTERS, 1, nullptr );
 	clusterSurfaceTypesUBO.MapAll();
-	uint32_t* atomicCommandCounters = ( uint32_t* ) clusterSurfaceTypesUBO.GetData();
-	memset( atomicCommandCounters, 0, MAX_COMMAND_COUNTERS* MAX_VIEWFRAMES * sizeof( uint32_t ) );
+	uint32_t* clusterSurfaceTypes = ( uint32_t* ) clusterSurfaceTypesUBO.GetData();
+	memset( clusterSurfaceTypes, 0, MAX_CLUSTERS * sizeof( uint32_t ) );
+
+	clusterBaseOffsetsUBO.BindBuffer();
+	clusterBaseOffsetsUBO.BufferStorage( MAX_CLUSTERS, 1, nullptr );
+	clusterBaseOffsetsUBO.MapAll();
+	uint32_t* clusterBaseOffsets = ( uint32_t* ) clusterBaseOffsetsUBO.GetData();
+	memset( clusterBaseOffsets, 0, MAX_CLUSTERS * sizeof( uint32_t ) );
+
+	globalClustersUBO.BindBuffer();
+	globalClustersUBO.BufferStorage( MAX_CLUSTERS, 1, nullptr );
+	globalClustersUBO.MapAll();
+	uint32_t* globalClusters = ( uint32_t* ) globalClustersUBO.GetData();
+	memset( globalClusters, 0, MAX_CLUSTERS * sizeof( uint32_t ) );
+
+	clusterOffsetsUBO.BindBuffer();
+	clusterOffsetsUBO.BufferStorage( MAX_CLUSTERS, 1, nullptr );
+	clusterOffsetsUBO.MapAll();
+	uint32_t* clusterOffsets = ( uint32_t* ) clusterOffsetsUBO.GetData();
+	memset( clusterOffsets, 0, MAX_CLUSTERS * sizeof( uint32_t ) );
 
 	//
 
@@ -1218,6 +1246,40 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	surfaceBatchesUBO.UnmapBuffer();
 
 	GL_CheckErrors();
+}
+
+void MaterialSystem::GenerateDrawSurfClusters( const drawSurf_t* drawSurf, const uint indexCount, const uint firstIndex,
+											   uint32_t* baseClusters, uint32_t* surfaceTypes,
+											   shaderVertex_t* verts, glIndex_t* indexes ) {
+	SurfaceType surfaceType;
+	surfaceType.count = 0;
+	for ( int i = 0; i < MAX_SHADER_STAGES; i++ ) {
+		if ( drawSurf->initialized[i] ) {
+			surfaceType.count++;
+			surfaceType.materialIDs[i] = materialPacks[drawSurf->materialPackIDs[i]].materials[drawSurf->materialIDs[i]].globalID;
+		}
+	}
+
+	std::vector<SurfaceType>::iterator it = std::find( clusterSurfaceTypes.begin(), clusterSurfaceTypes.end(), surfaceType );
+
+	uint surfaceTypeID = 0;
+	if ( it == clusterSurfaceTypes.end() ) {
+		surfaceTypeID = surfaceTypeLast;
+		clusterSurfaceTypes.emplace_back( surfaceType );
+
+		for ( int i = 0; i < surfaceType.count; i++ ) {
+			surfaceTypes = &surfaceType.materialIDs[i];
+			surfaceTypes++;
+			surfaceTypeLast++;
+		}
+	} else {
+		surfaceTypeID = it->id;
+	}
+
+	uint triangleCount = 0;
+	while ( ( triangleCount < indexCount * 3 ) && ( triangleCount < 256 ) ) {
+		//
+	}
 }
 
 void MaterialSystem::GenerateDepthImages( const int width, const int height, imageParams_t imageParms ) {

@@ -150,6 +150,8 @@ struct drawSurfBoundingSphere {
 #define SURFACE_COMMAND_BATCH_SIZE 4 // Aligned to 4 components
 
 #define MAX_CLUSTERS 65536/24
+#define MAX_CLUSTER_TRIANGLES 256
+#define MAX_VIEWFRAME_TRIANGLES 524288
 #define MAX_MATERIALS 128
 
 #define MAX_FRAMES 2
@@ -185,6 +187,16 @@ struct SurfaceCommand {
 
 struct SurfaceCommandBatch {
 	uint materialIDs[4] { 0, 0, 0, 0 };
+};
+
+struct SurfaceType {
+	uint id = 0;
+	uint count = 0;
+	uint materialIDs[16] = {};
+
+	bool operator==( const SurfaceType& other ) {
+		return ( count == other.count ) && memcmp( materialIDs, other.materialIDs, 16 * sizeof( uint ) );
+	}
 };
 
 class MaterialSystem {
@@ -244,6 +256,10 @@ class MaterialSystem {
 	void StartFrame();
 	void EndFrame();
 
+	void GenerateDrawSurfClusters( const drawSurf_t* drawSurf,
+								   const uint indexCount, const uint firstIndex, uint32_t* baseClusters, uint32_t* surfaceTypes,
+								   shaderVertex_t* verts, glIndex_t* indexes );
+
 	void GenerateDepthImages( const int width, const int height, imageParams_t imageParms );
 
 	void AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material );
@@ -264,6 +280,9 @@ class MaterialSystem {
 	image_t* lockedDepthImage;
 
 	int depthImageLevels;
+
+	uint surfaceTypeLast = 0;
+	std::vector<SurfaceType> clusterSurfaceTypes;
 
 	DrawCommand cmd;
 	uint lastCommandID;
@@ -294,10 +313,15 @@ extern GLUBO surfaceBatchesUBO; // Global
 extern GLBuffer atomicCommandCountersBuffer; // Per viewframe
 
 extern GLBuffer drawCommandBuffer; // Per viewframe
-extern GLBuffer clusterIndexesBuffer; // Per viewframe
-extern GLSSBO globalIndexesSSBO; // Per viewframe
+extern GLSSBO clusterIndexesBuffer; // Global
+extern GLBuffer globalIndexesSSBO; // Per viewframe
+extern GLSSBO materialIDsSSBO; // Per viewframe
+
 extern GLUBO clustersUBO; // Global
 extern GLUBO clusterSurfaceTypesUBO; // Global
+extern GLUBO clusterBaseOffsetsUBO; // Global
+extern GLUBO globalClustersUBO; // Global
+extern GLUBO clusterOffsetsUBO; // Global
 
 extern MaterialSystem materialSystem;
 

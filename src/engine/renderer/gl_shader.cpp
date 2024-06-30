@@ -441,6 +441,7 @@ static std::string GenVersionDeclaration() {
 			  GLEW_ARB_shader_draw_parameters, "ARB_shader_draw_parameters" );
 	addExtension( str, glConfig2.SSBOAvailable, 430,
 			  GLEW_ARB_shader_storage_buffer_object, "ARB_shader_storage_buffer_object" );
+	addExtension( str, 1, -1, GLEW_NV_gpu_shader5, "NV_gpu_shader5" );
 
 	return str;
 }
