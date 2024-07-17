@@ -89,6 +89,8 @@ endif()
 set(RENDERERLIST
     ${ENGINE_DIR}/renderer/gl_shader.cpp
     ${ENGINE_DIR}/renderer/gl_shader.h
+    ${ENGINE_DIR}/renderer/TextureAtlas.cpp
+    ${ENGINE_DIR}/renderer/TextureAtlas.h
     ${ENGINE_DIR}/renderer/iqm.h
     ${ENGINE_DIR}/renderer/shaders.cpp
     ${ENGINE_DIR}/renderer/tr_animation.cpp
