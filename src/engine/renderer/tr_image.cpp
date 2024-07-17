@@ -224,6 +224,50 @@ void R_ListImages_f()
 	size_t twrapLen = 4;
 	size_t swrapLen = 4;
 
+	std::unordered_map<uint32_t, uint> formatCounts = {
+		{ GL_RGBA, 0 },
+
+		{ GL_RGB8, 0 },
+		{ GL_RGBA8, 0 },
+		{ GL_RGB16, 0 },
+		{ GL_RGBA16, 0 },
+		{ GL_RGB16F, 0 },
+		{ GL_RGB32F, 0 },
+		{ GL_RGBA16F, 0 },
+		{ GL_RGBA32F, 0 },
+		{ GL_RGBA32UI, 0 },
+		{ GL_ALPHA16F_ARB, 0 },
+		{ GL_ALPHA32F_ARB, 0 },
+		{ GL_R16F, 0 },
+		{ GL_R32F, 0 },
+		{ GL_LUMINANCE_ALPHA16F_ARB, 0 },
+		{ GL_LUMINANCE_ALPHA32F_ARB, 0 },
+		{ GL_RG16F, 0 },
+		{ GL_RG32F, 0 },
+
+		// TODO: find imageDataSize multiplier
+		{ GL_COMPRESSED_RGBA, 0 },
+
+		{ GL_COMPRESSED_RGB_S3TC_DXT1_EXT, 0 },
+		{ GL_COMPRESSED_RGBA_S3TC_DXT1_EXT, 0 },
+		{ GL_COMPRESSED_RGBA_S3TC_DXT3_EXT, 0 },
+		{ GL_COMPRESSED_RGBA_S3TC_DXT5_EXT, 0 },
+
+		// TODO: find imageDataSize multiplier
+		{ GL_COMPRESSED_RED_RGTC1, 0 },
+		// TODO: find imageDataSize multiplier
+		{ GL_COMPRESSED_SIGNED_RED_RGTC1, 0 },
+		// TODO: find imageDataSize multiplier
+		{ GL_COMPRESSED_RG_RGTC2, 0 },
+		// TODO: find imageDataSize multiplier
+		{ GL_COMPRESSED_SIGNED_RG_RGTC2, 0 },
+
+		{ GL_DEPTH_COMPONENT16, 0 },
+		{ GL_DEPTH_COMPONENT24, 0 },
+		{ GL_DEPTH_COMPONENT32, 0 },
+		{ GL_DEPTH24_STENCIL8, 0 },
+	};
+
 	// Header number sizes
 	numLen = std::max( numLen, num.length() );
 	widthLen = std::max( widthLen, width.length() );
@@ -317,6 +361,7 @@ void R_ListImages_f()
 		{
 			format = imageFormatNameSize.at( image->internalFormat ).first;
 			imageDataSize *= imageFormatNameSize.at( image->internalFormat ).second;
+			formatCounts[image->internalFormat]++;
 		}
 
 		if ( !wrapTypeName.count( image->wrapType.t ) )
@@ -371,6 +416,10 @@ void R_ListImages_f()
 	std::string summary2 = Str::Format( "%d.%02d MB total image memory (estimated)",
 		dataSize / ( 1024 * 1024 ), ( dataSize % ( 1024 * 1024 ) ) * 100 / ( 1024 * 1024 ) );
 	std::string summary3 = Str::Format( "%i total images", tr.images.size() );
+
+	for ( auto& it : formatCounts ) {
+		Log::CommandInteractionMessage( va( "Format %s count: %u", imageFormatNameSize.at( it.first ).first, it.second ) );
+	}
 
 	Log::CommandInteractionMessage( lineSeparator );
 	Log::CommandInteractionMessage( summary1 );
