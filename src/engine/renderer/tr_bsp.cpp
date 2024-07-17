@@ -549,6 +549,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 				imageParams.bits = IF_NOPICMIP | IF_LIGHTMAP;
 				imageParams.filterType = filterType_t::FT_DEFAULT;
 				imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+				imageParams.useTextureAtlas = true;
 
 				auto image = R_CreateImage( va( "%s/%s", mapName, filename.c_str() ), (const byte **)&ldrImage, width, height, 1, imageParams );
 
@@ -576,6 +577,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 					imageParams.bits = IF_NOPICMIP | IF_NORMALMAP;
 					imageParams.filterType = filterType_t::FT_DEFAULT;
 					imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+					imageParams.useTextureAtlas = true;
 
 					auto image = R_FindImageFile(va("%s/%s", mapName, filename.c_str()), imageParams);
 					tr.deluxemaps.push_back(image);
@@ -605,6 +607,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 					imageParams.bits = IF_NOPICMIP | IF_LIGHTMAP;
 					imageParams.filterType = filterType_t::FT_LINEAR;
 					imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+					imageParams.useTextureAtlas = true;
 
 					auto image = R_FindImageFile(va("%s/%s", mapName, lightmapFiles[i].c_str()), imageParams);
 					tr.lightmaps.push_back(image);
@@ -615,6 +618,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 					imageParams.bits = IF_NOPICMIP | IF_NORMALMAP;
 					imageParams.filterType = filterType_t::FT_LINEAR;
 					imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+					imageParams.useTextureAtlas = true;
 
 					auto image = R_FindImageFile(va("%s/%s", mapName, lightmapFiles[i].c_str()), imageParams);
 					tr.deluxemaps.push_back( image );
@@ -685,6 +689,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 			imageParams.bits = IF_NOPICMIP | IF_LIGHTMAP;
 			imageParams.filterType = filterType_t::FT_DEFAULT;
 			imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+			imageParams.useTextureAtlas = true;
 
 			image_t *internalLightMap = R_CreateImage( va( "_internalLightMap%d", i ), (const byte **)&lightMapBuffer, internalLightMapSize, internalLightMapSize, 1, imageParams );
 			tr.lightmaps.push_back( internalLightMap );
@@ -692,6 +697,8 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 			ri.Hunk_FreeTempMemory( lightMapBuffer );
 		}
 	}
+
+	LoadTextureAtlases();
 }
 
 /*
@@ -1014,6 +1021,12 @@ static void ParseFace( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf, in
 
 	components = (struct vertexComponent_t *)ri.Hunk_AllocateTempMemory( numVerts * sizeof( struct vertexComponent_t ) );
 
+	const bool hasLightMap = static_cast<size_t>( surf->lightmapNum ) < tr.lightmaps.size();
+	const image_t* lightmap;
+	if ( hasLightMap ) {
+		lightmap = tr.lightmaps[surf->lightmapNum];
+	}
+
 	for ( i = 0; i < numVerts; i++ )
 	{
 		for ( j = 0; j < 3; j++ )
@@ -1037,6 +1050,11 @@ static void ParseFace( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf, in
 
 		cv->verts[ i ].lightmap[ 0 ] = LittleFloat( verts[ i ].lightmap[ 0 ] );
 		cv->verts[ i ].lightmap[ 1 ] = LittleFloat( verts[ i ].lightmap[ 1 ] );
+
+		if ( hasLightMap ) {
+			cv->verts[ i ].lightmap[ 0 ] = cv->verts[ i ].lightmap[ 0 ] * lightmap->atlas[ 0 ] + lightmap->atlas[ 2 ];
+			cv->verts[ i ].lightmap[ 1 ] = cv->verts[ i ].lightmap[ 1 ] * lightmap->atlas[ 1 ] + lightmap->atlas[ 3 ];
+		}
 
 		cv->verts[ i ].lightColor = Color::Adapt( verts[ i ].color );
 
@@ -1229,6 +1247,12 @@ static void ParseMesh( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf )
 	stBounds[ 1 ][ 0 ] = -99999.0f;
 	stBounds[ 1 ][ 1 ] = -99999.0f;
 
+	const bool hasLightMap = static_cast< size_t >( surf->lightmapNum ) < tr.lightmaps.size();
+	const image_t* lightmap; 
+	if ( hasLightMap ) {
+		lightmap = tr.lightmaps[surf->lightmapNum];
+	}
+
 	for ( i = 0; i < numPoints; i++ )
 	{
 		for ( j = 0; j < 3; j++ )
@@ -1248,6 +1272,11 @@ static void ParseMesh( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf )
 
 		points[ i ].lightmap[ 0 ] = LittleFloat( verts[ i ].lightmap[ 0 ] );
 		points[ i ].lightmap[ 1 ] = LittleFloat( verts[ i ].lightmap[ 1 ] );
+
+		if ( hasLightMap ) {
+			points[ i ].lightmap[ 0 ] = points[ i ].lightmap[ 0 ] * lightmap->atlas[ 0 ] + lightmap->atlas[ 2 ];
+			points[ i ].lightmap[ 1 ] = points[ i ].lightmap[ 1 ] * lightmap->atlas[ 1 ] + lightmap->atlas[ 3 ];
+		}
 
 		points[ i ].lightColor = Color::Adapt( verts[ i ].color );
 
@@ -1357,6 +1386,12 @@ static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf,
 
 	components = (struct vertexComponent_t *)ri.Hunk_AllocateTempMemory( numVerts * sizeof( struct vertexComponent_t ) );
 
+	const bool hasLightMap = static_cast< size_t >( surf->lightmapNum ) < tr.lightmaps.size();
+	const image_t* lightmap;
+	if ( hasLightMap ) {
+		lightmap = tr.lightmaps[surf->lightmapNum];
+	}
+
 	for ( i = 0; i < numVerts; i++ )
 	{
 		components[ i ].minVertex = i;
@@ -1371,6 +1406,10 @@ static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf,
 		{
 			cv->verts[ i ].st[ j ] = LittleFloat( verts[ i ].st[ j ] );
 			cv->verts[ i ].lightmap[ j ] = LittleFloat( verts[ i ].lightmap[ j ] );
+
+			if ( hasLightMap ) {
+				cv->verts[ i ].lightmap[ j ] = cv->verts[ i ].lightmap[ j ] * lightmap->atlas[ j ] + lightmap->atlas[ j + 2 ];
+			}
 
 			components[ i ].stBounds[ 0 ][ j ] = cv->verts[ i ].st[ j ];
 			components[ i ].stBounds[ 1 ][ j ] = cv->verts[ i ].st[ j ];

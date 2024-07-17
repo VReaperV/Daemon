@@ -35,6 +35,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_public.h"
 #include "iqm.h"
 #include "TextureManager.h"
+#include "TextureAtlas.h"
 
 #define DYN_BUFFER_SIZE ( 4 * 1024 * 1024 )
 #define DYN_BUFFER_SEGMENTS 4
@@ -599,10 +600,13 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		int bits = 0;
 		filterType_t filterType;
 		wrapType_t wrapType;
+		bool isTextureAtlas = false;
+		bool useTextureAtlas = false;
 		int minDimension = 0;
 		int maxDimension = 0;
 	};
 
+	class TextureAtlas;
 	struct image_t
 	{
 		char name[ MAX_QPATH ];
@@ -616,11 +620,24 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 
 		int            frameUsed; // for texture usage in frame statistics
 
+		GLenum format;
 		uint32_t       internalFormat;
 
 		uint32_t       bits;
 		filterType_t   filterType;
 		wrapType_t     wrapType;
+
+		bool isTextureAtlas;
+		bool useTextureAtlas;
+		uint32_t textureAtlasID;
+		byte* imageData;
+		uint16_t textureAtlasX;
+		uint16_t textureAtlasY;
+		uint16_t textureAtlasWidth;
+		uint16_t textureAtlasHeight;
+		f16vec2_t scale;
+		f16vec2_t offset;
+		vec4_t atlas;
 
 		image_t *next;
 	};
@@ -2609,6 +2626,8 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 
 		// Maximum reported is 192, see https://opengl.gpuinfo.org/displaycapability.php?name=GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS
 		std::vector<int> currenttextures;
+
+		bool textureAtlasesLoaded;
 
 		image_t    *defaultImage;
 		image_t    *cinematicImage[ MAX_IN_GAME_VIDEOS ];

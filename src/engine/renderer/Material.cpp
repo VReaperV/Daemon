@@ -561,6 +561,14 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_LightMapBindless(
 			GL_BindToTMU( BIND_LIGHTMAP, lightmap )
 		);
+
+		if ( lightmap->useTextureAtlas ) {
+			gl_lightMappingShaderMaterial->SetUniform_LightMapAtlas( lightmap->atlas );
+		} else {
+			vec4_t identity;
+			Vector4Set( identity, 1.0, 1.0, 0.0, 0.0 );
+			gl_lightMappingShaderMaterial->SetUniform_LightMapAtlas( identity );
+		}
 	} else {
 		gl_lightMappingShaderMaterial->SetUniform_LightGrid1Bindless( GL_BindToTMU( BIND_LIGHTMAP, lightmap ) );
 	}
@@ -570,6 +578,14 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_DeluxeMapBindless(
 			GL_BindToTMU( BIND_DELUXEMAP, deluxemap )
 		);
+
+		if ( deluxemap->useTextureAtlas ) {
+			gl_lightMappingShaderMaterial->SetUniform_DeluxeMapAtlas( deluxemap->atlas );
+		} else {
+			vec4_t identity;
+			Vector4Set( identity, 1.0, 1.0, 0.0, 0.0 );
+			gl_lightMappingShaderMaterial->SetUniform_DeluxeMapAtlas( identity );
+		}
 	} else {
 		gl_lightMappingShaderMaterial->SetUniform_LightGrid2Bindless( GL_BindToTMU( BIND_DELUXEMAP, deluxemap ) );
 	}
@@ -1744,8 +1760,17 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 			break;
 	}
 
-	material->AddTexture( lightmap->texture );
-	material->AddTexture( deluxemap->texture );
+	if( lightmap->useTextureAtlas ) {
+		material->AddTexture( textureAtlases[lightmap->textureAtlasID].texture->texture );
+	} else{
+		material->AddTexture( lightmap->texture );
+	}
+
+	if ( deluxemap->useTextureAtlas ) {
+		material->AddTexture( textureAtlases[deluxemap->textureAtlasID].texture->texture );
+	} else {
+		material->AddTexture( deluxemap->texture );
+	}
 
 	if ( glConfig2.dynamicLight ) {
 		if ( r_dynamicLightRenderer.Get() == Util::ordinal( dynamicLightRenderer_t::TILED ) ) {
