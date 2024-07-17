@@ -148,6 +148,12 @@ static void Tess_SurfaceVertsAndTris( const srfVert_t *verts, const srfTriangle_
 
 	tess.numIndexes += numIndexes;
 
+	const bool hasLightMap = static_cast<size_t>( tess.lightmapNum ) < tr.lightmaps.size();
+	image_t* lightmap;
+	if ( hasLightMap ) {
+		lightmap = tr.lightmaps[tess.lightmapNum];
+	}
+
 	for ( i = 0; i < numVerts; i++, vert++ )
 	{
 		VectorCopy( vert->xyz, tess.verts[ tess.numVertexes + i ].xyz );

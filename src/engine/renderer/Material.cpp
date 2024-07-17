@@ -1550,8 +1550,17 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, const uint32_t stag
 	image_t* lightmap = SetLightMap( drawSurf, lightMode );
 	image_t* deluxemap = SetDeluxeMap( drawSurf, deluxeMode );
 
-	material->AddTexture( lightmap->texture );
-	material->AddTexture( deluxemap->texture );
+	if( lightmap->useTextureAtlas ) {
+		material->AddTexture( textureAtlases[lightmap->textureAtlasID].texture->texture );
+	} else{
+		material->AddTexture( lightmap->texture );
+	}
+
+	if ( deluxemap->useTextureAtlas ) {
+		material->AddTexture( textureAtlases[deluxemap->textureAtlasID].texture->texture );
+	} else {
+		material->AddTexture( deluxemap->texture );
+	}
 
 	if ( pStage->type == stageType_t::ST_STYLELIGHTMAP ) {
 		textureData.texBundlesOverride[TB_COLORMAP] = lightmap;

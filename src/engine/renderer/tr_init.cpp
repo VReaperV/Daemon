@@ -1592,6 +1592,7 @@ ScreenshotCmd screenshotPNGRegistration("screenshotPNG", ssFormat_t::SSF_PNG, "p
 			CIN_CloseAllVideos();
 			R_ShutdownBackend();
 			R_ShutdownImages();
+			FreeTextureAtlases();
 			R_ShutdownVBOs();
 			R_ShutdownFBOs();
 			R_ShutdownVisTests();

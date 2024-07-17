@@ -125,6 +125,9 @@ struct Material {
 	bool texturesResident = false;
 	std::vector<Texture*> textures;
 
+	image_t* lightmap;
+	image_t* deluxemap;
+
 	bool operator==( const Material& other ) {
 		return program == other.program && stateBits == other.stateBits
 			&& fog == other.fog && cullType == other.cullType && usePolygonOffset == other.usePolygonOffset;

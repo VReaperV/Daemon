@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 #include <iomanip>
 #include "Material.h"
+#include "TextureAtlas.h"
 
 int                  gl_filter_min = GL_LINEAR_MIPMAP_NEAREST;
 int                  gl_filter_max = GL_LINEAR;
@@ -1034,6 +1035,9 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 	{
 		internalFormat = GL_RGBA8;
 	}
+	else if ( image->isTextureAtlas && ( image->bits & IF_LIGHTMAP ) ) {
+		internalFormat = GL_RGB8;
+	}
 	else if ( !dataArray ) {
 		internalFormat = GL_RGBA8;
 	}
@@ -1086,6 +1090,18 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 		}
 	}
 
+	switch ( internalFormat ) {
+		case GL_RGBA:
+		case GL_RGBA8:
+		case GL_RGBA16:
+		case GL_RGBA16F:
+		case GL_RGBA32F:
+		case GL_RGBA32UI:
+		case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+		case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+			image->bits |= IF_ALPHA;
+	}
+
 	if( format != GL_NONE ) {
 		if( dataArray )
 			scaledBuffer = (byte*) ri.Hunk_AllocateTempMemory( sizeof( byte ) * scaledWidth * scaledHeight * 4 );
@@ -1131,6 +1147,7 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 
 			image->uploadWidth = scaledWidth;
 			image->uploadHeight = scaledHeight;
+			image->format = format;
 			image->internalFormat = internalFormat;
 
 			switch ( image->type )
@@ -1155,7 +1172,22 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 				}
 				else
 				{
-					glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+					if( image )
+					{
+						if( image->useTextureAtlas )
+						{
+							if ( !TextureAtlasForImage( image, scaledBuffer ) ) {
+								glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+								image->useTextureAtlas = false;
+								GL_Bind( image );
+								break;
+							}
+						}
+						else
+						{
+							glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+						}
+					}
 				}
 
 				break;
@@ -1163,9 +1195,9 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 
 			if ( image->filterType == filterType_t::FT_DEFAULT )
 			{
-				if( image->type != GL_TEXTURE_CUBE_MAP || i == 5 ) {
+				if( ( image->type != GL_TEXTURE_CUBE_MAP || i == 5 ) && !image->isTextureAtlas ) {
 					GL_fboShim.glGenerateMipmap( image->type );
-					glTexParameteri( image->type, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );  // default to trilinear
+					glTexParameteri( image->type, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR ); // default to trilinear
 				}
 			}
 		}
@@ -1216,8 +1248,6 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 			}
 		}
 	}
-
-	GL_CheckErrors();
 
 	// set filter type
 	switch ( image->filterType )
@@ -1371,19 +1401,6 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 		ri.Hunk_FreeTempMemory( scaledBuffer );
 	}
 
-	switch ( image->internalFormat )
-	{
-		case GL_RGBA:
-		case GL_RGBA8:
-		case GL_RGBA16:
-		case GL_RGBA16F:
-		case GL_RGBA32F:
-		case GL_RGBA32UI:
-		case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
-		case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
-			image->bits |= IF_ALPHA;
-	}
-
 	GL_Unbind( image );
 }
 
@@ -1424,6 +1441,10 @@ image_t        *R_AllocImage( const char *name, bool linkIntoHashTable )
 
 	// Default image number of layers.
 	image->numLayers = 1;
+
+	// Texture atlases are turned off by default for each image
+	image->isTextureAtlas = false;
+	image->useTextureAtlas = false;
 
 	return image;
 }
@@ -1474,6 +1495,8 @@ image_t *R_CreateImage( const char *name, const byte **pic, int width, int heigh
 	image->filterType = imageParams.filterType;
 	image->wrapType = imageParams.wrapType;
 
+	image->useTextureAtlas = imageParams.useTextureAtlas;
+	image->isTextureAtlas = imageParams.isTextureAtlas;
 	R_UploadImage( name, pic, 1, numMips, image, imageParams );
 
 	if( r_exportTextures->integer ) {
