@@ -1472,6 +1472,7 @@ static bool LoadMap( shaderStage_t *stage, const char *buffer, stageType_t type,
 	imageParams_t imageParams = {};
 	imageParams.minDimension = shader.imageMinDimension;
 	imageParams.maxDimension = shader.imageMaxDimension;
+	imageParams.useTextureAtlas = true;
 
 	// determine image options
 	if ( stage->overrideNoPicMip || shader.noPicMip || stage->highQuality || stage->forceHighQuality )
@@ -2188,6 +2189,7 @@ static bool ParseStage( shaderStage_t *stage, const char **text )
 			imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
 			imageParams.minDimension = shader.imageMinDimension;
 			imageParams.maxDimension = shader.imageMaxDimension;
+			imageParams.useTextureAtlas = true;
 
 			stage->bundle[ 0 ].image[ 0 ] = R_FindImageFile( token, imageParams );
 
@@ -2237,6 +2239,7 @@ static bool ParseStage( shaderStage_t *stage, const char **text )
 					imageParams.wrapType = wrapTypeEnum_t::WT_REPEAT;
 					imageParams.minDimension = shader.imageMinDimension;
 					imageParams.maxDimension = shader.imageMaxDimension;
+					imageParams.useTextureAtlas = true;
 
 					stage->bundle[ 0 ].image[ num ] = R_FindImageFile( token, imageParams );
 
@@ -6342,6 +6345,7 @@ shader_t       *R_FindShader( const char *name, shaderType_t type,
 		imageParams.bits = bits;
 		imageParams.filterType = filterType_t::FT_DEFAULT;
 		imageParams.wrapType = wrapTypeEnum_t::WT_REPEAT;
+		imageParams.useTextureAtlas = true;
 
 		image = R_FindImageFile( fileName, imageParams );
 	} else {
@@ -6349,6 +6353,7 @@ shader_t       *R_FindShader( const char *name, shaderType_t type,
 		imageParams.bits = bits;
 		imageParams.filterType = filterType_t::FT_LINEAR;
 		imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+		imageParams.useTextureAtlas = true;
 
 		image = R_FindImageFile( fileName, imageParams );
 	}

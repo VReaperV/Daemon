@@ -36,6 +36,50 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef TEXTURE_ATLAS_H
 #define TEXTURE_ATLAS_H
 
+#include <vector>
+#include "GL/glew.h"
 
+struct TextureBin {
+    uint16_t x;
+    uint16_t y;
+    uint16_t width;
+    uint16_t height;
+};
+
+struct image_t;
+class TextureAtlas {
+    public:
+    TextureAtlas() = delete;
+    TextureAtlas( const GLenum newFormat, const GLint newInternalFormat, const GLint newMinFilterType, const GLint newMaxFilterType );
+    ~TextureAtlas();
+
+    void AddImageToTextureBin( image_t* image, byte* imageData, const TextureBin textureBin );
+    bool InsertImage( image_t* image, const GLint imageMinFilterType, const GLint imageMaxFilterType, byte* imageData );
+    void print();
+
+    private:
+    GLuint id;
+    bool allocated = false;
+    uint16_t allocatedWidth = 0;
+    uint16_t allocatedHeight = 0;
+    bool restrictSize = false;
+    std::vector<TextureBin> textureBins;
+
+    uint16_t width = 0;
+    uint16_t height = 0;
+    GLint levels = 1;
+    const GLenum format;
+    const GLint internalFormat;
+    const GLenum type = GL_UNSIGNED_BYTE;
+    const GLint minFilterType;
+    const GLint maxFilterType;
+
+    void AddTextureBin( const TextureBin textureBin );
+    void DeleteTextureBinIfEmpty( const size_t index );
+};
+
+TextureAtlas* TextureAtlasForImage( image_t* image, byte* imageData );
+
+extern std::vector<TextureAtlas> textureAtlases;
 
 #endif // TEXTURE_ATLAS_H

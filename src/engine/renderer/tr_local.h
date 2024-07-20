@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "botlib/bot_debug.h"
 #include "tr_public.h"
 #include "iqm.h"
+#include "TextureAtlas.h"
 
 #define GLEW_NO_GLU
 #include <GL/glew.h>
@@ -599,10 +600,12 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		int bits = 0;
 		filterType_t filterType;
 		wrapType_t wrapType;
+		bool useTextureAtlas = false;
 		int minDimension = 0;
 		int maxDimension = 0;
 	};
 
+	class TextureAtlas;
 	struct image_t
 	{
 		char name[ MAX_QPATH ];
@@ -615,11 +618,19 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 
 		int            frameUsed; // for texture usage in frame statistics
 
+		GLenum format;
 		uint32_t       internalFormat;
 
 		uint32_t       bits;
 		filterType_t   filterType;
 		wrapType_t     wrapType;
+
+		bool useTextureAtlas;
+		TextureAtlas* textureAtlas;
+		uint16_t textureAtlasX;
+		uint16_t textureAtlasY;
+		uint16_t textureAtlasWidth;
+		uint16_t textureAtlasHeight;
 
 		image_t *next;
 	};

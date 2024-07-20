@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "InternalImage.h"
 #include "tr_local.h"
 #include <iomanip>
+#include "TextureAtlas.h"
 
 int                  gl_filter_min = GL_LINEAR_MIPMAP_NEAREST;
 int                  gl_filter_max = GL_LINEAR;
@@ -1062,6 +1063,7 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 
 			image->uploadWidth = scaledWidth;
 			image->uploadHeight = scaledHeight;
+			image->format = format;
 			image->internalFormat = internalFormat;
 
 			switch ( image->type )
@@ -1086,7 +1088,24 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 				}
 				else
 				{
-					glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+					if( image )
+					{
+						if( image->useTextureAtlas )
+						{
+							if ( TextureAtlasForImage( image, scaledBuffer ) ) {
+								/* for ( TextureAtlas& atlas : textureAtlases ) {
+									atlas.print();
+								} */
+								// glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+							} else {
+								glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+							}
+						}
+						else
+						{
+							glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+						}
+					}
 				}
 
 				break;
@@ -1352,6 +1371,9 @@ image_t        *R_AllocImage( const char *name, bool linkIntoHashTable )
 	// Default image number of layers.
 	image->numLayers = 1;
 
+	// Texture atlases are turned off by default for each image
+	image->useTextureAtlas = false;
+
 	return image;
 }
 
@@ -1397,6 +1419,8 @@ image_t *R_CreateImage( const char *name, const byte **pic, int width, int heigh
 	image->bits = imageParams.bits;
 	image->filterType = imageParams.filterType;
 	image->wrapType = imageParams.wrapType;
+
+	image->useTextureAtlas = imageParams.useTextureAtlas;
 
 	R_UploadImage( pic, 1, numMips, image, imageParams );
 
@@ -2250,6 +2274,7 @@ static void R_CreateFogImage()
 	imageParams.bits = IF_NOPICMIP;
 	imageParams.filterType = filterType_t::FT_DEFAULT;
 	imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+	imageParams.useTextureAtlas = true;
 
 	tr.fogImage = R_CreateImage( "_fog", ( const byte ** ) &data, FOG_S, FOG_T, 1, imageParams );
 	ri.Hunk_FreeTempMemory( data );
@@ -2332,6 +2357,7 @@ static void R_CreateRandomNormalsImage()
 	imageParams.bits = IF_NOPICMIP;
 	imageParams.filterType = filterType_t::FT_DEFAULT;
 	imageParams.wrapType = wrapTypeEnum_t::WT_REPEAT;
+	imageParams.useTextureAtlas = true;
 
 	tr.randomNormalsImage = R_CreateImage( "_randomNormals", ( const byte ** ) &dataPtr, DEFAULT_SIZE, DEFAULT_SIZE, 1, imageParams );
 }
@@ -2391,6 +2417,7 @@ static void R_CreateAttenuationXYImage()
 	imageParams.bits = IF_NOPICMIP;
 	imageParams.filterType = filterType_t::FT_DEFAULT;
 	imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+	imageParams.useTextureAtlas = true;
 
 	tr.attenuationXYImage = R_CreateImage( "_attenuationXY", ( const byte ** ) &dataPtr, ATTENUATION_XY_SIZE, ATTENUATION_XY_SIZE, 1, imageParams );
 }
