@@ -39,14 +39,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include "GL/glew.h"
 
+struct image_t;
 struct TextureBin {
     uint16_t x;
     uint16_t y;
     uint16_t width;
     uint16_t height;
+    image_t* image;
 };
 
-struct image_t;
 enum filterProxy {
     FP_DEFAULT,
     FP_LINEAR,
@@ -78,6 +79,7 @@ class TextureAtlas {
 
     uint16_t width = 0;
     uint16_t height = 0;
+    uint16_t borderSize = 1;
     const uint32_t bits;
     GLint levels = 1;
     const GLenum format;

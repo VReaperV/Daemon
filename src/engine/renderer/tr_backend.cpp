@@ -45,8 +45,6 @@ void GL_Bind( image_t *image )
 		if ( image->useTextureAtlas ) {
 			if ( ( textureAtlases.size() > image->textureAtlasID ) && textureAtlases[image->textureAtlasID].allocated ) {
 				image = textureAtlases[image->textureAtlasID].texture;
-			} else {
-				image = tr.blackImage;
 			}
 		}
 

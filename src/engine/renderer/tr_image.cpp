@@ -910,6 +910,7 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 	}
 	else if ( IsImageCompressed( image->bits ) )
 	{
+		image->useTextureAtlas = false;
 		if( !GLEW_EXT_texture_compression_dxt1 &&
 		    !GLEW_EXT_texture_compression_s3tc ) {
 			Log::Warn("compressed image '%s' cannot be loaded", image->name );
@@ -1018,6 +1019,18 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 		}
 	}
 
+	switch ( image->internalFormat ) {
+		case GL_RGBA:
+		case GL_RGBA8:
+		case GL_RGBA16:
+		case GL_RGBA16F:
+		case GL_RGBA32F:
+		case GL_RGBA32UI:
+		case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+		case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+			image->bits |= IF_ALPHA;
+	}
+
 	if( format != GL_NONE ) {
 		if( dataArray )
 			scaledBuffer = (byte*) ri.Hunk_AllocateTempMemory( sizeof( byte ) * scaledWidth * scaledHeight * 4 );
@@ -1093,7 +1106,7 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 						if( image->useTextureAtlas )
 						{
 							if ( TextureAtlasForImage( image, scaledBuffer ) ) {
-								//
+								glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
 							} else {
 								glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
 								image->useTextureAtlas = false;
@@ -1163,24 +1176,6 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 					mipLayers >>= 1;
 			}
 		}
-	}
-
-	GL_CheckErrors();
-
-	switch ( image->internalFormat ) {
-		case GL_RGBA:
-		case GL_RGBA8:
-		case GL_RGBA16:
-		case GL_RGBA16F:
-		case GL_RGBA32F:
-		case GL_RGBA32UI:
-		case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
-		case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
-			image->bits |= IF_ALPHA;
-	}
-
-	if ( image->useTextureAtlas ) {
-		return;
 	}
 
 	// set filter type

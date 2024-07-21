@@ -51,6 +51,22 @@ TextureAtlas::~TextureAtlas() {
 }
 
 void TextureAtlas::CreateTexture() {
+	std::vector<TextureBin> tmp;
+	for ( TextureBin bin : textureBins ) {
+		tmp.push_back( bin );
+	}
+	textureBins.clear();
+	borderSize = log2( width > height ? width : height ) + 1;
+	width = 0;
+	height = 0;
+
+	for ( TextureBin origBin : tmp ) {
+		if ( origBin.image ) {
+			InsertImage( origBin.image, filter, origBin.image->imageData );
+			Log::Warn( "%s", origBin.image->name );
+		}
+	}
+
 	imageParams_t imageParams = {};
 	imageParams.bits = bits;
 
@@ -72,6 +88,10 @@ void TextureAtlas::CreateTexture() {
 	allocated = true;
 
 	Log::Warn( "%u", texture->texnum );
+
+	for ( TextureBin textureBin : textureBins ) {
+		UploadTexture( textureBin.image );
+	}
 }
 
 void TextureAtlas::UploadTexture( image_t* image ) {
@@ -80,16 +100,158 @@ void TextureAtlas::UploadTexture( image_t* image ) {
 	}
 
 	if ( ( image->textureAtlasWidth == 0 ) || ( image->textureAtlasHeight == 0 ) ) {
+		Log::Warn( "empty image: %s %u %u %u %u id: %u width: %u height: %u, %b", image->name, image->textureAtlasX, image->textureAtlasY,
+				   image->textureAtlasWidth, image->textureAtlasHeight, id, image->uploadWidth, image->uploadHeight,
+				   IsImageCompressed( image->bits ) );
 		return;
 	}
 
 	GL_Bind( texture );
 
-	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY, image->textureAtlasWidth - 2, image->textureAtlasHeight - 2,
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + borderSize, image->textureAtlasY + borderSize,
+					 image->textureAtlasWidth - 2 * borderSize, image->textureAtlasHeight - 2 * borderSize,
 					 format, type, image->imageData );
 
+	byte* border = new byte[image->textureAtlasWidth * 4];
+	/* for ( uint32_t i = 0; i < image->textureAtlasWidth * borderSize; i++ ) {
+		border[i * 4] = 255;
+		border[i * 4 + 1] = 0;
+		border[i * 4 + 2] = 0;
+		border[i * 4 + 3] = 0;
+	}
+
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY, image->textureAtlasWidth, borderSize,
+		format, type, border );
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY + image->textureAtlasHeight - borderSize,
+		image->textureAtlasWidth, borderSize, format, type, border ); */
+	
+	/* for ( uint32_t u = 0; u < borderSize; u++ ) {
+		for ( uint32_t v = 0; v < image->uploadWidth; v++ ) {
+			border[( u * image->textureAtlasWidth + v + borderSize ) * 4] = image->imageData[v * 4];
+			border[( u * image->textureAtlasWidth + v + borderSize ) * 4 + 1] = image->imageData[v * 4 + 1];
+			border[( u * image->textureAtlasWidth + v + borderSize ) * 4 + 2] = image->imageData[v * 4 + 2];
+			border[( u * image->textureAtlasWidth + v + borderSize ) * 4 + 3] = image->imageData[v * 4 + 3];
+		}
+		for ( uint32_t v = 0; v < borderSize; v++ ) {
+			border[( u * image->textureAtlasWidth + v ) * 4] = image->imageData[0];
+			border[( u * image->textureAtlasWidth + v ) * 4 + 1] = image->imageData[1];
+			border[( u * image->textureAtlasWidth + v ) * 4 + 2] = image->imageData[2];
+			border[( u * image->textureAtlasWidth + v ) * 4 + 3] = image->imageData[3];
+
+			border[( u * image->textureAtlasWidth + image->uploadWidth + borderSize + v ) * 4] =
+				image->imageData[image->uploadWidth * 4 - 4];
+			border[( u * image->textureAtlasWidth + image->uploadWidth + borderSize + v ) * 4 + 1] =
+				image->imageData[image->uploadWidth * 4 - 3];
+			border[( u * image->textureAtlasWidth + image->uploadWidth + borderSize + v ) * 4 + 2] =
+				image->imageData[image->uploadWidth * 4 - 2];
+			border[( u * image->textureAtlasWidth + image->uploadWidth + borderSize + v ) * 4 + 3] =
+				image->imageData[image->uploadWidth * 4 - 1];
+		}
+	} */
+
+	for ( uint32_t v = 0; v < image->uploadWidth; v++ ) {
+		border[( v + borderSize ) * 4] = image->imageData[v * 4];
+		border[( v + borderSize ) * 4 + 1] = image->imageData[v * 4 + 1];
+		border[( v + borderSize ) * 4 + 2] = image->imageData[v * 4 + 2];
+		border[( v + borderSize ) * 4 + 3] = image->imageData[v * 4 + 3];
+	}
+	for ( uint32_t v = 0; v < borderSize; v++ ) {
+		border[( v ) * 4] = image->imageData[0];
+		border[( v ) * 4 + 1] = image->imageData[1];
+		border[( v ) * 4 + 2] = image->imageData[2];
+		border[( v ) * 4 + 3] = image->imageData[3];
+
+		border[( image->uploadWidth + borderSize + v ) * 4] =
+			image->imageData[image->uploadWidth * 4 - 4];
+		border[( image->uploadWidth + borderSize + v ) * 4 + 1] =
+			image->imageData[image->uploadWidth * 4 - 3];
+		border[( image->uploadWidth + borderSize + v ) * 4 + 2] =
+			image->imageData[image->uploadWidth * 4 - 2];
+		border[( image->uploadWidth + borderSize + v ) * 4 + 3] =
+			image->imageData[image->uploadWidth * 4 - 1];
+	}
+
+	for ( uint i = 0; i < borderSize; i++ ) {
+		glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY + i, image->textureAtlasWidth, 1,
+			format, type, border );
+	}
+
+	for ( uint32_t v = 0; v < image->uploadWidth; v++ ) {
+		border[( v + borderSize ) * 4] = image->imageData[( ( image->uploadHeight - 1 ) * image->uploadWidth + v ) * 4];
+		border[( v + borderSize ) * 4 + 1] = image->imageData[( ( image->uploadHeight - 1 ) * image->uploadWidth + v ) * 4 + 1];
+		border[( v + borderSize ) * 4 + 2] = image->imageData[( ( image->uploadHeight - 1 ) * image->uploadWidth + v ) * 4 + 2];
+		border[( v + borderSize ) * 4 + 3] = image->imageData[( ( image->uploadHeight - 1 ) * image->uploadWidth + v ) * 4 + 3];
+	}
+	for ( uint32_t v = 0; v < borderSize; v++ ) {
+		border[( v ) * 4] = image->imageData[( image->uploadHeight - 1 ) * image->uploadWidth];
+		border[( v ) * 4 + 1] = image->imageData[( image->uploadHeight - 1 ) * image->uploadWidth + 1];
+		border[( v ) * 4 + 2] = image->imageData[( image->uploadHeight - 1 ) * image->uploadWidth + 2];
+		border[( v ) * 4 + 3] = image->imageData[( image->uploadHeight - 1 ) * image->uploadWidth + 3];
+
+		border[( image->uploadWidth + borderSize + v ) * 4] =
+			image->imageData[image->uploadHeight * image->uploadWidth * 4 - 4];
+		border[( image->uploadWidth + borderSize + v ) * 4 + 1] =
+			image->imageData[image->uploadHeight * image->uploadWidth * 4 - 3];
+		border[( image->uploadWidth + borderSize + v ) * 4 + 2] =
+			image->imageData[image->uploadHeight * image->uploadWidth * 4 - 2];
+		border[( image->uploadWidth + borderSize + v ) * 4 + 3] =
+			image->imageData[image->uploadHeight * image->uploadWidth * 4 - 1];
+	}
+
+	for ( uint i = 0; i < borderSize; i++ ) {
+		glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY + borderSize + image->uploadHeight + i,
+			image->textureAtlasWidth, 1, format, type, border );
+	}
+
+	delete[] border;
+
+	border = new byte[image->textureAtlasHeight * 4];
+
+	for ( uint32_t v = 0; v < image->uploadHeight; v++ ) {
+		border[( v + borderSize ) * 4] = image->imageData[v * image->uploadWidth * 4];
+		border[( v + borderSize ) * 4 + 1] = image->imageData[v * image->uploadWidth * 4 + 1];
+		border[( v + borderSize ) * 4 + 2] = image->imageData[v * image->uploadWidth * 4 + 2];
+		border[( v + borderSize ) * 4 + 3] = image->imageData[v * image->uploadWidth * 4 + 3];
+	}
+
+	for ( uint i = 0; i < borderSize * 0; i++ ) {
+		glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + i, image->textureAtlasY + borderSize, 1, image->uploadHeight,
+			format, type, border );
+	}
+
+	for ( uint32_t v = 0; v < image->uploadHeight; v++ ) {
+		border[( v + borderSize ) * 4] = image->imageData[( v + 1 ) * image->uploadWidth * 4 - 4];
+		border[( v + borderSize ) * 4 + 1] = image->imageData[( v + 1 ) * image->uploadWidth * 4 - 3];
+		border[( v + borderSize ) * 4 + 2] = image->imageData[( v + 1 ) * image->uploadWidth * 4 - 2];
+		border[( v + borderSize ) * 4 + 3] = image->imageData[( v + 1 ) * image->uploadWidth * 4 - 1];
+	}
+
+	for ( uint i = 0; i < borderSize * 0; i++ ) {
+		glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + borderSize + image->uploadWidth + i,
+						 image->textureAtlasY + borderSize, 1, image->uploadHeight,
+						 format, type, border );
+	}
+
+	delete[] border;
+
+	/* border = new byte[image->textureAtlasHeight * borderSize * 4];
+	for ( uint32_t i = 0; i < image->textureAtlasHeight * borderSize; i++ ) {
+		border[i * 4] = 255;
+		border[i * 4 + 1] = 0;
+		border[i * 4 + 2] = 0;
+		border[i * 4 + 3] = 0;
+	}
+
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY, borderSize, image->textureAtlasHeight,
+		format, type, border );
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + image->textureAtlasWidth - borderSize, image->textureAtlasY,
+		borderSize, image->textureAtlasHeight, format, type, border );
+
+	delete[] border; */
+
 	if ( image->imageData ) {
-		ri.Hunk_FreeTempMemory( image->imageData );
+		// ri.Hunk_FreeTempMemory( image->imageData );
+		delete[] image->imageData;
 	}
 
 	glGenerateMipmap( GL_TEXTURE_2D );
@@ -98,8 +260,8 @@ void TextureAtlas::UploadTexture( image_t* image ) {
 }
 
 void TextureAtlas::AddImageToTextureBin( image_t* image, byte* imageData, const TextureBin textureBin ) {
-	const uint16_t imageWidth = image->uploadWidth + 2;
-	const uint16_t imageHeight = image->uploadHeight + 2;
+	const uint16_t imageWidth = image->uploadWidth + 2 * borderSize;
+	const uint16_t imageHeight = image->uploadHeight + 2 * borderSize;
 
 	image->textureAtlasID = id;
 	image->textureAtlasX = textureBin.x;
@@ -108,18 +270,21 @@ void TextureAtlas::AddImageToTextureBin( image_t* image, byte* imageData, const 
 	image->textureAtlasHeight = imageHeight;
 
 	// Minimum dimension size including borders is 3
-	if ( textureBin.width - imageWidth >= 3 ) {
+	if ( textureBin.width - imageWidth >= 1 + 2 * borderSize ) {
 		TextureBin splitBin{ textureBin.x + imageWidth, textureBin.y, textureBin.width - imageWidth, imageHeight };
 		textureBins.push_back( splitBin );
 	}
 
 	// Minimum dimension size including borders is 3
-	if ( textureBin.height - imageHeight >= 3 ) {
+	if ( textureBin.height - imageHeight >= 1 + 2 * borderSize ) {
 		TextureBin splitBin{ textureBin.x, textureBin.y + imageHeight, textureBin.width, textureBin.height - imageHeight };
 		textureBins.push_back( splitBin );
 	}
 
-	image->imageData = imageData;
+	image->imageData = new byte[image->uploadWidth * image->uploadHeight * 4];
+	memcpy( image->imageData, imageData, image->uploadWidth * image->uploadHeight * 4 );
+
+	// image->imageData = imageData;
 
 	/* glTexSubImage2D(GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY, image->textureAtlasWidth, image->textureAtlasHeight,
 		             format, type, imageData );
@@ -138,14 +303,20 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 	}
 
 	// Add 2 because we'll need to copy border pixels for proper bilinear filtering
-	const uint16_t imageWidth = image->uploadWidth + 2;
-	const uint16_t imageHeight = image->uploadHeight + 2;
+	const uint16_t imageWidth = image->uploadWidth + 2 * borderSize;
+	const uint16_t imageHeight = image->uploadHeight + 2 * borderSize;
 
 	for ( size_t i = 0; i < textureBins.size(); i++ ) {
 		TextureBin& textureBin = textureBins[i];
-		if ( ( imageWidth <= textureBin.width ) && ( imageHeight <= textureBin.height ) ) {
+		if ( ( !textureBin.image ) && ( imageWidth <= textureBin.width ) && ( imageHeight <= textureBin.height ) ) {
 			AddImageToTextureBin( image, imageData, textureBin );
-			textureBins.erase( textureBins.begin() + i );
+			// textureBins.erase( textureBins.begin() + i );
+			textureBin.width = imageWidth;
+			textureBin.height = imageHeight;
+			textureBin.image = image;
+
+			width = width > imageWidth ? width : imageWidth;
+			height = height > imageHeight ? height : imageHeight;
 
 			return true;
 		}
@@ -160,15 +331,16 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 
 	if ( ( width + imageWidth <= glConfig.maxTextureSize )
 		&& ( ( area1 <= area2 ) || ( height + imageHeight > glConfig.maxTextureSize ) ) ) {
-		if ( ( height > imageHeight ) && ( height - imageHeight >= 3 ) ) {
+		if ( ( height > imageHeight ) && ( height - imageHeight >= 1 + 2 * borderSize ) ) {
 			TextureBin extendBin{ width, imageHeight, imageWidth, height - imageHeight };
 			textureBins.push_back( extendBin );
-		} else if ( ( width > 0 ) && ( height < imageHeight ) && ( imageHeight - height >= 3 ) ) {
+		} else if ( ( width > 0 ) && ( height < imageHeight ) && ( imageHeight - height >= 1 + 2 * borderSize ) ) {
 			TextureBin extendBin{ 0, height, width, imageHeight - height };
 			textureBins.push_back( extendBin );
 		}
 
-		TextureBin tempBin{ width, 0, imageWidth, imageHeight };
+		TextureBin tempBin{ width, 0, imageWidth, imageHeight, image };
+		textureBins.push_back( tempBin );
 		
 		width += imageWidth;
 		height = height > imageHeight ? height : imageHeight;
@@ -177,16 +349,17 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 
 		return true;
 	} else if ( height + imageHeight <= glConfig.maxTextureSize ) {
-		if ( ( width > imageWidth ) && ( width - imageWidth >= 3 ) ) {
+		if ( ( width > imageWidth ) && ( width - imageWidth >= 1 + 2 * borderSize ) ) {
 			TextureBin extendBin{ imageWidth, height, width - imageWidth, imageHeight };
 			textureBins.push_back( extendBin );
-		} else if ( ( height > 0 ) && ( width < imageWidth ) && ( imageWidth - width >= 3 ) ) {
+		} else if ( ( height > 0 ) && ( width < imageWidth ) && ( imageWidth - width >= 1 + 2 * borderSize ) ) {
 			TextureBin extendBin{ width, 0, imageWidth - width, height };
 			textureBins.push_back( extendBin );
 			width = imageWidth;
 		}
 
-		TextureBin tempBin{ 0, height, imageWidth, imageHeight };
+		TextureBin tempBin{ 0, height, imageWidth, imageHeight, image };
+		textureBins.push_back( tempBin );
 
 		height += imageHeight;
 		width = width > imageWidth ? width : imageWidth;
@@ -204,11 +377,11 @@ void LoadTextureAtlases() {
 		textureAtlas.CreateTexture();
 	}
 
-	for ( image_t* image : tr.images ) {
+	/* for ( image_t* image : tr.images ) {
 		if ( image->useTextureAtlas ) {
 			textureAtlases[image->textureAtlasID].UploadTexture( image );
 		}
-	}
+	} */
 }
 
 static uint32_t textureAtlasID = 0;
