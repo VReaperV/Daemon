@@ -1093,12 +1093,10 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 						if( image->useTextureAtlas )
 						{
 							if ( TextureAtlasForImage( image, scaledBuffer ) ) {
-								/* for ( TextureAtlas& atlas : textureAtlases ) {
-									atlas.print();
-								} */
-								// glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+								//
 							} else {
 								glTexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer );
+								image->useTextureAtlas = false;
 							}
 						}
 						else
@@ -1168,6 +1166,22 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 	}
 
 	GL_CheckErrors();
+
+	switch ( image->internalFormat ) {
+		case GL_RGBA:
+		case GL_RGBA8:
+		case GL_RGBA16:
+		case GL_RGBA16F:
+		case GL_RGBA32F:
+		case GL_RGBA32UI:
+		case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+		case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+			image->bits |= IF_ALPHA;
+	}
+
+	if ( image->useTextureAtlas ) {
+		return;
+	}
 
 	// set filter type
 	switch ( image->filterType )
@@ -1319,19 +1333,6 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 	if ( scaledBuffer != nullptr )
 	{
 		ri.Hunk_FreeTempMemory( scaledBuffer );
-	}
-
-	switch ( image->internalFormat )
-	{
-		case GL_RGBA:
-		case GL_RGBA8:
-		case GL_RGBA16:
-		case GL_RGBA16F:
-		case GL_RGBA32F:
-		case GL_RGBA32UI:
-		case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
-		case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
-			image->bits |= IF_ALPHA;
 	}
 
 	GL_Unbind( image );

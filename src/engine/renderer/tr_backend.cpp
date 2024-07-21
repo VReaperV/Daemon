@@ -42,6 +42,14 @@ void GL_Bind( image_t *image )
 	}
 	else
 	{
+		if ( image->useTextureAtlas ) {
+			if ( ( textureAtlases.size() > image->textureAtlasID ) && textureAtlases[image->textureAtlasID].allocated ) {
+				image = textureAtlases[image->textureAtlasID].texture;
+			} else {
+				image = tr.blackImage;
+			}
+		}
+
 		if ( r_logFile->integer )
 		{
 			// don't just call LogComment, or we will get a call to va() every frame!

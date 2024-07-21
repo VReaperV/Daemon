@@ -40,22 +40,68 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 std::vector<TextureAtlas> textureAtlases;
 
 TextureAtlas::TextureAtlas( const GLenum newFormat, const GLint newInternalFormat,
-							const GLint newMinFilterType, const GLint newMaxFilterType ) :
+							const filterProxy newFilterProxy, const uint32_t newBits ) :
 	format( newFormat ),
 	internalFormat( newInternalFormat ),
-	minFilterType( newMinFilterType ),
-	maxFilterType( newMaxFilterType ) {
+	filter( newFilterProxy ),
+	bits( newBits ) {
 }
 
 TextureAtlas::~TextureAtlas() {
-	glDeleteTextures( 1, &id );
+}
+
+void TextureAtlas::CreateTexture() {
+	imageParams_t imageParams = {};
+	imageParams.bits = bits;
+
+	switch ( filter ) {
+		case FP_DEFAULT:
+			imageParams.filterType = filterType_t::FT_DEFAULT;
+			break;
+		case FP_LINEAR:
+			imageParams.filterType = filterType_t::FT_LINEAR;
+			break;
+		case FP_NEAREST:
+			imageParams.filterType = filterType_t::FT_NEAREST;
+			break;
+	}
+	imageParams.wrapType = wrapTypeEnum_t::WT_REPEAT;
+
+	texture = R_CreateImage( va( "textureAtlas%u", id ), nullptr, width, height, 1, imageParams );
+
+	allocated = true;
+
+	Log::Warn( "%u", texture->texnum );
+}
+
+void TextureAtlas::UploadTexture( image_t* image ) {
+	if ( !image->useTextureAtlas ) {
+		return;
+	}
+
+	if ( ( image->textureAtlasWidth == 0 ) || ( image->textureAtlasHeight == 0 ) ) {
+		return;
+	}
+
+	GL_Bind( texture );
+
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY, image->textureAtlasWidth - 2, image->textureAtlasHeight - 2,
+					 format, type, image->imageData );
+
+	if ( image->imageData ) {
+		ri.Hunk_FreeTempMemory( image->imageData );
+	}
+
+	glGenerateMipmap( GL_TEXTURE_2D );
+
+	GL_CheckErrors();
 }
 
 void TextureAtlas::AddImageToTextureBin( image_t* image, byte* imageData, const TextureBin textureBin ) {
 	const uint16_t imageWidth = image->uploadWidth + 2;
 	const uint16_t imageHeight = image->uploadHeight + 2;
 
-	// image->textureAtlas = this;
+	image->textureAtlasID = id;
 	image->textureAtlasX = textureBin.x;
 	image->textureAtlasY = textureBin.y;
 	image->textureAtlasWidth = imageWidth;
@@ -73,90 +119,21 @@ void TextureAtlas::AddImageToTextureBin( image_t* image, byte* imageData, const 
 		textureBins.push_back( splitBin );
 	}
 
-	const int currentTexture = tr.currenttextures[glState.currenttmu];
-	if ( !allocated ) {
+	image->imageData = imageData;
 
-		glGenTextures( 1, &id );
-		glBindTexture( GL_TEXTURE_2D, id );
-		Log::Warn( "alloc id: %u", id );
-		glTexImage2D( GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr );
-		
-		if ( glConfig2.textureAnisotropyAvailable ) {
-			glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, glConfig2.textureAnisotropy );
-		}
-
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilterType );
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, maxFilterType );
-
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
-
-		GL_CheckErrors();
-
-		allocated = true;
-		allocatedWidth = width;
-		allocatedHeight = height;
-	} else if ( width > allocatedWidth || height > allocatedHeight ) {
-		const FBO_t* currentFBO = glState.currentFBO;
-
-		GLuint tmpFBOID;
-		glGenFramebuffers( 1, &tmpFBOID );
-		GL_fboShim.glBindFramebuffer( GL_READ_FRAMEBUFFER, tmpFBOID );
-		GL_fboShim.glFramebufferTexture2D( GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0 );
-
-		GLuint newID;
-		glGenTextures( 1, &newID );
-		glBindTexture( GL_TEXTURE_2D, newID );
-		Log::Warn( "deleted id: %u copy id: %u", id, newID );
-		glTexImage2D( GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr );
-
-		if ( glConfig2.textureAnisotropyAvailable ) {
-			glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, glConfig2.textureAnisotropy );
-		}
-
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilterType );
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, maxFilterType );
-
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
-
-		glReadBuffer( GL_COLOR_ATTACHMENT0 );
-		glCopyTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, 0, 0, allocatedWidth, allocatedHeight );
-
-		glDeleteTextures( 1, &id );
-
-		id = newID;
-		allocatedWidth = width;
-		allocatedHeight = height;
-
-		if ( currentFBO ) {
-			GL_fboShim.glBindFramebuffer( GL_FRAMEBUFFER, currentFBO->frameBuffer );
-		} else {
-			GL_fboShim.glBindFramebuffer( GL_FRAMEBUFFER, 0 );
-		}
-
-		glDeleteFramebuffers( 1, &tmpFBOID );
-
-		GL_CheckErrors();
-	} else {
-		glBindTexture( GL_TEXTURE_2D, id );
-	}
-
-	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY, image->textureAtlasWidth, image->textureAtlasHeight,
+	/* glTexSubImage2D(GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY, image->textureAtlasWidth, image->textureAtlasHeight,
 		             format, type, imageData );
 
 	GL_CheckErrors();
 
 	glGenerateMipmap( GL_TEXTURE_2D );
 
-	glBindTexture( GL_TEXTURE_2D, currentTexture );
-
-	GL_CheckErrors();
+	GL_CheckErrors(); */
 }
 
-bool TextureAtlas::InsertImage( image_t* image, const GLint imageMinFilterType, const GLint imageMaxFilterType, byte* imageData ) {
+bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy, byte* imageData ) {
 	if ( format != image->format || internalFormat != image->internalFormat
-		 || minFilterType != imageMinFilterType || maxFilterType != imageMaxFilterType ) {
+		 || filter != newFilterProxy || bits != image->bits ) {
 		return false;
 	}
 
@@ -222,42 +199,62 @@ bool TextureAtlas::InsertImage( image_t* image, const GLint imageMinFilterType, 
 	return false;
 }
 
+void LoadTextureAtlases() {
+	for ( TextureAtlas& textureAtlas : textureAtlases ) {
+		textureAtlas.CreateTexture();
+	}
+
+	for ( image_t* image : tr.images ) {
+		if ( image->useTextureAtlas ) {
+			textureAtlases[image->textureAtlasID].UploadTexture( image );
+		}
+	}
+}
+
+static uint32_t textureAtlasID = 0;
+
 TextureAtlas* TextureAtlasForImage( image_t* image, byte* imageData ) {
 	if ( false ) {
 		return nullptr;
 	}
 
-	GLint minFilterType;
-	GLint maxFilterType;
+	filterProxy filter;
 	switch ( image->filterType ) {
 		case filterType_t::FT_DEFAULT:
-			minFilterType = gl_filter_min;
-			maxFilterType = gl_filter_max;
+			filter = FP_DEFAULT;
 			break;
 		case filterType_t::FT_LINEAR:
-			minFilterType = GL_LINEAR;
-			maxFilterType = GL_LINEAR;
+			filter = FP_LINEAR;
 			break;
 		case filterType_t::FT_NEAREST:
-			minFilterType = GL_NEAREST;
-			maxFilterType = GL_NEAREST;
+			filter = FP_NEAREST;
 			break;
 	}
 
 	for ( TextureAtlas& atlas : textureAtlases ) {
-		if ( atlas.InsertImage( image, minFilterType, maxFilterType, imageData ) ) {
+		if ( atlas.InsertImage( image, filter, imageData ) ) {
+			image->textureAtlasID = atlas.id;
 			return &atlas;
 		}
 	}
 
-	TextureAtlas atlas( image->format, image->internalFormat, minFilterType, maxFilterType );
-	if ( atlas.InsertImage( image, minFilterType, maxFilterType, imageData ) ) {
+	TextureAtlas atlas( image->format, image->internalFormat, filter, image->bits );
+	if ( atlas.InsertImage( image, filter, imageData ) ) {
+		atlas.id = textureAtlasID;
+		image->textureAtlasID = atlas.id;
+		textureAtlasID++;
+
 		textureAtlases.push_back( atlas );
 		return &textureAtlases[textureAtlases.size() - 1];
 	} else {
 		Log::Warn( "Unable to allocate texture memory in texture atlases for image %s", image->name );
 		return nullptr;
 	}
+}
+
+void FreeTextureAtlases() {
+	textureAtlases.clear();
+	textureAtlasID = 0;
 }
 
 void TextureAtlas::print() {

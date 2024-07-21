@@ -47,19 +47,30 @@ struct TextureBin {
 };
 
 struct image_t;
+enum filterProxy {
+    FP_DEFAULT,
+    FP_LINEAR,
+    FP_NEAREST
+};
+
 class TextureAtlas {
     public:
+    uint32_t id;
+    image_t* texture;
+    bool allocated = false;
+
     TextureAtlas() = delete;
-    TextureAtlas( const GLenum newFormat, const GLint newInternalFormat, const GLint newMinFilterType, const GLint newMaxFilterType );
+    TextureAtlas( const GLenum newFormat, const GLint newInternalFormat, const filterProxy newFilterProxy,
+                  const uint32_t newBits );
     ~TextureAtlas();
 
+    void CreateTexture();
+    void UploadTexture( image_t* image );
     void AddImageToTextureBin( image_t* image, byte* imageData, const TextureBin textureBin );
-    bool InsertImage( image_t* image, const GLint imageMinFilterType, const GLint imageMaxFilterType, byte* imageData );
+    bool InsertImage( image_t* image, const filterProxy newFilterProxy, byte* imageData );
     void print();
 
     private:
-    GLuint id;
-    bool allocated = false;
     uint16_t allocatedWidth = 0;
     uint16_t allocatedHeight = 0;
     bool restrictSize = false;
@@ -67,18 +78,20 @@ class TextureAtlas {
 
     uint16_t width = 0;
     uint16_t height = 0;
+    const uint32_t bits;
     GLint levels = 1;
     const GLenum format;
     const GLint internalFormat;
     const GLenum type = GL_UNSIGNED_BYTE;
-    const GLint minFilterType;
-    const GLint maxFilterType;
+    const filterProxy filter;
 
     void AddTextureBin( const TextureBin textureBin );
     void DeleteTextureBinIfEmpty( const size_t index );
 };
 
+void LoadTextureAtlases();
 TextureAtlas* TextureAtlasForImage( image_t* image, byte* imageData );
+void FreeTextureAtlases();
 
 extern std::vector<TextureAtlas> textureAtlases;
 
