@@ -91,7 +91,9 @@ void TextureAtlas::CreateTexture() {
 	Log::Warn( "%u", texture->texnum );
 
 	for ( TextureBin textureBin : textureBins ) {
-		UploadTexture( textureBin.image );
+		if ( textureBin.image ) {
+			UploadTexture( textureBin.image );
+		}
 	}
 }
 

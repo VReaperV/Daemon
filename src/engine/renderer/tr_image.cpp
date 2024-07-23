@@ -2353,7 +2353,6 @@ static void R_CreateRandomNormalsImage()
 	imageParams.bits = IF_NOPICMIP;
 	imageParams.filterType = filterType_t::FT_DEFAULT;
 	imageParams.wrapType = wrapTypeEnum_t::WT_REPEAT;
-	imageParams.useTextureAtlas = true;
 
 	tr.randomNormalsImage = R_CreateImage( "_randomNormals", ( const byte ** ) &dataPtr, DEFAULT_SIZE, DEFAULT_SIZE, 1, imageParams );
 }
@@ -2370,6 +2369,7 @@ static void R_CreateNoFalloffImage()
 	imageParams.bits = IF_NOPICMIP;
 	imageParams.filterType = filterType_t::FT_DEFAULT;
 	imageParams.wrapType = wrapTypeEnum_t::WT_EDGE_CLAMP;
+	imageParams.useTextureAtlas = true;
 
 	tr.noFalloffImage = R_CreateImage( "_noFalloff", ( const byte ** ) &dataPtr, 8, 8, 1, imageParams );
 }
