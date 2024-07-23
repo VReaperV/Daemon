@@ -26,6 +26,11 @@ uniform sampler2D	u_DiffuseMap;
 uniform sampler2D	u_MaterialMap;
 uniform sampler2D	u_GlowMap;
 
+uniform vec4 u_DiffuseMapAtlas;
+uniform vec4 u_NormalMapAtlas;
+uniform vec4 u_LightMapAtlas;
+uniform vec4 u_DeluxeMapAtlas;
+
 uniform float		u_AlphaThreshold;
 uniform float u_InverseLightFactor;
 uniform vec3		u_ViewOrigin;
@@ -79,7 +84,7 @@ void main()
 	#endif
 
 	// Compute the diffuse term.
-	vec4 diffuse = texture2D(u_DiffuseMap, texCoords);
+	vec4 diffuse = texture2D(u_DiffuseMap, texCoords * u_DiffuseMapAtlas.xy + u_DiffuseMapAtlas.zw);
 
 	// Apply vertex blend operation like: alphaGen vertex.
 	diffuse *= var_Color;
@@ -117,7 +122,7 @@ void main()
 
 	#if defined(USE_LIGHT_MAPPING)
 		// Compute light color from world space lightmap.
-		vec3 lightColor = texture2D(u_LightMap, var_TexLight).rgb;
+		vec3 lightColor = texture2D(u_LightMap, var_TexLight * u_LightMapAtlas.xy + u_LightMapAtlas.zw).rgb;
 
 		color.rgb = vec3(0.0);
 	#else

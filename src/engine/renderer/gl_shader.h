@@ -1298,6 +1298,54 @@ public:
 	}
 };
 
+class u_DiffuseMapAtlas :
+	GLUniform4f {
+	public:
+	u_DiffuseMapAtlas( GLShader* shader ) :
+		GLUniform4f( shader, "u_DiffuseMapAtlas" ) {
+	}
+
+	void SetUniform_DiffuseMapAtlas( const vec4_t diffuseMapAtlas ) {
+		this->SetValue( diffuseMapAtlas );
+	}
+};
+
+class u_NormalMapAtlas :
+	GLUniform4f {
+	public:
+	u_NormalMapAtlas( GLShader* shader ) :
+		GLUniform4f( shader, "u_NormalMapAtlas" ) {
+	}
+
+	void SetUniform_NormalMapAtlas( const vec4_t normalMapAtlas ) {
+		this->SetValue( normalMapAtlas );
+	}
+};
+
+class u_LightMapAtlas :
+	GLUniform4f {
+	public:
+	u_LightMapAtlas( GLShader* shader ) :
+		GLUniform4f( shader, "u_LightMapAtlas" ) {
+	}
+
+	void SetUniform_LightMapAtlas( const vec4_t lightMapAtlas ) {
+		this->SetValue( lightMapAtlas );
+	}
+};
+
+class u_DeluxeMapAtlas :
+	GLUniform4f {
+	public:
+	u_DeluxeMapAtlas( GLShader* shader ) :
+		GLUniform4f( shader, "u_DeluxeMapAtlas" ) {
+	}
+
+	void SetUniform_DeluxeMapAtlas( const vec4_t deluxeMapAtlas ) {
+		this->SetValue( deluxeMapAtlas );
+	}
+};
+
 class u_LightFactor :
 	GLUniform1f
 {
@@ -2314,6 +2362,8 @@ public:
 
 class GLShader_lightMapping :
 	public GLShader,
+	public u_DiffuseMapAtlas,
+	public u_LightMapAtlas,
 	public u_TextureMatrix,
 	public u_SpecularExponent,
 	public u_ColorModulate,

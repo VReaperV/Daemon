@@ -1060,6 +1060,13 @@ void Render_lightMapping( shaderStage_t *pStage )
 
 	// bind u_DiffuseMap
 	GL_BindToTMU( BIND_DIFFUSEMAP, pStage->bundle[ TB_DIFFUSEMAP ].image[ 0 ] );
+	if ( pStage->bundle[TB_DIFFUSEMAP].image[0]->useTextureAtlas && ( pStage->bundle[TB_DIFFUSEMAP].image[0]->atlas[0] > 0.0 ) ) {
+		gl_lightMappingShader->SetUniform_DiffuseMapAtlas( pStage->bundle[TB_DIFFUSEMAP].image[0]->atlas );
+	} else {
+		vec4_t identity;
+		Vector4Set( identity, 1.0, 1.0, 0.0, 0.0 );
+		gl_lightMappingShader->SetUniform_DiffuseMapAtlas( identity );
+	}
 
 	if ( pStage->type != stageType_t::ST_LIGHTMAP )
 	{
@@ -1201,6 +1208,14 @@ void Render_lightMapping( shaderStage_t *pStage )
 
 	// bind u_LightMap
 	GL_BindToTMU( BIND_LIGHTMAP, lightmap );
+
+	if ( lightmap->useTextureAtlas ) {
+		gl_lightMappingShader->SetUniform_LightMapAtlas( lightmap->atlas );
+	} else {
+		vec4_t identity;
+		Vector4Set( identity, 1.0, 1.0, 0.0, 0.0 );
+		gl_lightMappingShader->SetUniform_LightMapAtlas( identity );
+	}
 
 	// bind u_DeluxeMap
 	GL_BindToTMU( BIND_DELUXEMAP, deluxemap );

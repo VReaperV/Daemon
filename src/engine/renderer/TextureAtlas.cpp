@@ -1,4 +1,3 @@
-#include "TextureAtlas.h"
 /*
 ===========================================================================
 
@@ -109,6 +108,17 @@ void TextureAtlas::UploadTexture( image_t* image ) {
 	}
 
 	GL_Bind( texture );
+
+	image->scale[0] = floatToHalf( (float) image->uploadWidth / width );
+	image->scale[1] = floatToHalf( (float) image->uploadHeight / height );
+
+	image->offset[0] = floatToHalf( (float) image->textureAtlasX / width );
+	image->offset[1] = floatToHalf( (float) image->textureAtlasY / height );
+
+	image->atlas[0] = (float) image->uploadWidth / width;
+	image->atlas[1] = (float) image->uploadHeight / height;
+	image->atlas[2] = (float) ( image->textureAtlasX + borderSize ) / width;
+	image->atlas[3] = (float) ( image->textureAtlasY + borderSize ) / height;
 
 	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + borderSize, image->textureAtlasY + borderSize,
 					 image->textureAtlasWidth - 2 * borderSize, image->textureAtlasHeight - 2 * borderSize,

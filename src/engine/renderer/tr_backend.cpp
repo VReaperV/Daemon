@@ -177,6 +177,12 @@ void GL_BindToTMU( int unit, image_t *image )
 	{
 		Log::Warn("GL_BindToTMU: NULL image" );
 		image = tr.defaultImage;
+	} else {
+		if ( image->useTextureAtlas ) {
+			if ( ( textureAtlases.size() > image->textureAtlasID ) && textureAtlases[image->textureAtlasID].allocated ) {
+				image = textureAtlases[image->textureAtlasID].texture;
+			}
+		}
 	}
 
 	int texnum = image->texnum;

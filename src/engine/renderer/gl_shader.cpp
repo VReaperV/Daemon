@@ -1816,6 +1816,8 @@ void GLShader_generic::SetShaderProgramUniforms( shaderProgram_t *shaderProgram 
 GLShader_lightMapping::GLShader_lightMapping( GLShaderManager *manager ) :
 	GLShader( "lightMapping",
 	ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager ),
+	u_DiffuseMapAtlas( this ),
+	u_LightMapAtlas( this ),
 	u_TextureMatrix( this ),
 	u_SpecularExponent( this ),
 	u_ColorModulate( this ),
