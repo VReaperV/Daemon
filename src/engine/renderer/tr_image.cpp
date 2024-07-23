@@ -1019,7 +1019,7 @@ void R_UploadImage( const byte **dataArray, int numLayers, int numMips, image_t 
 		}
 	}
 
-	switch ( image->internalFormat ) {
+	switch ( internalFormat ) {
 		case GL_RGBA:
 		case GL_RGBA8:
 		case GL_RGBA16:
