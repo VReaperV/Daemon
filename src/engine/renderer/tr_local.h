@@ -2878,6 +2878,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	extern Cvar::Cvar<bool> r_forceLegacyOverBrightClamping;
 	extern Cvar::Range<Cvar::Cvar<int>> r_lightMode;
 	extern Cvar::Cvar<bool> r_materialSystem;
+	extern Cvar::Cvar<bool> r_gpuFrustumCulling;
 	extern cvar_t *r_lightStyles;
 	extern cvar_t *r_exportTextures;
 	extern cvar_t *r_heatHaze;

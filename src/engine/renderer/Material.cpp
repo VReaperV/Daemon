@@ -42,6 +42,7 @@ GLSSBO surfaceCommandsSSBO( "surfaceCommands", 2, GL_MAP_WRITE_BIT | GL_MAP_PERS
 GLBuffer culledCommandsBuffer( "culledCommands", 3, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
 GLUBO surfaceBatchesUBO( "surfaceBatches", 0, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 GLBuffer atomicCommandCountersBuffer( "atomicCommandCounters", 4, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLSSBO debugSSBO( "debugSurfaces", 5, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 MaterialSystem materialSystem;
 
 static void ComputeDynamics( shaderStage_t* pStage ) {
@@ -1030,6 +1031,14 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 				  nullptr, GL_STATIC_DRAW );
 	uint32_t* surfaceDescriptors = surfaceDescriptorsSSBO.MapBufferRange( surfaceDescriptorsCount * descriptorSize );
 
+	debugSSBO.GenBuffer();
+	debugSSBO.BindBuffer();
+	glBufferData( GL_SHADER_STORAGE_BUFFER, surfaceDescriptorsCount * 20 * sizeof( uint32_t ),
+		nullptr, GL_STATIC_DRAW );
+	uint32_t* debugSurfaces = debugSSBO.MapBufferRange( surfaceDescriptorsCount * 20 );
+	memset( debugSurfaces, 0, surfaceDescriptorsCount * 20 * sizeof( uint32_t ) );
+	debugSSBO.UnmapBuffer();
+
 	culledCommandsCount = totalBatchCount * SURFACE_COMMANDS_PER_BATCH;
 	surfaceCommandsCount = totalBatchCount * SURFACE_COMMANDS_PER_BATCH + 1;
 
@@ -1145,6 +1154,39 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	surfaceBatchesUBO.UnmapBuffer();
 
 	GL_CheckErrors();
+}
+
+void MaterialSystem::GenerateDepthImages( const int width, const int height, imageParams_t imageParms ) {
+	int size = std::max( width, height );
+	imageParams_t oldParms = imageParms;
+	imageParms.bits ^= ( IF_NOPICMIP | IF_PACKED_DEPTH24_STENCIL8 );
+	imageParms.bits |= IF_ONECOMP32F;
+
+	depthImageLevels = 0;
+	while ( size > 0 ) {
+		depthImageLevels++;
+		size >>= 1; // mipmaps round down
+	}
+	Log::Warn( "%u", depthImageLevels );
+
+	byte* data = new byte[width * height * 4];
+	for ( uint32_t i = 0; i < MAX_FRAMES; i++ ) {
+		Frame* frame = &frames[i];
+
+		frame->depthTexture = R_CreateImage( va( "_currentDepth%u", i ), nullptr, width, height, 1, oldParms );
+		frame->depthImage = R_CreateImage( va( "_depthFrame%u", i ), nullptr, width, height, depthImageLevels, imageParms );
+		GL_Bind( frame->depthImage );
+		int mipmapWidth = width;
+		int mipmapHeight = height;
+		for ( int j = 0; j < depthImageLevels; j++ ) {
+			glTexImage2D( GL_TEXTURE_2D, j, GL_R32F, mipmapWidth, mipmapHeight, 0, GL_RED, GL_FLOAT, data );
+			mipmapWidth >>= 1;
+			mipmapHeight >>= 1;
+		}
+	}
+	delete[] data;
+
+	tr.currentDepthImage = frames[0].depthTexture;
 }
 
 static void BindShaderGeneric( Material* material ) {
@@ -1756,14 +1798,6 @@ void MaterialSystem::UpdateDynamicSurfaces() {
 }
 
 void MaterialSystem::UpdateFrameData() {
-	/* atomicCommandCountersBuffer.AreaIncr();
-
-	atomicCommandCountersBuffer.BindBuffer( GL_ATOMIC_COUNTER_BUFFER );
-	uint32_t* atomicCommandCounters = atomicCommandCountersBuffer.GetCurrentAreaData();
-	memset( atomicCommandCounters, 0, MAX_COMMAND_COUNTERS * sizeof(uint32_t));
-	atomicCommandCountersBuffer.FlushCurrentArea( GL_ATOMIC_COUNTER_BUFFER );
-	atomicCommandCountersBuffer.UnBindBuffer( GL_ATOMIC_COUNTER_BUFFER ); */
-	
 	atomicCommandCountersBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER );
 	gl_clearSurfacesShader->BindProgram( 0 );
 	gl_clearSurfacesShader->SetUniform_Frame( nextFrame );
@@ -1778,12 +1812,61 @@ void MaterialSystem::QueueSurfaceCull( const uint32_t viewID, const frustum_t* f
 	frames[nextFrame].viewCount++;
 }
 
+void MaterialSystem::DepthReduction() {
+	if ( r_lockpvs->integer ) {
+		if ( !PVSLocked ) {
+			lockedDepthImage = frames[currentFrame].depthImage;
+		}
+
+		return;
+	}
+
+	image_t* depthImage = frames[nextFrame].depthImage;
+	int width = depthImage->width;
+	int height = depthImage->height;
+
+	gl_depthReductionShader->BindProgram( 0 );
+
+	uint32_t globalWorkgroupX = width % 8 == 0 ? width / 8 : width / 8 + 1;
+	uint32_t globalWorkgroupY = height % 8 == 0 ? height / 8 : height / 8 + 1;
+
+	// GL_Bind( frames[nextFrame].depthTexture );
+	GL_Bind( tr.currentDepthImage );
+	glBindImageTexture( 2, frames[nextFrame].depthImage->texnum, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F );
+
+	gl_depthReductionShader->SetUniform_InitialDepthLevel( true );
+	gl_depthReductionShader->SetUniform_ViewWidth( width );
+	gl_depthReductionShader->SetUniform_ViewHeight( height );
+	gl_depthReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
+
+	for ( int i = 0; i < depthImageLevels; i++ ) {
+		width = width > 1 ? width >> 1 : 1;
+		height = height > 1 ? height >> 1 : 1;
+
+		globalWorkgroupX = width % 8 == 0 ? width / 8 : width / 8 + 1;
+		globalWorkgroupY = height % 8 == 0 ? height / 8 : height / 8 + 1;
+
+		glBindImageTexture( 1, frames[nextFrame].depthImage->texnum, i, GL_FALSE, 0, GL_READ_ONLY, GL_R32F );
+		glBindImageTexture( 2, frames[nextFrame].depthImage->texnum,i + 1, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F );
+
+		gl_depthReductionShader->SetUniform_InitialDepthLevel( false );
+		gl_depthReductionShader->SetUniform_ViewWidth( width );
+		gl_depthReductionShader->SetUniform_ViewHeight( height );
+		gl_depthReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
+
+		glMemoryBarrier( GL_SHADER_IMAGE_ACCESS_BARRIER_BIT );
+	}
+}
+
 void MaterialSystem::CullSurfaces() {
+	DepthReduction();
+
 	surfaceDescriptorsSSBO.BindBufferBase();
 	surfaceCommandsSSBO.BindBufferBase();
 	culledCommandsBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER );
 	surfaceBatchesUBO.BindBufferBase();
 	atomicCommandCountersBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	debugSSBO.BindBufferBase();
 
 	for ( uint32_t view = 0; view < frames[nextFrame].viewCount; view++ ) {
 		frustum_t* frustum = &frames[nextFrame].viewFrames[view].frustum;
@@ -1797,8 +1880,18 @@ void MaterialSystem::CullSurfaces() {
 		gl_cullShader->BindProgram( 0 );
 		uint32_t globalWorkGroupX = totalDrawSurfs % MAX_COMMAND_COUNTERS == 0 ?
 			totalDrawSurfs / MAX_COMMAND_COUNTERS : totalDrawSurfs / MAX_COMMAND_COUNTERS + 1;
+		GL_Bind( frames[nextFrame].depthImage );
+		gl_cullShader->SetUniform_ViewID( view );
 		gl_cullShader->SetUniform_TotalDrawSurfs( totalDrawSurfs );
+		gl_cullShader->SetUniform_UseFrustumCulling( r_gpuFrustumCulling.Get() );
+		gl_cullShader->SetUniform_CameraPosition( backEnd.viewParms.pvsOrigin );
+		gl_cullShader->SetUniform_ModelViewMatrix( backEnd.viewParms.world.modelViewMatrix );
+		gl_cullShader->SetUniform_ModelViewProjectionMatrix( glState.projectionMatrix[glState.stackIndex] );
+		gl_cullShader->SetUniform_ViewWidth( frames[nextFrame].depthImage->width );
+		gl_cullShader->SetUniform_ViewHeight( frames[nextFrame].depthImage->height );
 		gl_cullShader->SetUniform_SurfaceCommandsOffset( surfaceCommandsCount * ( MAX_VIEWS * nextFrame + view ) );
+		gl_cullShader->SetUniform_P00( glState.projectionMatrix[glState.stackIndex][0] );
+		gl_cullShader->SetUniform_P11( glState.projectionMatrix[glState.stackIndex][5] );
 
 		if ( PVSLocked ) {
 			if ( r_lockpvs->integer == 0 ) {
@@ -1833,6 +1926,7 @@ void MaterialSystem::CullSurfaces() {
 	culledCommandsBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
 	surfaceBatchesUBO.UnBindBufferBase();
 	atomicCommandCountersBuffer.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	debugSSBO.UnBindBufferBase();
 
 	GL_CheckErrors();
 }
@@ -1852,6 +1946,8 @@ void MaterialSystem::EndFrame() {
 	if ( !generatedWorldCommandBuffer ) {
 		return;
 	}
+
+	// tr.currentDepthImage = frames[nextFrame].depthImage;
 
 	currentFrame = nextFrame;
 	nextFrame++;
@@ -2156,6 +2252,29 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 		material.globalID * sizeof( uint32_t )
 		+ ( MAX_COMMAND_COUNTERS * ( MAX_VIEWS * currentFrame + viewID ) ) * sizeof( uint32_t ),
 		material.drawCommands.size(), 0 );
+
+	if( r_showTris->integer && ( material.stateBits & GLS_DEPTHMASK_TRUE ) == 0 ) {
+		switch ( material.stageType ) {
+			case stageType_t::ST_LIGHTMAP:
+			case stageType_t::ST_DIFFUSEMAP:
+			case stageType_t::ST_COLLAPSE_COLORMAP:
+			case stageType_t::ST_COLLAPSE_DIFFUSEMAP:
+				gl_lightMappingShaderMaterial->SetUniform_ShowTris( 1 );
+				GL_State( GLS_DEPTHTEST_DISABLE );
+				glMultiDrawElementsIndirectCountARB( GL_LINES, GL_UNSIGNED_INT,
+					BUFFER_OFFSET( material.surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH * sizeof( GLIndirectBuffer::GLIndirectCommand )
+						+ ( culledCommandsCount * ( MAX_VIEWS * currentFrame + viewID )
+							* sizeof( GLIndirectBuffer::GLIndirectCommand ) ) ),
+					//+ ( culledCommandsCount * ( MAX_VIEWS * currentFrame + currentView )
+						//* sizeof( GLIndirectBuffer::GLIndirectCommand ) ),
+					material.globalID * sizeof( uint32_t )
+					+ ( MAX_COMMAND_COUNTERS * ( MAX_VIEWS * currentFrame + viewID ) ) * sizeof( uint32_t ),
+					material.drawCommands.size(), 0 );
+				gl_lightMappingShaderMaterial->SetUniform_ShowTris( 0 );
+			default:
+				break;
+		}
+	}
 
 	culledCommandsBuffer.UnBindBuffer( GL_DRAW_INDIRECT_BUFFER );
 

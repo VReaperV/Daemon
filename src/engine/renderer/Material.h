@@ -161,6 +161,8 @@ struct ViewFrame {
 struct Frame {
 	uint32_t viewCount = 0;
 	ViewFrame viewFrames[MAX_VIEWS];
+	image_t* depthTexture;
+	image_t* depthImage;
 };
 
 struct BoundingSphere {
@@ -224,6 +226,7 @@ class MaterialSystem {
 	};
 
 	bool frameStart = false;
+	uint32_t testTex[2];
 
 	void AddTexture( Texture* texture );
 	void AddDrawCommand( const uint32_t materialID, const uint32_t materialPackID, const uint32_t materialsSSBOOffset,
@@ -234,10 +237,13 @@ class MaterialSystem {
 	void UpdateDynamicSurfaces();
 
 	void QueueSurfaceCull( const uint32_t viewID, const frustum_t* frustum );
+	void DepthReduction();
 	void CullSurfaces();
 	
 	void StartFrame();
 	void EndFrame();
+
+	void GenerateDepthImages( const int width, const int height, imageParams_t imageParms );
 
 	void AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material );
 	void GenerateWorldMaterials();
@@ -252,6 +258,9 @@ class MaterialSystem {
 	private:
 	bool PVSLocked = false;
 	frustum_t lockedFrustum;
+	image_t* lockedDepthImage;
+
+	int depthImageLevels;
 
 	DrawCommand cmd;
 	uint32_t lastCommandID;
@@ -280,6 +289,7 @@ extern GLSSBO surfaceCommandsSSBO; // Per viewframe, GPU updated
 extern GLBuffer culledCommandsBuffer; // Per viewframe
 extern GLUBO surfaceBatchesUBO; // Global
 extern GLBuffer atomicCommandCountersBuffer; // Per viewframe
+extern GLSSBO debugSSBO; // Global
 extern MaterialSystem materialSystem;
 
 #endif // MATERIAL_H
