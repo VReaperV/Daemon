@@ -1605,7 +1605,7 @@ static bool SurfBoxIsOffscreen(const drawSurf_t *drawSurf, screenRect_t& surfRec
 ** Determines if a surface is completely offscreen or out of the portal range.
 ** also computes a conservative screen rectangle bounds for the surface
 */
-static bool PortalOffScreenOrOutOfRange( const drawSurf_t *drawSurf, screenRect_t& surfRect )
+bool PortalOffScreenOrOutOfRange( const drawSurf_t *drawSurf, screenRect_t& surfRect )
 {
 	float        shortest = 100000000;
 	shader_t     *shader;
@@ -2040,6 +2040,8 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader, int lightmapNum, i
 	}
 }
 
+static uint32_t currentView = 0;
+
 /*
 =================
 R_SortDrawSurfs
@@ -2049,7 +2051,7 @@ static void R_SortDrawSurfs()
 {
 	drawSurf_t   *drawSurf;
 	shader_t     *shader;
-	int          i, sort;
+	int          sort;
 
 	// it is possible for some views to not have any surfaces
 	if ( !glConfig2.materialSystemAvailable && tr.viewParms.numDrawSurfs < 1 )
@@ -2088,7 +2090,7 @@ static void R_SortDrawSurfs()
 
 	// compute the offsets of the first surface of each SS_* type
 	sort = Util::ordinal( shaderSort_t::SS_BAD ) - 1;
-	for ( i = 0; i < tr.viewParms.numDrawSurfs; i++ )
+	for ( int i = 0; i < tr.viewParms.numDrawSurfs; i++ )
 	{
 		drawSurf = &tr.viewParms.drawSurfs[ i ];
 		shader = drawSurf->shader;
@@ -2112,7 +2114,7 @@ static void R_SortDrawSurfs()
 
 	// check for any pass through drawing, which
 	// may cause another view to be rendered first
-	for ( i = tr.viewParms.firstDrawSurf[ Util::ordinal(shaderSort_t::SS_PORTAL) ];
+	for ( int i = tr.viewParms.firstDrawSurf[ Util::ordinal(shaderSort_t::SS_PORTAL) ];
 	      i < tr.viewParms.firstDrawSurf[ Util::ordinal(shaderSort_t::SS_PORTAL) + 1 ]; i++ )
 	{
 		drawSurf = &tr.viewParms.drawSurfs[ i ];
@@ -2130,7 +2132,22 @@ static void R_SortDrawSurfs()
 	}
 
 	if ( glConfig2.materialSystemAvailable ) {
-		materialSystem.AddPortalSurfaces();
+		if ( tr.viewParms.portalLevel == 0 ) {
+			materialSystem.AddPortalSurfaces();
+			currentView = 0;
+		} else {
+			currentView++;
+		}
+
+		for ( uint32_t i = 0; i < portalStack[currentView].count; i++ ) {
+			uint32_t viewID = portalStack[currentView].views[i];
+			if ( viewID == 0 ) {
+				break;
+			}
+
+			R_MirrorViewBySurface( portalStack[portalStack[currentView].views[i]].drawSurf );
+		}
+		currentView--;
 	}
 
 	// tell renderer backend to render this view
@@ -2893,7 +2910,7 @@ void R_RenderView( viewParms_t *parms )
 
 	if ( glConfig2.materialSystemAvailable ) {
 		tr.viewParms.viewID = tr.viewCount;
-		materialSystem.QueueSurfaceCull( tr.viewCount, (frustum_t*) tr.viewParms.frustums[0] );
+		materialSystem.QueueSurfaceCull( tr.viewCount, tr.viewParms.pvsOrigin, (frustum_t*) tr.viewParms.frustums[0] );
 	} else {
 		R_AddWorldSurfaces();
 	}
