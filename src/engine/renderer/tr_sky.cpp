@@ -146,6 +146,10 @@ void Tess_StageIteratorSky()
 			GL_BindToTMU( 1, pStage->bundle[TB_COLORMAP].image[0] )
 		);
 
+		if ( r_texturePacks.Get() ) {
+			gl_skyboxShader->SetUniform_CloudMapModifier( pStage->bundle[TB_COLORMAP].image[0]->texturePackModifier );
+		}
+
 		// u_AlphaThreshold
 		gl_skyboxShader->SetUniform_AlphaTest( pStage->stateBits );
 

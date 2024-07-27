@@ -247,8 +247,16 @@ static void UpdateSurfaceDataGeneric( uint32_t* materials, Material& material, d
 		gl_genericShaderMaterial->SetUniform_ColorMapBindless(
 			GL_BindToTMU( 0, GetLightMap( drawSurf ) )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_genericShaderMaterial->SetUniform_ColorMapModifier( GetLightMap( drawSurf )->texturePackModifier );
+		}
 	} else {
 		gl_genericShaderMaterial->SetUniform_ColorMapBindless( BindAnimatedImage( 0, &pStage->bundle[TB_COLORMAP] ) );
+
+		if ( r_texturePacks.Get() ) {
+			gl_genericShaderMaterial->SetUniform_ColorMapModifier( pStage->bundle[TB_COLORMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	bool needDepthMap = pStage->hasDepthFade || shader->autoSpriteMode;
@@ -423,6 +431,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 			gl_lightMappingShaderMaterial->SetUniform_HeightMapBindless(
 				GL_BindToTMU( BIND_HEIGHTMAP, pStage->bundle[TB_HEIGHTMAP].image[0] )
 			);
+
+			if ( r_texturePacks.Get() ) {
+				gl_lightMappingShaderMaterial->SetUniform_HeightMapModifier( pStage->bundle[TB_HEIGHTMAP].image[0]->texturePackModifier );
+			}
 		}
 	}
 
@@ -430,6 +442,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 	gl_lightMappingShaderMaterial->SetUniform_DiffuseMapBindless(
 		GL_BindToTMU( BIND_DIFFUSEMAP, pStage->bundle[TB_DIFFUSEMAP].image[0] )
 	);
+
+	if ( r_texturePacks.Get() ) {
+		gl_lightMappingShaderMaterial->SetUniform_DiffuseMapModifier( pStage->bundle[TB_DIFFUSEMAP].image[0]->texturePackModifier );
+	}
 
 	if ( pStage->type != stageType_t::ST_LIGHTMAP ) {
 		Tess_ComputeTexMatrices( pStage );
@@ -441,6 +457,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_NormalMapBindless(
 			GL_BindToTMU( BIND_NORMALMAP, pStage->bundle[TB_NORMALMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_NormalMapModifier( pStage->bundle[TB_NORMALMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	// bind u_NormalScale
@@ -456,6 +476,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_MaterialMapBindless(
 			GL_BindToTMU( BIND_MATERIALMAP, pStage->bundle[TB_MATERIALMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_MaterialMapModifier( pStage->bundle[TB_MATERIALMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	if ( pStage->enableSpecularMapping ) {
@@ -554,6 +578,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_LightMapBindless(
 			GL_BindToTMU( BIND_LIGHTMAP, lightmap )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_LightMapModifier( lightmap->texturePackModifier );
+		}
 	} else {
 		gl_lightMappingShaderMaterial->SetUniform_LightGrid1Bindless( GL_BindToTMU( BIND_LIGHTMAP, lightmap ) );
 	}
@@ -563,6 +591,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_DeluxeMapBindless(
 			GL_BindToTMU( BIND_DELUXEMAP, deluxemap )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_DeluxeMapModifier( deluxemap->texturePackModifier );
+		}
 	} else {
 		gl_lightMappingShaderMaterial->SetUniform_LightGrid2Bindless( GL_BindToTMU( BIND_DELUXEMAP, deluxemap ) );
 	}
@@ -572,6 +604,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_GlowMapBindless(
 			GL_BindToTMU( BIND_GLOWMAP, pStage->bundle[TB_GLOWMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_GlowMapModifier( pStage->bundle[TB_GLOWMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	gl_lightMappingShaderMaterial->WriteUniformsToBuffer( materials );
@@ -649,6 +685,10 @@ static void UpdateSurfaceDataSkybox( uint32_t* materials, Material& material, dr
 	gl_skyboxShaderMaterial->SetUniform_ColorMapCubeBindless(
 		GL_BindToTMU( 0, pStage->bundle[TB_COLORMAP].image[0] )
 	);
+
+	if ( r_texturePacks.Get() ) {
+		gl_skyboxShaderMaterial->SetUniform_CloudMapModifier( pStage->bundle[TB_COLORMAP].image[0]->texturePackModifier );
+	}
 
 	// u_AlphaThreshold
 	gl_skyboxShaderMaterial->SetUniform_AlphaTest( GLS_ATEST_NONE );
@@ -1472,12 +1512,19 @@ void MaterialSystem::AddAllWorldSurfaces() {
 void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material ) {
 	for ( const textureBundle_t& bundle : pStage->bundle ) {
 		if ( bundle.isVideoMap ) {
-			material->AddTexture( tr.cinematicImage[bundle.videoMapHandle]->texture );
+			image_t* image = tr.cinematicImage[bundle.videoMapHandle];
+			if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+				image = tr.texturePacks[image->texturePackImage].texture;
+			}
+			material->AddTexture( image->texture );
 			continue;
 		}
 
 		for ( image_t* image : bundle.image ) {
 			if ( image ) {
+				if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+					image = tr.texturePacks[image->texturePackImage].texture;
+				}
 				material->AddTexture( image->texture );
 			}
 		}
@@ -1534,6 +1581,9 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 
 		case lightMode_t::MAP:
 			lightmap = GetLightMap( drawSurf );
+			if ( r_texturePacks.Get() && lightmap->assignedTexturePack ) {
+				lightmap = tr.texturePacks[lightmap->texturePackImage].texture;
+			}
 			break;
 
 		default:
@@ -1543,6 +1593,9 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 	switch ( deluxeMode ) {
 		case deluxeMode_t::MAP:
 			deluxemap = GetDeluxeMap( drawSurf );
+			if ( r_texturePacks.Get() && deluxemap->assignedTexturePack ) {
+				deluxemap = tr.texturePacks[deluxemap->texturePackImage].texture;
+			}
 			break;
 
 		case deluxeMode_t::GRID:

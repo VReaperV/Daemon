@@ -44,6 +44,9 @@ void GL_Bind( image_t *image )
 	}
 	else
 	{
+		if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+			image = tr.texturePacks[image->texturePackImage].texture;
+		}
 		if ( r_logFile->integer )
 		{
 			// don't just call LogComment, or we will get a call to va() every frame!
@@ -178,6 +181,10 @@ GLuint64 GL_BindToTMU( int unit, image_t *image )
 	{
 		Log::Warn("GL_BindToTMU: NULL image" );
 		image = tr.defaultImage;
+	}
+
+	if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+		image = tr.texturePacks[image->texturePackImage].texture;
 	}
 
 	if ( glConfig2.bindlessTexturesAvailable ) {
@@ -3049,6 +3056,10 @@ void RB_RenderGlobalFog()
 	gl_fogGlobalShader->SetUniform_ColorMapBindless(
 		GL_BindToTMU( 0, tr.fogImage ) 
 	);
+
+	if ( r_texturePacks.Get() ) {
+		gl_fogGlobalShader->SetUniform_ColorMapModifier( tr.fogImage->texturePackModifier );
+	}
 
 	// bind u_DepthMap
 	gl_fogGlobalShader->SetUniform_DepthMapBindless(

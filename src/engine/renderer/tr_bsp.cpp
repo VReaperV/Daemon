@@ -549,6 +549,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 				imageParams.bits = IF_NOPICMIP | IF_LIGHTMAP;
 				imageParams.filterType = filterType_t::FT_DEFAULT;
 				imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+				imageParams.useTexturePack = true;
 
 				auto image = R_CreateImage( va( "%s/%s", mapName, filename.c_str() ), (const byte **)&ldrImage, width, height, 1, imageParams );
 
@@ -576,6 +577,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 					imageParams.bits = IF_NOPICMIP | IF_NORMALMAP;
 					imageParams.filterType = filterType_t::FT_DEFAULT;
 					imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+					imageParams.useTexturePack = true;
 
 					auto image = R_FindImageFile(va("%s/%s", mapName, filename.c_str()), imageParams);
 					tr.deluxemaps.push_back(image);
@@ -605,6 +607,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 					imageParams.bits = IF_NOPICMIP | IF_LIGHTMAP;
 					imageParams.filterType = filterType_t::FT_LINEAR;
 					imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+					imageParams.useTexturePack = true;
 
 					auto image = R_FindImageFile(va("%s/%s", mapName, lightmapFiles[i].c_str()), imageParams);
 					tr.lightmaps.push_back(image);
@@ -615,6 +618,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 					imageParams.bits = IF_NOPICMIP | IF_NORMALMAP;
 					imageParams.filterType = filterType_t::FT_LINEAR;
 					imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+					imageParams.useTexturePack = true;
 
 					auto image = R_FindImageFile(va("%s/%s", mapName, lightmapFiles[i].c_str()), imageParams);
 					tr.deluxemaps.push_back( image );
@@ -685,6 +689,7 @@ static void R_LoadLightmaps( lump_t *l, const char *bspName )
 			imageParams.bits = IF_NOPICMIP | IF_LIGHTMAP;
 			imageParams.filterType = filterType_t::FT_DEFAULT;
 			imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+			imageParams.useTexturePack = true;
 
 			image_t *internalLightMap = R_CreateImage( va( "_internalLightMap%d", i ), (const byte **)&lightMapBuffer, internalLightMapSize, internalLightMapSize, 1, imageParams );
 			tr.lightmaps.push_back( internalLightMap );

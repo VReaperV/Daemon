@@ -638,6 +638,10 @@ static std::string GenEngineConstants() {
 		AddDefine( str, "r_highPrecisionRendering", 1 );
 	}
 
+	if ( r_texturePacks.Get() ) {
+		AddDefine( str, "r_texturePacks", 1 );
+	}
+
 	if ( glConfig2.dynamicLight )
 	{
 		AddDefine( str, "r_dynamicLight", 1 );
@@ -1980,6 +1984,7 @@ GLShader_generic2D::GLShader_generic2D( GLShaderManager *manager ) :
 	GLShader( "generic2D", "generic", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
+	u_ColorMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_AlphaThreshold( this ),
 	u_ModelMatrix( this ),
@@ -2012,6 +2017,7 @@ GLShader_generic::GLShader_generic( GLShaderManager *manager ) :
 	GLShader( "generic", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
+	u_ColorMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_ViewUp( this ),
@@ -2049,6 +2055,7 @@ GLShader_genericMaterial::GLShader_genericMaterial( GLShaderManager* manager ) :
 	GLShader( "genericMaterial", "generic", true, ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
+	u_ColorMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_ViewUp( this ),
@@ -2096,6 +2103,13 @@ GLShader_lightMapping::GLShader_lightMapping( GLShaderManager *manager ) :
 	u_LightTiles( this ),
 	u_LightTilesInt( this ),
 	u_LightsTexture( this ),
+	u_DiffuseMapModifier( this ),
+	u_MaterialMapModifier( this ),
+	u_LightMapModifier( this ),
+	u_DeluxeMapModifier( this ),
+	u_GlowMapModifier( this ),
+	u_NormalMapModifier( this ),
+	u_HeightMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_SpecularExponent( this ),
 	u_ColorModulate( this ),
@@ -2178,6 +2192,13 @@ GLShader_lightMappingMaterial::GLShader_lightMappingMaterial( GLShaderManager* m
 	u_LightGrid1( this ),
 	u_LightGrid2( this ),
 	u_LightTilesInt( this ),
+	u_DiffuseMapModifier( this ),
+	u_MaterialMapModifier( this ),
+	u_LightMapModifier( this ),
+	u_DeluxeMapModifier( this ),
+	u_GlowMapModifier( this ),
+	u_NormalMapModifier( this ),
+	u_HeightMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_SpecularExponent( this ),
 	u_ColorModulate( this ),
@@ -2574,6 +2595,7 @@ GLShader_skybox::GLShader_skybox( GLShaderManager *manager ) :
 	GLShader( "skybox", ATTR_POSITION, manager ),
 	u_ColorMapCube( this ),
 	u_CloudMap( this ),
+	u_CloudMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_CloudHeight( this ),
@@ -2596,6 +2618,7 @@ GLShader_skyboxMaterial::GLShader_skyboxMaterial( GLShaderManager* manager ) :
 	GLShader( "skyboxMaterial", "skybox", true, ATTR_POSITION, manager ),
 	u_ColorMapCube( this ),
 	u_CloudMap( this ),
+	u_CloudMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_CloudHeight( this ),
@@ -2615,6 +2638,7 @@ void GLShader_skyboxMaterial::SetShaderProgramUniforms( shaderProgram_t* shaderP
 GLShader_fogQuake3::GLShader_fogQuake3( GLShaderManager *manager ) :
 	GLShader( "fogQuake3", ATTR_POSITION | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
+	u_ColorMapModifier( this ),
 	u_ModelMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),
 	u_InverseLightFactor( this ),
@@ -2643,6 +2667,7 @@ void GLShader_fogQuake3::SetShaderProgramUniforms( shaderProgram_t *shaderProgra
 GLShader_fogQuake3Material::GLShader_fogQuake3Material( GLShaderManager* manager ) :
 	GLShader( "fogQuake3Material", "fogQuake3", true, ATTR_POSITION | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
+	u_ColorMapModifier( this ),
 	u_ModelMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),
 	u_InverseLightFactor( this ),
@@ -2669,6 +2694,7 @@ GLShader_fogGlobal::GLShader_fogGlobal( GLShaderManager *manager ) :
 	GLShader( "fogGlobal", ATTR_POSITION, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
+	u_ColorMapModifier( this ),
 	u_ViewOrigin( this ),
 	u_ViewMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),

@@ -22,7 +22,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 /* fogGlobal_fp.glsl */
 
-uniform sampler2D	u_ColorMap; // fog texture
+// fog texture
+#if defined(r_texturePacks)
+	uniform sampler2DArray	u_ColorMap;
+	uniform vec3 u_ColorMapModifier;
+#else
+	uniform sampler2D	u_ColorMap;
+#endif
+
 uniform sampler2D	u_DepthMap;
 
 uniform float u_InverseLightFactor;
@@ -53,8 +60,12 @@ void	main()
 	st.s = dot(P.xyz, u_FogDistanceVector.xyz) + u_FogDistanceVector.w;
 	// st.s = vertexDistanceToCamera;
 	st.t = 1.0;
-
+	
+#if defined(r_texturePacks)
+	vec4 color = texture2D(u_ColorMap, vec3( st * u_ColorMapModifier.xy, u_ColorMapModifier.z ));
+#else
 	vec4 color = texture2D(u_ColorMap, st);
+#endif
 
 	color.rgb *= u_InverseLightFactor;
 

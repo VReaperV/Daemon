@@ -29,7 +29,12 @@ const float radiusWorld = 4096.0; // Value used by quake 3 skybox code
 uniform samplerCube	u_ColorMapCube;
 
 uniform float u_InverseLightFactor;
-uniform sampler2D	u_CloudMap;
+#if defined(r_texturePacks)
+	uniform sampler2DArray u_CloudMap;
+	uniform vec3 u_CloudMapModifier;
+#else
+	uniform sampler2D u_CloudMap;
+#endif
 
 uniform bool        u_UseCloudMap;
 uniform float       u_CloudHeight;
@@ -68,7 +73,11 @@ void	main()
 		incidentRay = normalize( incidentRay );
 		vec2 st = vec2( acos(incidentRay.x), acos(incidentRay.y) );
 		st = (u_TextureMatrix * vec4(st, 0.0, 1.0)).xy;
+	#if defined(r_texturePacks)
+		color = texture2D( u_CloudMap, vec3( st * u_CloudMapModifier.xy, u_CloudMapModifier.z ) );
+	#else
 		color = texture2D( u_CloudMap, st ).rgba;
+	#endif
 	}
 	
 	if( abs(color.a + u_AlphaThreshold) <= 1.0 )

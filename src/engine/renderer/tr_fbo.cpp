@@ -557,6 +557,11 @@ void R_InitFBOs()
 		}
 	}
 
+	tr.texturePackFBO = R_CreateFBO( "texturePack", glConfig2.maxRenderbufferSize, glConfig2.maxRenderbufferSize );
+	R_BindFBO( tr.texturePackFBO );
+	// R_AttachFBOTexture2D( GL_TEXTURE_2D, tr.currentRenderImage[1]->texnum, 0 );
+	R_CheckFBO( tr.texturePackFBO );
+
 	GL_CheckErrors();
 
 	R_BindNullFBO();

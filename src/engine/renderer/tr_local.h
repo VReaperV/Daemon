@@ -602,8 +602,11 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		wrapType_t wrapType;
 		int minDimension = 0;
 		int maxDimension = 0;
+
+		bool useTexturePack = false;
 	};
 
+	struct TexturePack;
 	struct image_t
 	{
 		char name[ MAX_QPATH ];
@@ -611,6 +614,16 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		GLenum         type;
 		GLuint         texnum; // gl texture binding
 		Texture        *texture;
+		bool useTexturePack;
+		uint32_t texturePackImage;
+		GLint layer = -1;
+		GLint level = 0;
+		uint16_t levelWidth;
+		uint16_t levelHeight;
+		vec3_t texturePackModifier;
+		bool assignedTexturePack = false;
+
+		bool isTexturePack = false;
 
 		uint16_t width, height, numLayers; // source image
 		uint16_t       uploadWidth, uploadHeight; // after power of two and picmip but not including clamp to MAX_TEXTURE_SIZE
@@ -624,6 +637,27 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		wrapType_t     wrapType;
 
 		image_t *next;
+	};
+
+	struct TexturePack {
+		GLenum         type;
+		GLuint         id;
+		image_t* texture;
+
+		uint16_t width = 0;
+		uint16_t height = 0;
+		uint16_t numLayers = 0;
+		uint16_t layer = 0;
+		int numMips = 0;
+
+		uint32_t       internalFormat;
+
+		uint32_t       bits;
+		GLenum format;
+		filterType_t   filterType;
+		wrapType_t     wrapType;
+
+		bool InsertImage( image_t* image, const GLenum newFormat, const GLsizei imageSize, const byte* imageData );
 	};
 
 	inline bool IsImageCompressed(int bits) { return bits & (IF_BC1 | IF_BC2 | IF_BC3 | IF_BC4 | IF_BC5); }
@@ -2705,6 +2739,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		FBO_t *downScaleFBO_64x64;
 		FBO_t *contrastRenderFBO;
 		FBO_t *bloomRenderFBO[ 2 ];
+		FBO_t *texturePackFBO;
 		FBO_t *shadowMapFBO[ MAX_SHADOWMAPS ];
 		FBO_t *sunShadowMapFBO[ MAX_SHADOWMAPS ];
 
@@ -2776,6 +2811,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		skelAnimation_t *animations[ MAX_ANIMATIONFILES ];
 
 		std::vector<image_t *> images;
+		std::vector<TexturePack> texturePacks;
 
 		int             numFBOs;
 		FBO_t           *fbos[ MAX_FBOS ];
@@ -2929,6 +2965,8 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	extern cvar_t *r_rimExponent;
 
 	extern Cvar::Cvar<bool> r_highPrecisionRendering;
+
+	extern Cvar::Cvar<bool> r_texturePacks;
 
 	extern cvar_t *r_logFile; // number of frames to emit GL logs
 
@@ -3241,6 +3279,7 @@ inline bool checkGLErrors()
 
 	image_t *R_CreateCubeImage( const char *name, const byte *pic[ 6 ], int width, int height, const imageParams_t &imageParams );
 	image_t *R_Create3DImage( const char *name, const byte *pic, int width, int height, int depth, const imageParams_t &imageParams );
+	image_t* R_Create2DArrayImage( const char* name, const byte * pic, int width, int height, int depth, int numMips, const imageParams_t & imageParams );
 
 	image_t *R_CreateGlyph( const char *name, const byte *pic, int width, int height );
 	qhandle_t RE_GenerateTexture( const byte *pic, int width, int height );
