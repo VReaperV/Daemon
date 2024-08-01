@@ -24,7 +24,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define FOGQUAKE3_GLSL
 
-uniform sampler2D	u_ColorMap;
+#if defined(r_texturePacks)
+	uniform sampler2DArray	u_ColorMap;
+	uniform vec3 u_ColorMapModifier;
+#else
+	uniform sampler2D	u_ColorMap;
+#endif
 
 uniform float u_InverseLightFactor;
 IN(smooth) vec3		var_Position;
@@ -37,7 +42,11 @@ void	main()
 {
 	#insert material_fp
 
+#if defined(r_texturePacks)
+	vec4 color = texture2D(u_ColorMap, vec3( var_TexCoords * u_ColorMapModifier.xy, u_ColorMapModifier.z ));
+#else
 	vec4 color = texture2D(u_ColorMap, var_TexCoords);
+#endif
 
 	color *= var_Color;
 

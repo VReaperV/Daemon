@@ -48,10 +48,10 @@ void	main()
 	// apply color grading
 	vec3 colCoord = color.rgb * 15.0 / 16.0 + 0.5 / 16.0;
 	colCoord.z *= 0.25;
-	color.rgb = u_ColorModulate.x * texture3D(u_ColorMap3D, colCoord).rgb;
+	/* color.rgb = u_ColorModulate.x * texture3D(u_ColorMap3D, colCoord).rgb;
 	color.rgb += u_ColorModulate.y * texture3D(u_ColorMap3D, colCoord + vec3(0.0, 0.0, 0.25)).rgb;
 	color.rgb += u_ColorModulate.z * texture3D(u_ColorMap3D, colCoord + vec3(0.0, 0.0, 0.50)).rgb;
-	color.rgb += u_ColorModulate.w * texture3D(u_ColorMap3D, colCoord + vec3(0.0, 0.0, 0.75)).rgb;
+	color.rgb += u_ColorModulate.w * texture3D(u_ColorMap3D, colCoord + vec3(0.0, 0.0, 0.75)).rgb; */
 
 	color.xyz = pow(color.xyz, vec3(u_InverseGamma));
 

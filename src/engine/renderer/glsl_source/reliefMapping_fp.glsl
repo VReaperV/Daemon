@@ -24,7 +24,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define RELIEFMAPPING_GLSL
 
 #if defined(r_normalMapping) || defined(USE_HEIGHTMAP_IN_NORMALMAP)
-uniform sampler2D	u_NormalMap;
+	#if defined(r_texturePacks)
+		uniform sampler2DArray u_NormalMap;
+		uniform vec3 u_NormalMapModifier;
+	#else
+		uniform sampler2D u_NormalMap;
+	#endif
 #endif // r_normalMapping || USE_HEIGHTMAP_IN_NORMALMAP
 
 #if defined(r_normalMapping)
@@ -33,7 +38,12 @@ uniform vec3        u_NormalScale;
 
 #if defined(USE_RELIEF_MAPPING)
 #if !defined(USE_HEIGHTMAP_IN_NORMALMAP)
-uniform sampler2D	u_HeightMap;
+	#if defined(r_texturePacks)
+		uniform sampler2DArray u_HeightMap;
+		uniform vec3 u_HeightMapModifier;
+	#else
+		uniform sampler2D u_HeightMap;
+	#endif
 #endif // !USE_HEIGHTMAP_IN_NORMALMAP
 uniform float       u_ReliefDepthScale;
 uniform float       u_ReliefOffsetBias;
@@ -41,9 +51,13 @@ uniform float       u_ReliefOffsetBias;
 
 // compute normal in tangent space
 #if defined(r_normalMapping)
-vec3 NormalInTangentSpace(vec2 texNormal, in sampler2D u_NormalMap)
+	#if defined(r_texturePacks)
+		vec3 NormalInTangentSpace(vec2 texNormal, in sampler2DArray u_NormalMap)
+	#else
+		vec3 NormalInTangentSpace(vec2 texNormal, in sampler2D u_NormalMap)
+	#endif
 #else // !r_normalMapping
-vec3 NormalInTangentSpace(vec2 texNormal)
+	vec3 NormalInTangentSpace(vec2 texNormal)
 #endif // !r_normalMapping
 {
 	vec3 normal;
@@ -51,7 +65,11 @@ vec3 NormalInTangentSpace(vec2 texNormal)
 #if defined(r_normalMapping)
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
 	// alpha channel contains the height map so do not try to reconstruct normal map from it
+#if defined(r_texturePacks)
+	normal = texture2D(u_NormalMap, vec3( texNormal * u_NormalMapModifier.xy, u_NormalMapModifier.z )).rgb;
+#else
 	normal = texture2D(u_NormalMap, texNormal).rgb;
+#endif
 	normal = 2.0 * normal - 1.0;
 #else // !USE_HEIGHTMAP_IN_NORMALMAP
 	// the Capcom trick abusing alpha channel of DXT1/5 formats to encode normal map
@@ -62,7 +80,11 @@ vec3 NormalInTangentSpace(vec2 texNormal)
 	//
 	// crunch -dxn seems to produce such files, since alpha channel is abused such format
 	// is unsuitable to embed height map, then height map must be distributed as loose file
+#if defined(r_texturePacks)
+	normal = texture2D(u_NormalMap, vec3( texNormal * u_NormalMapModifier.xy, u_NormalMapModifier.z )).rga;
+#else
 	normal = texture2D(u_NormalMap, texNormal).rga;
+#endif
 	normal.x *= normal.z;
 	normal.xy = 2.0 * normal.xy - 1.0;
 	// In a perfect world this code must be enough:
@@ -109,7 +131,11 @@ vec3 NormalInTangentSpace(vec2 texNormal)
 
 // compute normal in worldspace from normalmap
 #if defined(r_normalMapping)
+#if defined(r_texturePacks)
+vec3 NormalInWorldSpace(vec2 texNormal, mat3 tangentToWorldMatrix, in sampler2DArray u_NormalMap)
+#else
 vec3 NormalInWorldSpace(vec2 texNormal, mat3 tangentToWorldMatrix, in sampler2D u_NormalMap)
+#endif
 {
 	// compute normal in tangent space from normalmap
 	vec3 normal = NormalInTangentSpace(texNormal, u_NormalMap);
@@ -131,7 +157,11 @@ vec3 NormalInWorldSpace(vec2 texNormal, mat3 tangentToWorldMatrix)
 // most of the code doing somewhat the same is likely to be named
 // RayIntersectDisplaceMap in other id tech3-based engines
 // so please keep the comment above to enable cross-tree look-up
+#if defined(r_texturePacks)
+vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMatrix, in sampler2DArray u_HeightMap)
+#else
 vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMatrix, in sampler2D u_HeightMap)
+#endif
 {
 	// compute view direction in tangent space
 	vec3 tangentViewDir = normalize(viewDir * tangentToWorldMatrix);
@@ -159,9 +189,19 @@ vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMa
 		currentDepth += currentSize;
 
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
+	#if defined(r_texturePacks)
+		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth )
+												   * u_NormalMapModifier.xy, u_NormalMapModifier.z )).a;
+	#else
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).a;
+	#endif
 #else // !USE_HEIGHTMAP_IN_NORMALMAP
+	#if defined(r_texturePacks)
+		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth )
+												   * u_HeightMapModifier.xy, u_HeightMapModifier.z )).g;
+	#else
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).g;
+	#endif
 #endif // !USE_HEIGHTMAP_IN_NORMALMAP
 
 		float heightMapDepth = topDepth - depth;
@@ -183,9 +223,19 @@ vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMa
 		currentSize *= 0.5;
 
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
+	#if defined(r_texturePacks)
+		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth )
+												   * u_NormalMapModifier.xy, u_NormalMapModifier.z )).a;
+	#else
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).a;
+	#endif
 #else // !USE_HEIGHTMAP_IN_NORMALMAP
+	#if defined(r_texturePacks)
+		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth )
+												   * u_HeightMapModifier.xy, u_HeightMapModifier.z )).g;
+	#else
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).g;
+	#endif
 #endif // !USE_HEIGHTMAP_IN_NORMALMAP
 
 		float heightMapDepth = topDepth - depth;
