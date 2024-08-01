@@ -48,7 +48,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *  Any texture samplers should be passed to functions from main() or other functions
 */
 
-#if defined(USE_MATERIAL_SYSTEM)
+#if defined(USE_MATERIAL_SYSTEMB)
+
+#if defined(r_texturePacks)
+#define samplerPack sampler2DArray
+#else
+#define samplerPack sampler2D
+#endif
 
 #ifdef HAVE_ARB_bindless_texture
 
@@ -61,11 +67,11 @@ usampler3D u_LightTilesInt = usampler3D( u_LightTilesInt_initial );
 #endif // !COMPUTELIGHT_GLSL
 
 #if defined(FOGQUAKE3_GLSL)
-sampler2D u_ColorMap = sampler2D( u_ColorMap_initial );
+samplerPack u_ColorMap = samplerPack( u_ColorMap_initial );
 #endif // !FOGQUAKE3_GLSL
 
 #if defined(GENERIC_GLSL)
-sampler2D u_ColorMap = sampler2D( u_ColorMap_initial );
+samplerPack u_ColorMap = samplerPack( u_ColorMap_initial );
 #if defined(USE_DEPTH_FADE) || defined(USE_VERTEX_SPRITE)
 sampler2D u_DepthMap = sampler2D( u_DepthMap_initial );
 #endif // !(USE_DEPTH_FADE || USE_VERTEX_SPRITE)
@@ -76,12 +82,12 @@ sampler2D u_CurrentMap = sampler2D( u_CurrentMap_initial );
 #endif // !HEATHAZE_GLSL
 
 #if defined(LIGHTMAPPING_GLSL)
-sampler2D u_DiffuseMap = sampler2D( u_DiffuseMap_initial );
-sampler2D u_MaterialMap = sampler2D( u_MaterialMap_initial );
-sampler2D u_GlowMap = sampler2D( u_GlowMap_initial );
-sampler2D u_LightMap = sampler2D( u_LightMap_initial );
+samplerPack u_DiffuseMap = samplerPack( u_DiffuseMap_initial );
+samplerPack u_MaterialMap = samplerPack( u_MaterialMap_initial );
+samplerPack u_GlowMap = samplerPack( u_GlowMap_initial );
+samplerPack u_LightMap = samplerPack( u_LightMap_initial );
 sampler3D u_LightGrid1 = sampler3D( u_LightGrid1_initial );
-sampler2D u_DeluxeMap = sampler2D( u_DeluxeMap_initial );
+samplerPack u_DeluxeMap = samplerPack( u_DeluxeMap_initial );
 sampler3D u_LightGrid2 = sampler3D( u_LightGrid2_initial );
 #endif // !LIGHTMAPPING_GLSL
 
@@ -99,14 +105,14 @@ samplerCube u_ColorMap = samplerCube( u_ColorMap_initial );
 
 #if defined(RELIEFMAPPING_GLSL)
 #if defined(r_normalMapping) || defined(USE_HEIGHTMAP_IN_NORMALMAP)
-sampler2D u_NormalMap = sampler2D( u_NormalMap_initial );
+samplerPack u_NormalMap = samplerPack( u_NormalMap_initial );
 #endif // r_normalMapping || USE_HEIGHTMAP_IN_NORMALMAP
 
 #if defined(USE_RELIEF_MAPPING)
 #if !defined(USE_HEIGHTMAP_IN_NORMALMAP)
-sampler2D u_HeightMap = sampler2D( u_HeightMap_initial );
+samplerPack u_HeightMap = samplerPack( u_HeightMap_initial );
 #else
-sampler2D u_HeightMap = sampler2D( u_NormalMap_initial );
+samplerPack u_HeightMap = samplerPack( u_NormalMap_initial );
 #endif // !USE_HEIGHTMAP_IN_NORMALMAP
 #endif // USE_RELIEF_MAPPING
 #endif // !RELIEFMAPPING_GLSL
@@ -117,7 +123,7 @@ sampler2D u_CurrentMap = sampler2D( u_CurrentMap_initial );
 
 #if defined(SKYBOX_GLSL)
 samplerCube u_ColorMapCube = samplerCube( u_ColorMapCube_initial );
-sampler2D u_CloudMap = sampler2D( u_CloudMap_initial );
+samplerPack u_CloudMap = samplerPack( u_CloudMap_initial );
 #endif // !SKYBOX_GLSL
 
 #else // !HAVE_ARB_bindless_texture

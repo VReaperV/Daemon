@@ -35,7 +35,7 @@ backEndState_t backEnd;
 static Cvar::Cvar<bool> r_clear( "r_clear", "Clear screen before painting over it on every frame", Cvar::NONE, false );
 Cvar::Cvar<bool> r_fastsky( "r_fastsky", "Clear sky instead of drawing it", Cvar::NONE, false );
 
-void GL_Bind( image_t *image )
+void GL_Bind( image_t *image, const bool skipTexturePack )
 {
 	int texnum;
 
@@ -46,6 +46,9 @@ void GL_Bind( image_t *image )
 	}
 	else
 	{
+		if ( r_texturePacks.Get() && image->assignedTexturePack && !skipTexturePack ) {
+			image = tr.texturePacks[image->texturePackImage].texture;
+		}
 		if ( r_logFile->integer )
 		{
 			// don't just call LogComment, or we will get a call to va() every frame!
@@ -74,6 +77,10 @@ void GL_Bind( image_t *image )
 	}
 }
 
+void GL_Bind( image_t* image ) {
+	GL_Bind( image, false );
+}
+
 void GL_Unbind( image_t *image )
 {
 	GLimp_LogComment( "--- GL_Unbind() ---\n" );
@@ -94,14 +101,17 @@ GLuint64 BindAnimatedImage( int unit, textureBundle_t *bundle )
 		}
 		else
 		{
+			tr.currentImage = tr.defaultImage;
 			return GL_BindToTMU( unit, tr.defaultImage );
 		}
 
+		tr.currentImage = tr.cinematicImage[bundle->videoMapHandle];
 		return tr.cinematicImage[bundle->videoMapHandle]->texture->bindlessTextureHandle;
 	}
 
 	if ( bundle->numImages <= 1 )
 	{
+		tr.currentImage = bundle->image[0];
 		return GL_BindToTMU( unit, bundle->image[ 0 ] );
 	}
 
@@ -117,6 +127,7 @@ GLuint64 BindAnimatedImage( int unit, textureBundle_t *bundle )
 
 	index %= bundle->numImages;
 
+	tr.currentImage = bundle->image[index];
 	return GL_BindToTMU( unit, bundle->image[ index ] );
 }
 
@@ -180,6 +191,10 @@ GLuint64 GL_BindToTMU( int unit, image_t *image )
 	{
 		Log::Warn("GL_BindToTMU: NULL image" );
 		image = tr.defaultImage;
+	}
+
+	if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+		image = tr.texturePacks[image->texturePackImage].texture;
 	}
 
 	if ( glConfig2.bindlessTexturesAvailable ) {
@@ -624,21 +639,25 @@ void GL_State( uint32_t stateBits )
 	glState.glStateBits ^= diff;
 }
 
-void GL_VertexAttribsState( uint32_t stateBits )
+void GL_VertexAttribsState( uint32_t stateBits ) {
+	GL_VertexAttribsState( stateBits, false );
+}
+
+void GL_VertexAttribsState( uint32_t stateBits, const bool useMaterialSystem )
 {
 	uint32_t diff;
 	uint32_t i;
 
-	if ( glConfig2.vboVertexSkinningAvailable && tess.vboVertexSkinning )
+	if ( !useMaterialSystem && glConfig2.vboVertexSkinningAvailable && tess.vboVertexSkinning )
 	{
 		stateBits |= ATTR_BONE_FACTORS;
 	}
 
-	GL_VertexAttribPointers( stateBits );
+	GL_VertexAttribPointers( stateBits, useMaterialSystem );
 
 	diff = stateBits ^ glState.vertexAttribsState;
 
-	if ( !diff )
+	if ( !useMaterialSystem && !diff )
 	{
 		return;
 	}
@@ -647,7 +666,7 @@ void GL_VertexAttribsState( uint32_t stateBits )
 	{
 		uint32_t bit = BIT( i );
 
-		if ( ( diff & bit ) )
+		if ( useMaterialSystem || !useMaterialSystem && ( diff & bit ) )
 		{
 			if ( ( stateBits & bit ) )
 			{
@@ -679,11 +698,11 @@ void GL_VertexAttribsState( uint32_t stateBits )
 	glState.vertexAttribsState = stateBits;
 }
 
-void GL_VertexAttribPointers( uint32_t attribBits )
+void GL_VertexAttribPointers( uint32_t attribBits, const bool useMaterialSystem )
 {
 	uint32_t i;
 
-	if ( !glState.currentVBO )
+	if ( !useMaterialSystem && !glState.currentVBO )
 	{
 		Sys::Error( "GL_VertexAttribPointers: no VBO bound" );
 	}
@@ -694,7 +713,7 @@ void GL_VertexAttribPointers( uint32_t attribBits )
 		GLimp_LogComment( va( "--- GL_VertexAttribPointers( %s ) ---\n", glState.currentVBO->name ) );
 	}
 
-	if ( glConfig2.vboVertexSkinningAvailable && tess.vboVertexSkinning )
+	if ( !useMaterialSystem && glConfig2.vboVertexSkinningAvailable && tess.vboVertexSkinning )
 	{
 		attribBits |= ATTR_BONE_FACTORS;
 	}
@@ -705,11 +724,11 @@ void GL_VertexAttribPointers( uint32_t attribBits )
 		uint32_t frame = 0;
 		uintptr_t base = 0;
 
-		if( glState.currentVBO == tess.vbo ) {
+		if( !useMaterialSystem && ( glState.currentVBO == tess.vbo ) ) {
 			base = tess.vertexBase * sizeof( shaderVertex_t );
 		}
 
-		if ( ( attribBits & bit ) != 0 &&
+		if ( useMaterialSystem || ( attribBits & bit ) != 0 &&
 		     ( !( glState.vertexAttribPointersSet & bit ) ||
 		       glState.vertexAttribsInterpolation >= 0 ||
 		       glState.currentVBO == tess.vbo ) )
@@ -724,7 +743,7 @@ void GL_VertexAttribPointers( uint32_t attribBits )
 				GLimp_LogComment( buf );
 			}
 
-			if ( ( ATTR_INTERP_BITS & bit ) && glState.vertexAttribsInterpolation > 0 )
+			if ( !useMaterialSystem && ( ATTR_INTERP_BITS & bit ) && glState.vertexAttribsInterpolation > 0 )
 			{
 				frame = glState.vertexAttribsNewFrame;
 			}
@@ -740,7 +759,9 @@ void GL_VertexAttribPointers( uint32_t attribBits )
 			}
 
 			glVertexAttribPointer( i, layout->numComponents, layout->componentType, layout->normalize, layout->stride, BUFFER_OFFSET( layout->ofs + ( frame * layout->frameOffset + base ) ) );
-			glState.vertexAttribPointersSet |= bit;
+			if ( !useMaterialSystem ) {
+				glState.vertexAttribPointersSet |= bit;
+			}
 		}
 	}
 }
@@ -3041,6 +3062,10 @@ void RB_RenderGlobalFog()
 	gl_fogGlobalShader->SetUniform_ColorMapBindless(
 		GL_BindToTMU( 0, tr.fogImage ) 
 	);
+
+	if ( r_texturePacks.Get() ) {
+		gl_fogGlobalShader->SetUniform_ColorMapModifier( tr.fogImage->texturePackModifier );
+	}
 
 	// bind u_DepthMap
 	gl_fogGlobalShader->SetUniform_DepthMapBindless(

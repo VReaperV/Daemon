@@ -1493,6 +1493,30 @@ static bool LoadMap( shaderStage_t *stage, const char *buffer, stageType_t type,
 			break;
 	}
 
+	switch ( type ) {
+		case stageType_t::ST_COLORMAP:
+		case stageType_t::ST_DIFFUSEMAP:
+		case stageType_t::ST_REFLECTIONMAP:
+			imageParams.hint = IH_COLORMAP;
+			break;
+		case stageType_t::ST_NORMALMAP:
+			imageParams.hint = IH_NORMALMAP;
+			break;
+		case stageType_t::ST_HEIGHTMAP:
+			imageParams.hint = IH_HEIGHTMAP;
+			break;
+		case stageType_t::ST_PHYSICALMAP:
+		case stageType_t::ST_SPECULARMAP:
+			imageParams.hint = IH_MATERIALMAP;
+			break;
+		case stageType_t::ST_GLOWMAP:
+			imageParams.hint = IH_GLOWMAP;
+			break;
+		case stageType_t::ST_LIGHTMAP:
+			imageParams.hint = IH_LIGHTMAP;
+			break;
+	}
+
 	if ( stage->stateBits & ( GLS_ATEST_BITS ) )
 	{
 		imageParams.bits |= IF_ALPHATEST; // FIXME: this is unused
@@ -1522,6 +1546,7 @@ static bool LoadMap( shaderStage_t *stage, const char *buffer, stageType_t type,
 	}
 	else
 	{
+		imageParams.useTexturePack = true;
 		stage->bundle[ bundleIndex ].image[ 0 ] = R_FindImageFile( buffer, imageParams );
 
 		if ( !stage->bundle[ bundleIndex ].image[ 0 ] )
@@ -2189,6 +2214,8 @@ static bool ParseStage( shaderStage_t *stage, const char **text )
 			imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
 			imageParams.minDimension = shader.imageMinDimension;
 			imageParams.maxDimension = shader.imageMaxDimension;
+			imageParams.useTexturePack = true;
+			imageParams.hint = IH_COLORMAP;
 
 			stage->bundle[ 0 ].image[ 0 ] = R_FindImageFile( token, imageParams );
 
@@ -2238,6 +2265,8 @@ static bool ParseStage( shaderStage_t *stage, const char **text )
 					imageParams.wrapType = wrapTypeEnum_t::WT_REPEAT;
 					imageParams.minDimension = shader.imageMinDimension;
 					imageParams.maxDimension = shader.imageMaxDimension;
+					imageParams.useTexturePack = true;
+					imageParams.hint = IH_COLORMAP;
 
 					stage->bundle[ 0 ].image[ num ] = R_FindImageFile( token, imageParams );
 
@@ -6362,6 +6391,9 @@ shader_t       *R_FindShader( const char *name, shaderType_t type,
 		imageParams.bits = bits;
 		imageParams.filterType = filterType_t::FT_DEFAULT;
 		imageParams.wrapType = wrapTypeEnum_t::WT_REPEAT;
+		// imageParams.useTexturePack = shader.type == shaderType_t::SHADER_3D_DYNAMIC || shader.type == shaderType_t::SHADER_3D_STATIC;
+		imageParams.useTexturePack = true;
+		imageParams.hint = IH_COLORMAP;
 
 		image = R_FindImageFile( fileName, imageParams );
 	} else {
@@ -6369,6 +6401,9 @@ shader_t       *R_FindShader( const char *name, shaderType_t type,
 		imageParams.bits = bits;
 		imageParams.filterType = filterType_t::FT_LINEAR;
 		imageParams.wrapType = wrapTypeEnum_t::WT_CLAMP;
+		// imageParams.useTexturePack = shader.type == shaderType_t::SHADER_3D_DYNAMIC || shader.type == shaderType_t::SHADER_3D_STATIC;
+		imageParams.useTexturePack = true;
+		imageParams.hint = IH_COLORMAP;
 
 		image = R_FindImageFile( fileName, imageParams );
 	}

@@ -68,20 +68,22 @@ static Cvar::Cvar<bool> r_arb_debug_output( "r_arb_debug_output",
 	"Use GL_ARB_debug_output if available", Cvar::NONE, true );
 static Cvar::Cvar<bool> r_arb_depth_clamp( "r_arb_depth_clamp",
 	"Use GL_ARB_depth_clamp if available", Cvar::NONE, true );
+static Cvar::Cvar<bool> r_arb_explicit_attrib_location( "r_arb_explicit_attrib_location",
+	"Use GL_ARB_explicit_attrib_location if available", Cvar::NONE, true );
 static Cvar::Cvar<bool> r_arb_explicit_uniform_location( "r_arb_explicit_uniform_location",
 	"Use GL_ARB_explicit_uniform_location if available", Cvar::NONE, true );
 static Cvar::Cvar<bool> r_arb_gpu_shader5( "r_arb_gpu_shader5",
 	"Use GL_ARB_gpu_shader5 if available", Cvar::NONE, true );
-static Cvar::Cvar<bool> r_arb_indirect_parameters( "r_arb_indirect_parameters",
-	"Use GL_ARB_indirect_parameters if available", Cvar::NONE, true );
 static Cvar::Cvar<bool> r_arb_map_buffer_range( "r_arb_map_buffer_range",
 	"Use GL_ARB_map_buffer_range if available", Cvar::NONE, true );
 static Cvar::Cvar<bool> r_arb_multi_draw_indirect( "r_arb_multi_draw_indirect",
 	"Use GL_ARB_multi_draw_indirect if available", Cvar::NONE, true );
-static Cvar::Cvar<bool> r_arb_shader_draw_parameters( "r_arb_shader_draw_parameters",
-	"Use GL_ARB_shader_draw_parameters if available", Cvar::NONE, true );
 static Cvar::Cvar<bool> r_arb_shader_atomic_counters( "r_arb_shader_atomic_counters",
 	"Use GL_ARB_shader_atomic_counters if available", Cvar::NONE, true );
+static Cvar::Cvar<bool> r_arb_shader_atomic_counter_ops( "r_arb_shader_atomic_counter_ops",
+	"Use GL_ARB_shader_atomic_counter_ops if available", Cvar::NONE, true );
+static Cvar::Cvar<bool> r_arb_shader_draw_parameters( "r_arb_shader_draw_parameters",
+	"Use GL_ARB_shader_draw_parameters if available", Cvar::NONE, true );
 static Cvar::Cvar<bool> r_arb_shader_image_load_store( "r_arb_shader_image_load_store",
 	"Use GL_ARB_shader_image_load_store if available", Cvar::NONE, true );
 static Cvar::Cvar<bool> r_arb_shader_storage_buffer_object( "r_arb_shader_storage_buffer_object",
@@ -1809,12 +1811,13 @@ static void GLimp_InitExtensions()
 	Cvar::Latch( r_arb_compute_shader );
 	Cvar::Latch( r_arb_debug_output );
 	Cvar::Latch( r_arb_depth_clamp );
+	Cvar::Latch( r_arb_explicit_attrib_location );
 	Cvar::Latch( r_arb_explicit_uniform_location );
 	Cvar::Latch( r_arb_gpu_shader5 );
-	Cvar::Latch( r_arb_indirect_parameters );
 	Cvar::Latch( r_arb_map_buffer_range );
 	Cvar::Latch( r_arb_multi_draw_indirect );
 	Cvar::Latch( r_arb_shader_atomic_counters );
+	Cvar::Latch( r_arb_shader_atomic_counter_ops );
 	Cvar::Latch( r_arb_shader_draw_parameters );
 	Cvar::Latch( r_arb_shader_image_load_store );
 	Cvar::Latch( r_arb_shading_language_420pack );
@@ -2103,6 +2106,9 @@ static void GLimp_InitExtensions()
 	glConfig2.shadingLanguage420PackAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_NONE, ARB_shading_language_420pack, r_arb_shading_language_420pack.Get() );
 
 	// made required in OpenGL 4.3
+	glConfig2.explicitAttribLocationAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_NONE, ARB_explicit_attrib_location, r_arb_explicit_attrib_location.Get() );
+
+	// made required in OpenGL 4.3
 	glConfig2.explicitUniformLocationAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_NONE, ARB_explicit_uniform_location, r_arb_explicit_uniform_location.Get() );
 
 	// made required in OpenGL 4.2
@@ -2111,14 +2117,15 @@ static void GLimp_InitExtensions()
 	// made required in OpenGL 4.2
 	glConfig2.shaderAtomicCountersAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_NONE, ARB_shader_atomic_counters, r_arb_shader_atomic_counters.Get() );
 
-	// not required by any OpenGL version
-	glConfig2.indirectParametersAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_NONE, ARB_indirect_parameters, r_arb_indirect_parameters.Get() );
+	// made required in OpenGL 4.6
+	glConfig2.shaderAtomicCounterOpsAvailable = LOAD_EXTENSION_WITH_TEST( ExtFlag_NONE, ARB_shader_atomic_counter_ops, r_arb_shader_atomic_counter_ops.Get() );
 
 	glConfig2.materialSystemAvailable = glConfig2.shaderDrawParametersAvailable && glConfig2.SSBOAvailable
 									    && glConfig2.multiDrawIndirectAvailable && glConfig2.bindlessTexturesAvailable
 										&& glConfig2.computeShaderAvailable && glConfig2.shadingLanguage420PackAvailable
-										&& glConfig2.explicitUniformLocationAvailable && glConfig2.shaderImageLoadStoreAvailable
-										&& glConfig2.shaderAtomicCountersAvailable && glConfig2.indirectParametersAvailable
+										&& glConfig2.explicitAttribLocationAvailable && glConfig2.explicitUniformLocationAvailable
+										&& glConfig2.shaderImageLoadStoreAvailable
+										&& glConfig2.shaderAtomicCountersAvailable && glConfig2.shaderAtomicCounterOpsAvailable
 										&& r_materialSystem.Get(); // Allow disabling it without disabling any extensions
 
 	GL_CheckErrors();

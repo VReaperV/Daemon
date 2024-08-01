@@ -520,7 +520,7 @@ class GLUniformSampler : protected GLUniform {
 	void SetValueBindless( GLint64 value ) {
 		currentValueBindless = value;
 
-		if ( glConfig2.bindlessTexturesAvailable && ( !_shader->UseMaterialSystem() || _global ) ) {
+		if ( glConfig2.bindlessTexturesAvailable && ( !_shader->UseMaterialSystem() || _global || true ) ) {
 			glUniformHandleui64ARB( GetLocation(), currentValueBindless );
 		}
 	}
@@ -761,7 +761,7 @@ class GLUniform1ui : protected GLUniform {
 class GLUniform1Bool : protected GLUniform {
 	protected:
 	// GLSL std430 bool is always 4 bytes, which might not correspond to C++ bool
-	GLUniform1Bool( GLShader* shader, const char* name, const bool global ) :
+	GLUniform1Bool( GLShader* shader, const char* name, const bool global = false ) :
 		GLUniform( shader, name, "bool", 1, 1, global ) {
 	}
 
@@ -1339,8 +1339,24 @@ class GLBuffer {
 		glBindBufferBase( target, _bindingPoint, handle );
 	}
 
+	void BindBufferBase( const GLenum target, const GLuint bindingPoint ) {
+		glBindBufferBase( target, bindingPoint, handle );
+	}
+
+	void BindBufferRange( const GLenum target, const GLintptr offset, const GLsizeiptr size ) {
+		glBindBufferRange( target, _bindingPoint, handle, offset * sizeof( uint32_t ), size * sizeof( uint32_t ) );
+	}
+
+	void BindBufferRange( const GLenum target, const GLuint bindingPoint, const GLintptr offset, const GLsizeiptr size ) {
+		glBindBufferRange( target, bindingPoint, handle, offset * sizeof( uint32_t ), size * sizeof( uint32_t ) );
+	}
+
 	void UnBindBufferBase( const GLenum target ) {
 		glBindBufferBase( target, _bindingPoint, 0 );
+	}
+
+	void UnBindBufferBase( const GLenum target, const GLuint bindingPoint ) {
+		glBindBufferBase( target, bindingPoint, 0 );
 	}
 
 	void BindBuffer( const GLenum target ) {
@@ -1462,8 +1478,16 @@ class GLSSBO : public GLBuffer {
 		GLBuffer::BindBufferBase( GL_SHADER_STORAGE_BUFFER );
 	}
 
+	void BindBufferBase( const GLuint bindingPoint ) {
+		GLBuffer::BindBufferBase( GL_SHADER_STORAGE_BUFFER, bindingPoint );
+	}
+
 	void UnBindBufferBase() {
 		GLBuffer::UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	}
+
+	void UnBindBufferBase( const GLuint bindingPoint ) {
+		GLBuffer::UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, bindingPoint );
 	}
 
 	void BindBuffer() {
@@ -1514,8 +1538,16 @@ class GLUBO : public GLBuffer {
 		GLBuffer::BindBufferBase( GL_UNIFORM_BUFFER );
 	}
 
+	void BindBufferBase( const GLuint bindingPoint ) {
+		GLBuffer::BindBufferBase( GL_UNIFORM_BUFFER, bindingPoint );
+	}
+
 	void UnBindBufferBase() {
 		GLBuffer::UnBindBufferBase( GL_UNIFORM_BUFFER );
+	}
+
+	void UnBindBufferBase( const GLuint bindingPoint ) {
+		GLBuffer::UnBindBufferBase( GL_UNIFORM_BUFFER, bindingPoint );
 	}
 
 	void BindBuffer() {
@@ -1562,8 +1594,16 @@ class GLAtomicCounterBuffer : public GLBuffer {
 		GLBuffer::BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
 	}
 
+	void BindBufferBase( const GLuint bindingPoint ) {
+		GLBuffer::BindBufferBase( GL_ATOMIC_COUNTER_BUFFER, bindingPoint );
+	}
+
 	void UnBindBufferBase() {
 		GLBuffer::UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	}
+
+	void UnBindBufferBase( const GLuint bindingPoint ) {
+		GLBuffer::UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER, bindingPoint );
 	}
 
 	void BindBuffer() {
@@ -2765,6 +2805,163 @@ class u_ShadowClipMap4 :
 	}
 };
 
+
+class u_ColorMapModifier :
+	GLUniform3f {
+	public:
+	u_ColorMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_ColorMapModifier" ) {
+	}
+
+	void SetUniform_ColorMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_DiffuseMapModifier :
+	GLUniform3f {
+	public:
+	u_DiffuseMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_DiffuseMapModifier" ) {
+	}
+
+	void SetUniform_DiffuseMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_HeightMapModifier :
+	GLUniform3f {
+	public:
+	u_HeightMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_HeightMapModifier" ) {
+	}
+
+	void SetUniform_HeightMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_NormalMapModifier :
+	GLUniform3f {
+	public:
+	u_NormalMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_NormalMapModifier" ) {
+	}
+
+	void SetUniform_NormalMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_MaterialMapModifier :
+	GLUniform3f {
+	public:
+	u_MaterialMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_MaterialMapModifier" ) {
+	}
+
+	void SetUniform_MaterialMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_LightMapModifier :
+	GLUniform3f {
+	public:
+	u_LightMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_LightMapModifier" ) {
+	}
+
+	void SetUniform_LightMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_DeluxeMapModifier :
+	GLUniform3f {
+	public:
+	u_DeluxeMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_DeluxeMapModifier" ) {
+	}
+
+	void SetUniform_DeluxeMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_GlowMapModifier :
+	GLUniform3f {
+	public:
+	u_GlowMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_GlowMapModifier" ) {
+	}
+
+	void SetUniform_GlowMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_RandomMapModifier :
+	GLUniform3f {
+	public:
+	u_RandomMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_RandomMapModifier" ) {
+	}
+
+	void SetUniform_RandomMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_CloudMapModifier :
+	GLUniform3f {
+	public:
+	u_CloudMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_CloudMapModifier" ) {
+	}
+
+	void SetUniform_CloudMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_CurrentMapModifier :
+	GLUniform3f {
+	public:
+	u_CurrentMapModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_CurrentMapModifier" ) {
+	}
+
+	void SetUniform_CurrentMapModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_AttenuationMapXYModifier :
+	GLUniform3f {
+	public:
+	u_AttenuationMapXYModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_AttenuationMapXYModifier" ) {
+	}
+
+	void SetUniform_AttenuationMapXYModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_AttenuationMapZModifier :
+	GLUniform3f {
+	public:
+	u_AttenuationMapZModifier( GLShader* shader ) :
+		GLUniform3f( shader, "u_AttenuationMapZModifier" ) {
+	}
+
+	void SetUniform_AttenuationMapZModifier( const vec3_t modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
 class u_TextureMatrix :
 	GLUniformMatrix4f
 {
@@ -3284,6 +3481,18 @@ class u_TotalDrawSurfs :
 
 	void SetUniform_TotalDrawSurfs( const uint totalDrawSurfs ) {
 		this->SetValue( totalDrawSurfs );
+	}
+};
+
+class u_MaxViewFrameTriangles :
+	GLUniform1ui {
+	public:
+	u_MaxViewFrameTriangles( GLShader* shader ) :
+		GLUniform1ui( shader, "u_MaxViewFrameTriangles" ) {
+	}
+
+	void SetUniform_MaxViewFrameTriangles( const uint maxViewFrameTriangles ) {
+		this->SetValue( maxViewFrameTriangles );
 	}
 };
 
@@ -3922,6 +4131,7 @@ class GLShader_generic2D :
 	public GLShader,
 	public u_ColorMap,
 	public u_DepthMap,
+	public u_ColorMapModifier,
 	public u_TextureMatrix,
 	public u_AlphaThreshold,
 	public u_ModelMatrix,
@@ -3942,6 +4152,7 @@ class GLShader_generic :
 	public GLShader,
 	public u_ColorMap,
 	public u_DepthMap,
+	public u_ColorMapModifier,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_ViewUp,
@@ -3971,6 +4182,7 @@ class GLShader_genericMaterial :
 	public GLShader,
 	public u_ColorMap,
 	public u_DepthMap,
+	public u_ColorMapModifier,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_ViewUp,
@@ -4011,6 +4223,13 @@ class GLShader_lightMapping :
 	public u_LightTiles,
 	public u_LightTilesInt,
 	public u_LightsTexture,
+	public u_DiffuseMapModifier,
+	public u_MaterialMapModifier,
+	public u_LightMapModifier,
+	public u_DeluxeMapModifier,
+	public u_GlowMapModifier,
+	public u_NormalMapModifier,
+	public u_HeightMapModifier,
 	public u_TextureMatrix,
 	public u_SpecularExponent,
 	public u_ColorModulate,
@@ -4061,6 +4280,13 @@ class GLShader_lightMappingMaterial :
 	public u_LightGrid1,
 	public u_LightGrid2,
 	public u_LightTilesInt,
+	public u_DiffuseMapModifier,
+	public u_MaterialMapModifier,
+	public u_LightMapModifier,
+	public u_DeluxeMapModifier,
+	public u_GlowMapModifier,
+	public u_NormalMapModifier,
+	public u_HeightMapModifier,
 	public u_TextureMatrix,
 	public u_SpecularExponent,
 	public u_ColorModulate,
@@ -4316,6 +4542,7 @@ class GLShader_skybox :
 	public GLShader,
 	public u_ColorMapCube,
 	public u_CloudMap,
+	public u_CloudMapModifier,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_CloudHeight,
@@ -4335,6 +4562,7 @@ class GLShader_skyboxMaterial :
 	public GLShader,
 	public u_ColorMapCube,
 	public u_CloudMap,
+	public u_CloudMapModifier,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_CloudHeight,
@@ -4352,6 +4580,7 @@ class GLShader_skyboxMaterial :
 class GLShader_fogQuake3 :
 	public GLShader,
 	public u_ColorMap,
+	public u_ColorMapModifier,
 	public u_ModelMatrix,
 	public u_ModelViewProjectionMatrix,
 	public u_InverseLightFactor,
@@ -4373,6 +4602,7 @@ public:
 class GLShader_fogQuake3Material :
 	public GLShader,
 	public u_ColorMap,
+	public u_ColorMapModifier,
 	public u_ModelMatrix,
 	public u_ModelViewProjectionMatrix,
 	public u_InverseLightFactor,
@@ -4394,6 +4624,7 @@ class GLShader_fogGlobal :
 	public GLShader,
 	public u_ColorMap,
 	public u_DepthMap,
+	public u_ColorMapModifier,
 	public u_ViewOrigin,
 	public u_ViewMatrix,
 	public u_ModelViewProjectionMatrix,
@@ -4413,6 +4644,8 @@ class GLShader_heatHaze :
 	public u_CurrentMap,
 	public u_NormalMap,
 	public u_HeightMap,
+	public u_NormalMapModifier,
+	public u_HeightMapModifier,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_ViewUp,
@@ -4440,7 +4673,7 @@ class GLShader_heatHazeMaterial :
 	public GLShader,
 	public u_CurrentMap,
 	public u_NormalMap,
-	public u_HeightMap,
+	public u_NormalMapModifier,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_ViewUp,
@@ -4698,6 +4931,7 @@ class GLShader_cull :
 	public u_Frame,
 	public u_ViewID,
 	public u_TotalDrawSurfs,
+	public u_MaxViewFrameTriangles,
 	public u_SurfaceCommandsOffset,
 	public u_Frustum,
 	public u_UseFrustumCulling,
@@ -4726,7 +4960,8 @@ class GLShader_depthReduction :
 
 class GLShader_clearSurfaces :
 	public GLShader,
-	public u_Frame {
+	public u_Frame,
+	public u_MaxViewFrameTriangles {
 	public:
 	GLShader_clearSurfaces( GLShaderManager* manager );
 };
@@ -4735,6 +4970,8 @@ class GLShader_processSurfaces :
 	public GLShader,
 	public u_Frame,
 	public u_ViewID,
+	public u_CameraPosition,
+	public u_MaxViewFrameTriangles,
 	public u_SurfaceCommandsOffset,
 	public u_CulledCommandsOffset {
 	public:

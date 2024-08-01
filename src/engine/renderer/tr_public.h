@@ -93,9 +93,11 @@ struct glconfig2_t
 	bool multiDrawIndirectAvailable;
 	bool indirectParametersAvailable;
 	bool shadingLanguage420PackAvailable;
+	bool explicitAttribLocationAvailable;
 	bool explicitUniformLocationAvailable;
 	bool shaderImageLoadStoreAvailable;
 	bool shaderAtomicCountersAvailable;
+	bool shaderAtomicCounterOpsAvailable;
 	bool materialSystemAvailable;
 	bool gpuShader4Available;
 	bool gpuShader5Available;

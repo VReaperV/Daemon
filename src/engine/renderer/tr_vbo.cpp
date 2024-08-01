@@ -550,6 +550,11 @@ VBO_t *R_CreateStaticVBO( const char *name, vboData_t data, vboLayout_t layout )
 		glUnmapBuffer( GL_ARRAY_BUFFER );
 	}
 
+	if ( glConfig2.materialSystemAvailable ) {
+		vbo->byteData = ( byte* ) ri.Hunk_AllocateTempMemory( vbo->vertexesSize );
+		memcpy( vbo->byteData, outData, vbo->vertexesSize );
+	}
+
 	R_BindNullVBO();
 
 	GL_CheckErrors();
@@ -587,6 +592,12 @@ VBO_t *R_CreateStaticVBO2( const char *name, int numVertexes, shaderVertex_t *ve
 	vbo->attribBits = stateBits;
 	vbo->usage = GL_STATIC_DRAW;
 
+	if ( glConfig2.materialSystemAvailable ) {
+		vbo->shaderVertexData = ( shaderVertex_t* ) ri.Hunk_AllocateTempMemory( numVertexes * sizeof( shaderVertex_t ) );
+		memcpy( vbo->shaderVertexData, verts, numVertexes * sizeof( shaderVertex_t ) );
+		vbo->useShaderVertexData = true;
+	}
+
 	R_SetVBOAttributeLayouts( vbo );
 	
 	glGenBuffers( 1, &vbo->vertexesVBO );
@@ -595,7 +606,7 @@ VBO_t *R_CreateStaticVBO2( const char *name, int numVertexes, shaderVertex_t *ve
 #ifdef GL_ARB_buffer_storage
 	if( glConfig2.bufferStorageAvailable ) {
 		glBufferStorage( GL_ARRAY_BUFFER, vbo->vertexesSize,
-				 verts, 0 );
+			verts, ( glConfig2.materialSystemAvailable ? GL_MAP_READ_BIT : 0 ) );
 	} else
 #endif
 	{
@@ -675,6 +686,11 @@ IBO_t *R_CreateStaticIBO( const char *name, glIndex_t *indexes, int numIndexes )
 	ibo->indexesSize = numIndexes * sizeof( glIndex_t );
 	ibo->indexesNum = numIndexes;
 
+	if ( glConfig2.materialSystemAvailable ) {
+		ibo->savedData = ( glIndex_t* ) ri.Hunk_AllocateTempMemory( numIndexes * sizeof( glIndex_t ) );
+		memcpy( ibo->savedData, indexes, numIndexes * sizeof( glIndex_t ) );
+	}
+
 	glGenBuffers( 1, &ibo->indexesVBO );
 
 	R_BindIBO( ibo );
@@ -713,13 +729,18 @@ IBO_t *R_CreateStaticIBO2( const char *name, int numTriangles, glIndex_t *indexe
 	ibo->indexesNum = numTriangles * 3;
 	ibo->indexesSize = ibo->indexesNum * sizeof( glIndex_t );
 
+	if ( glConfig2.materialSystemAvailable ) {
+		ibo->savedData = ( glIndex_t* ) ri.Hunk_AllocateTempMemory( numTriangles * 3 * sizeof( glIndex_t ) );
+		memcpy( ibo->savedData, indexes, numTriangles * 3 * sizeof( glIndex_t ) );
+	}
+
 	glGenBuffers( 1, &ibo->indexesVBO );
 	R_BindIBO( ibo );
 
 #ifdef GL_ARB_buffer_storage
 	if( glConfig2.bufferStorageAvailable ) {
 		glBufferStorage( GL_ELEMENT_ARRAY_BUFFER, ibo->indexesSize,
-				 indexes, 0 );
+				 indexes, ( glConfig2.materialSystemAvailable ? GL_MAP_READ_BIT : 0 ) );
 	} else
 #endif
 	{
@@ -1004,6 +1025,22 @@ static void R_InitMaterialBuffers() {
 		surfaceBatchesUBO.GenBuffer();
 		atomicCommandCountersBuffer.GenBuffer();
 		portalSurfacesSSBO.GenBuffer();
+
+		drawCommandBuffer.GenBuffer();
+		clusterIndexesBuffer.GenBuffer();
+		globalIndexesSSBO.GenBuffer();
+		materialIDsSSBO.GenBuffer();
+
+		clustersUBO.GenBuffer();
+		clusterSurfaceTypesUBO.GenBuffer();
+		clusterDataSSBO.GenBuffer();
+		culledClustersBuffer.GenBuffer();
+		atomicMaterialCountersBuffer.GenBuffer();
+		atomicMaterialCountersBuffer2.GenBuffer();
+		clusterCountersBuffer.GenBuffer();
+		clusterWorkgroupCountersBuffer.GenBuffer();
+
+		clusterVertexesBuffer.GenBuffer();
 	}
 }
 
@@ -1132,10 +1169,90 @@ void R_ShutdownVBOs()
 		surfaceBatchesUBO.DelBuffer();
 		atomicCommandCountersBuffer.DelBuffer();
 		portalSurfacesSSBO.DelBuffer();
+
+		drawCommandBuffer.DelBuffer();
+		clusterIndexesBuffer.DelBuffer();
+		globalIndexesSSBO.DelBuffer();
+		materialIDsSSBO.DelBuffer();
+
+		clustersUBO.DelBuffer();
+		clusterSurfaceTypesUBO.DelBuffer();
+		clusterDataSSBO.DelBuffer();
+		culledClustersBuffer.DelBuffer();
+		atomicMaterialCountersBuffer.DelBuffer();
+		atomicMaterialCountersBuffer2.DelBuffer();
+		clusterCountersBuffer.DelBuffer();
+		clusterWorkgroupCountersBuffer.DelBuffer();
+
+		clusterVertexesBuffer.DelBuffer();
 	}
 
 	tess.verts = tess.vertsBuffer = nullptr;
 	tess.indexes = tess.indexesBuffer = nullptr;
+}
+
+void Tess_MapVBO( VBO_t* VBO ) {
+	if ( VBO->mapped ) {
+		Log::Warn( "VBO %s is already mapped!", VBO->name );
+		return;
+	}
+
+	R_BindVBO( VBO );
+
+	void* data = glMapBufferRange(
+		GL_ARRAY_BUFFER, 0,
+		VBO->vertexesSize,
+		GL_MAP_READ_BIT );
+
+	if ( data == nullptr ) {
+		Sys::Drop( "Failed to map VBO: %s", VBO->name );
+	}
+
+	VBO->data = data;
+	VBO->mapped = true;
+}
+
+void Tess_UnMapVBO( VBO_t* VBO ) {
+	if ( !VBO->mapped ) {
+		Log::Warn( "VBO %s is not mapped!", VBO->name );
+		return;
+	}
+
+	R_BindVBO( VBO );
+	glUnmapBuffer( GL_ARRAY_BUFFER );
+	VBO->mapped = false;
+}
+
+void Tess_MapIBO( IBO_t* IBO ) {
+	if ( IBO->mapped ) {
+		Log::Warn( "IBO %s is already mapped!", IBO->name );
+		return;
+	}
+
+	R_BindIBO( IBO );
+
+	void* data = glMapBufferRange(
+		GL_ELEMENT_ARRAY_BUFFER, 0,
+		IBO->indexesSize,
+		GL_MAP_READ_BIT );
+
+	if ( data == nullptr ) {
+		Sys::Drop( "Failed to map IBO: %s", IBO->name );
+	}
+
+	IBO->data = data;
+	IBO->mapped = true;
+}
+
+void Tess_UnMapIBO( IBO_t* IBO ) {
+	if ( !IBO->mapped ) {
+		Log::Warn( "IBO %s is not mapped!", IBO->name );
+		return;
+	}
+
+	R_BindIBO( IBO );
+	glUnmapBuffer( GL_ELEMENT_ARRAY_BUFFER );
+	IBO->mapped = false;
 }
 
 /*
@@ -1177,7 +1294,8 @@ void Tess_MapVBOs( bool forceCPU ) {
 				GL_ARRAY_BUFFER, tess.vertsWritten * sizeof( shaderVertex_t ),
 				SHADER_MAX_VERTEXES * sizeof( shaderVertex_t ),
 				GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT |
-				GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_FLUSH_EXPLICIT_BIT );
+				GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_FLUSH_EXPLICIT_BIT
+				| ( materialSystem.generatingWorldCommandBuffer ? GL_MAP_READ_BIT : 0 ) );
 		}
 	}
 
@@ -1204,7 +1322,8 @@ void Tess_MapVBOs( bool forceCPU ) {
 				GL_ELEMENT_ARRAY_BUFFER, tess.indexesWritten * sizeof( glIndex_t ),
 				SHADER_MAX_INDEXES * sizeof( glIndex_t ),
 				GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT |
-				GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_FLUSH_EXPLICIT_BIT );
+				GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_FLUSH_EXPLICIT_BIT
+				| ( materialSystem.generatingWorldCommandBuffer ? GL_MAP_READ_BIT : 0 ) );
 		}
 	}
 }

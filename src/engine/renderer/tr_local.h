@@ -595,6 +595,17 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	static inline bool operator ==( const wrapType_t &a, const wrapType_t &b ) { return a.s == b.s && a.t == b.t; }
 	static inline bool operator !=( const wrapType_t &a, const wrapType_t &b ) { return a.s != b.s || a.t != b.t; }
 
+	enum ImageHint {
+		IH_NONE,
+		IH_COLORMAP,
+		IH_NORMALMAP,
+		IH_HEIGHTMAP,
+		IH_MATERIALMAP,
+		IH_GLOWMAP,
+		IH_LIGHTMAP,
+		IH_DELUXEMAP
+	};
+
 	struct imageParams_t
 	{
 		int bits = 0;
@@ -602,8 +613,12 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		wrapType_t wrapType;
 		int minDimension = 0;
 		int maxDimension = 0;
+
+		bool useTexturePack = false;
+		ImageHint hint = IH_NONE;
 	};
 
+	struct TexturePack;
 	struct image_t
 	{
 		char name[ MAX_QPATH ];
@@ -611,6 +626,16 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		GLenum         type;
 		GLuint         texnum; // gl texture binding
 		Texture        *texture;
+		bool useTexturePack;
+		uint32_t texturePackImage;
+		GLint layer = -1;
+		GLint level = 0;
+		uint16_t levelWidth;
+		uint16_t levelHeight;
+		vec3_t texturePackModifier;
+		bool assignedTexturePack = false;
+
+		bool isTexturePack = false;
 
 		uint16_t width, height, numLayers; // source image
 		uint16_t       uploadWidth, uploadHeight; // after power of two and picmip but not including clamp to MAX_TEXTURE_SIZE
@@ -623,7 +648,31 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		filterType_t   filterType;
 		wrapType_t     wrapType;
 
+		ImageHint hint = IH_NONE;
+
 		image_t *next;
+	};
+
+	struct TexturePack {
+		GLenum         type;
+		GLuint         id;
+		image_t* texture;
+		std::vector<image_t*> images;
+
+		uint16_t width = 0;
+		uint16_t height = 0;
+		uint16_t numLayers = 0;
+		uint16_t layer = 0;
+		int numMips = 0;
+
+		uint32_t       internalFormat;
+
+		uint32_t       bits;
+		GLenum format;
+		filterType_t   filterType;
+		wrapType_t     wrapType;
+
+		bool InsertImage( image_t* image, const GLenum newFormat, const GLsizei imageSize, const byte* imageData );
 	};
 
 	inline bool IsImageCompressed(int bits) { return bits & (IF_BC1 | IF_BC2 | IF_BC3 | IF_BC4 | IF_BC5); }
@@ -733,9 +782,19 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		int     numVerts;
 	};
 
+	struct shaderVertex_t;
+
 	struct VBO_t
 	{
 		char     name[ 96 ]; // only for debugging with /listVBOs
+
+		bool mapped = false;
+
+		void* data;
+
+		byte* byteData;
+		shaderVertex_t* shaderVertexData;
+		bool useShaderVertexData = false;
 
 		uint32_t vertexesVBO;
 
@@ -754,6 +813,12 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	struct IBO_t
 	{
 		char     name[ 96 ]; // only for debugging with /listVBOs
+
+		bool mapped = false;
+
+		void* data;
+
+		glIndex_t* savedData;
 
 		uint32_t indexesVBO;
 		uint32_t indexesSize; // amount of memory data allocated for all triangles in bytes
@@ -1663,6 +1728,9 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		uint materialPackIDs[ MAX_SHADER_STAGES ];
 		bool texturesDynamic[ MAX_SHADER_STAGES ];
 		uint drawCommandIDs[ MAX_SHADER_STAGES ];
+
+		uint baseCluster;
+		uint clusterCount = 0;
 
 		drawSurf_t* depthSurface;
 		bool materialSystemSkip = false;
@@ -2665,6 +2733,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 
 		image_t    *defaultImage;
 		image_t    *cinematicImage[ MAX_IN_GAME_VIDEOS ];
+		image_t    *currentImage;
 		image_t    *fogImage;
 		image_t    *quadraticImage;
 		image_t    *whiteImage; // full of 0xff
@@ -2715,6 +2784,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		FBO_t *downScaleFBO_64x64;
 		FBO_t *contrastRenderFBO;
 		FBO_t *bloomRenderFBO[ 2 ];
+		FBO_t *texturePackFBO;
 		FBO_t *shadowMapFBO[ MAX_SHADOWMAPS ];
 		FBO_t *sunShadowMapFBO[ MAX_SHADOWMAPS ];
 
@@ -2786,6 +2856,7 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		skelAnimation_t *animations[ MAX_ANIMATIONFILES ];
 
 		std::vector<image_t *> images;
+		std::vector<TexturePack> texturePacks;
 
 		int             numFBOs;
 		FBO_t           *fbos[ MAX_FBOS ];
@@ -2941,6 +3012,8 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 	extern cvar_t *r_rimExponent;
 
 	extern Cvar::Cvar<bool> r_highPrecisionRendering;
+
+	extern Cvar::Cvar<bool> r_texturePacks;
 
 	extern cvar_t *r_logFile; // number of frames to emit GL logs
 
@@ -3156,6 +3229,7 @@ inline bool checkGLErrors()
 
 	====================================================================
 	*/
+	void GL_Bind( image_t *image, const bool skipTexturePack );
 	void GL_Bind( image_t *image );
 	void GL_BindNearestCubeMap( int unit, const vec3_t xyz );
 	void GL_Unbind( image_t *image );
@@ -3192,7 +3266,8 @@ inline bool checkGLErrors()
 
 	void GL_State( uint32_t stateVector );
 	void GL_VertexAttribsState( uint32_t stateBits );
-	void GL_VertexAttribPointers( uint32_t attribBits );
+	void GL_VertexAttribsState( uint32_t stateBits, const bool useMaterialSystem );
+	void GL_VertexAttribPointers( uint32_t attribBits, const bool useMaterialSystem );
 	void GL_Cull( cullType_t cullType );
 	void R_ShutdownBackend();
 
@@ -3252,6 +3327,7 @@ inline bool checkGLErrors()
 
 	image_t *R_CreateCubeImage( const char *name, const byte *pic[ 6 ], int width, int height, const imageParams_t &imageParams );
 	image_t *R_Create3DImage( const char *name, const byte *pic, int width, int height, int depth, const imageParams_t &imageParams );
+	image_t* R_Create2DArrayImage( const char* name, const byte * pic, int width, int height, int depth, int numMips, const imageParams_t & imageParams );
 
 	image_t *R_CreateGlyph( const char *name, const byte *pic, int width, int height );
 	qhandle_t RE_GenerateTexture( const byte *pic, int width, int height );
@@ -3482,6 +3558,10 @@ inline bool checkGLErrors()
 	class u_ModelViewProjectionMatrix;
 	void Tess_InstantQuad( u_ModelViewProjectionMatrix &shader, float x, float y, float width, float height );
 
+	void Tess_MapVBO( VBO_t* VBO );
+	void Tess_UnMapVBO( VBO_t* VBO );
+	void Tess_MapIBO( IBO_t* IBO );
+	void Tess_UnMapIBO( IBO_t* IBO );
 	void Tess_MapVBOs( bool forceCPU );
 	void Tess_UpdateVBOs();
 

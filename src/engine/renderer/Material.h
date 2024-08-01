@@ -114,7 +114,15 @@ struct Material {
 	bool texturesResident = false;
 	std::vector<Texture*> textures;
 
+	int texturePacks[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+
 	bool operator==( const Material& other ) {
+		for ( uint32_t i = 0; i < 8; i++ ) {
+			if ( texturePacks[i] != other.texturePacks[i] ) { // && texturePacks[i] != -1 && other.texturePacks[i] != -1 ) {
+				return false;
+			}
+		}
+
 		return program == other.program && stateBits == other.stateBits && vbo == other.vbo && ibo == other.ibo
 			&& cullType == other.cullType && usePolygonOffset == other.usePolygonOffset;
 	}
@@ -160,6 +168,15 @@ extern PortalView portalStack[MAX_VIEWS];
 #define SURFACE_COMMAND_BATCH_SIZE 4 // Aligned to 4 components
 #define PORTAL_SURFACE_SIZE 8
 
+#define MAX_CLUSTERS 65536/24
+#define MAX_CLUSTER_TRIANGLES 256
+#define MAX_BASE_TRIANGLES MAX_CLUSTERS * MAX_CLUSTER_TRIANGLES
+#define MAX_VIEWFRAME_TRIANGLES 524288
+#define MAX_FRAME_TRIANGLES 4194304
+#define MAX_MATERIALS 128
+
+#define MAX_CLUSTERS_NEW 65536/4
+
 #define MAX_FRAMES 2
 #define MAX_VIEWFRAMES MAX_VIEWS * MAX_FRAMES // Buffer 2 frames for each view
 
@@ -187,6 +204,15 @@ struct SurfaceDescriptor {
 	uint32_t surfaceCommandIDs[MAX_SURFACE_COMMANDS] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 };
 
+struct ClusterData {
+	uint baseIndexOffset;
+	uint indexOffset;
+	uint entityID;
+	uint padding;
+	BoundingSphere boundingSphere;
+	uint materials[MAX_SURFACE_COMMANDS] = {};
+};
+
 struct SurfaceCommand {
 	uint32_t enabled; // uint because bool in GLSL is always 4 bytes
 	GLIndirectBuffer::GLIndirectCommand drawCommand;
@@ -194,6 +220,16 @@ struct SurfaceCommand {
 
 struct SurfaceCommandBatch {
 	uint32_t materialIDs[4] { 0, 0, 0, 0 };
+};
+
+struct SurfaceType {
+	uint8_t id = 0;
+	uint count = 0;
+	uint materialIDs[16] = {};
+
+	bool operator==( const SurfaceType& other ) {
+		return ( count == other.count ) && !memcmp( materialIDs, other.materialIDs, 16 * sizeof( uint ) );
+	}
 };
 
 class MaterialSystem {
@@ -255,10 +291,19 @@ class MaterialSystem {
 	void StartFrame();
 	void EndFrame();
 
+	void VertexAttribsState( uint32_t stateBits );
+	void VertexAttribPointers( uint32_t attribBits );
+	uint GetTotalVertexCount();
+	void GenerateDrawSurfClusters( drawSurf_t* drawSurf, const uint indexCount, const uint firstIndex,
+								   uint8_t* baseClusters, uint32_t* surfaceTypes, uint32_t* clusterData,
+								   shaderVertex_t* clusterVertexes, uint32_t* materialIDs, const uint totalVertexCount,
+								   uint32_t* clusterIndexes, VBO_t* VBO, IBO_t* IBO );
+
 	void GenerateDepthImages( const int width, const int height, imageParams_t imageParms );
 
 	void AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material );
-	void ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage );
+	void ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint* packIDs, uint& stage,
+		uint& previousMaterialID );
 	void GenerateWorldMaterials();
 	void GenerateWorldMaterialsBuffer();
 	void GenerateWorldCommandBuffer();
@@ -279,6 +324,20 @@ class MaterialSystem {
 	image_t* depthImage;
 	int depthImageLevels;
 
+	uint surfaceTypeLast = 0;
+	std::vector<SurfaceType> clusterSurfaceTypes;
+	uint currentBaseClusterIndex = 0;
+	uint currentBaseCluster = 0;
+	uint currentGlobalCluster = 0;
+	uint currentClusterVertex = 0;
+
+	uint clusterCount = 0;
+	uint clusterTriangles = 0;
+	uint totalTriangles = 0;
+
+	uint totalMaterialCount;
+	vboAttributeLayout_t clusterVertexLayout[ATTR_INDEX_MAX];
+
 	DrawCommand cmd;
 	uint32_t lastCommandID;
 	uint32_t totalDrawSurfs;
@@ -297,6 +356,7 @@ class MaterialSystem {
 	uint32_t nextFrame = 1;
 
 	bool AddPortalSurface( uint32_t viewID, PortalSurface* portalSurfs );
+	uint32_t* clusterTest;
 
 	void RenderMaterial( Material& material, const uint32_t viewID );
 	void UpdateFrameData();
@@ -309,6 +369,25 @@ extern GLBuffer culledCommandsBuffer; // Per viewframe
 extern GLUBO surfaceBatchesUBO; // Global
 extern GLBuffer atomicCommandCountersBuffer; // Per viewframe
 extern GLSSBO portalSurfacesSSBO; // Per viewframe
+
+extern GLBuffer drawCommandBuffer; // Per viewframe
+extern GLSSBO clusterIndexesBuffer; // Global
+extern GLBuffer globalIndexesSSBO; // Per viewframe
+extern GLBuffer materialIDsSSBO; // Per viewframe
+
+extern GLBuffer clustersUBO; // Global
+extern GLUBO clusterSurfaceTypesUBO; // Global
+extern GLSSBO clusterDataSSBO; // Global
+extern GLBuffer culledClustersBuffer; // Per viewframe
+extern GLBuffer atomicMaterialCountersBuffer; // Per viewframe
+extern GLBuffer atomicMaterialCountersBuffer2; // Per viewframe
+extern GLBuffer clusterCountersBuffer; // Per viewframe | Per frame (transformed vertices counters)
+extern GLBuffer clusterWorkgroupCountersBuffer; // Per viewframe
+
+extern GLBuffer clusterVertexesBuffer; // Per frame
+
+extern GLSSBO debugSSBO; // Global
+
 extern MaterialSystem materialSystem;
 
 #endif // MATERIAL_H

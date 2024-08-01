@@ -82,8 +82,67 @@ layout(std430, binding = 5) restrict buffer portalSurfacesSSBO {
 	PortalSurface portalSurfaces[];
 };
 
+layout(std430, binding = 13) writeonly restrict buffer debugSSBO {
+    uvec4 debugSurfaces[];
+};
+
+
+layout(std430, binding = 7) readonly restrict buffer clusterIndexesSSBO {
+    int clusterIndexes[];
+};
+
+layout(std430, binding = 8) writeonly restrict buffer globalIndexesSSBO {
+    int globalIndexes[];
+};
+
+layout(std430, binding = 9) writeonly restrict buffer materialIDsSSBO {
+    uint materialIDs[];
+};
+
+struct ClusterData {
+    uint baseIndexOffset;
+    uint indexOffset;
+    uint entityID;
+    uint padding;
+    float x;
+    float y;
+    float z;
+    float radius;
+    uint materials[MAX_SURFACE_COMMANDS];
+};
+
+layout(std430, binding = 10) readonly restrict buffer clusterDataSSBO {
+    ClusterData clusterData[];
+};
+
+layout(std430, binding = 11) coherent buffer culledClustersBuffer {
+    uint culledClusters[];
+};
+
+layout(std430, binding = 12) writeonly restrict buffer clustersVisibilitySSBO {
+    uint clustersVisibility[];
+};
+
+#define MAX_CLUSTERS 65536/24
+
+layout(std140, binding = 1) uniform ub_Clusters {
+    uvec4 clusters[MAX_CLUSTERS];
+};
+
+layout(std140, binding = 2) uniform ub_ClusterSurfaceTypes {
+    uvec4 clusterSurfaceTypes[MAX_CLUSTERS];
+};
+
+#define MAX_MATERIALS 128
+
+layout (binding = 1) uniform atomic_uint atomicMaterialCounters[MAX_MATERIALS * MAX_VIEWS * MAX_FRAMES];
+layout (binding = 3) uniform atomic_uint clusterCounters[MAX_VIEWS * MAX_FRAMES + MAX_FRAMES];
+layout (binding = 5) uniform atomic_uint clusterWorkgroupCounters[MAX_VIEWS * MAX_FRAMES * 3];
+
 uniform uint u_Frame;
 uniform uint u_ViewID;
+uniform uint u_MaxViewFrameTriangles;
+
 uniform uint u_TotalDrawSurfs;
 uniform uint u_SurfaceCommandsOffset;
 uniform vec4 u_Frustum[6]; // xyz - normal, w - distance
@@ -156,16 +215,17 @@ bool CullSurface( in BoundingSphere boundingSphere ) {
 		const int level = int( floor( log2( max( width, height ) ) ) );
 
 		// Coords for the 4 pixels covered by the AABB, adjusted for partially off-screen surfaces as needed
-		vec2 surfaceCoords = vec2( u_ViewWidth >> level, u_ViewHeight >> level );
-		surfaceCoords *= ( boundingBox.xy + boundingBox.zw ) * 0.5;
-		const ivec2 surfaceCoordsFloor = ivec2( clamp( surfaceCoords.x, 0.0, float( u_ViewWidth >> level ) ), clamp( surfaceCoords.y, 0.0, float( u_ViewHeight >> level ) ) );
-		ivec4 depthCoords = ivec4( surfaceCoordsFloor.xy,
-								   surfaceCoordsFloor.x + ( surfaceCoords.x - surfaceCoordsFloor.x >= 0.5 ? 1 : -1 ),
-								   surfaceCoordsFloor.y + ( surfaceCoords.y - surfaceCoordsFloor.y >= 0.5 ? 1 : -1 ) );
-		depthCoords.x = clamp( depthCoords.x, 0, int( ( u_ViewWidth >> level ) - 1 ) );
-		depthCoords.y = clamp( depthCoords.y, 0, int( ( u_ViewHeight >> level ) - 1 ) );
-		depthCoords.z = clamp( depthCoords.z, 0, int( ( u_ViewWidth >> level ) - 1 ) );
-		depthCoords.w = clamp( depthCoords.w, 0, int( ( u_ViewHeight >> level ) - 1 ) );
+        vec2 surfaceCoords = vec2( u_ViewWidth >> level, u_ViewHeight >> level );
+        surfaceCoords *= ( boundingBox.xy + boundingBox.zw ) * 0.5;
+        const ivec2 surfaceCoordsFloor = ivec2( clamp( surfaceCoords.x, 0.0, float( u_ViewWidth >> level ) ), clamp( surfaceCoords.y, 0.0, float( u_ViewHeight >> level ) ) );
+        ivec4 depthCoords = ivec4( surfaceCoordsFloor.xy,
+                                   surfaceCoordsFloor.x + ( surfaceCoords.x - surfaceCoordsFloor.x >= 0.5 ? 1 : -1 ),
+                                   surfaceCoordsFloor.y + ( surfaceCoords.y - surfaceCoordsFloor.y >= 0.5 ? 1 : -1 ) );
+
+        depthCoords.x = clamp( depthCoords.x, 0, int( ( u_ViewWidth >> level ) - 1 ) );
+        depthCoords.y = clamp( depthCoords.y, 0, int( ( u_ViewHeight >> level ) - 1 ) );
+        depthCoords.z = clamp( depthCoords.z, 0, int( ( u_ViewWidth >> level ) - 1 ) );
+        depthCoords.w = clamp( depthCoords.w, 0, int( ( u_ViewHeight >> level ) - 1 ) );
 
 		vec4 depthValues;
 		depthValues.x = texelFetch( depthImage, depthCoords.xy, level ).r;
@@ -191,13 +251,156 @@ void ProcessSurfaceCommands( const in SurfaceDescriptor surface, const in bool e
 	}
 }
 
+uvec2 uintIDToUvec4( const in uint id ) {
+    return uvec2( id / 4, id % 4 );
+}
+
+struct Cluster {
+    uint triangleCount;
+    // uint materialCount;
+    uint indexOffset;
+    uint surfaceTypeID;
+};
+
+/*                  sfTypeID|sfTypeID|sfTypeID|sfTypeID
+   clusters - uint [________|________|________|________] */
+Cluster UnpackCluster( const in uint clusterID ) {
+    Cluster cluster;
+
+    uvec2 clusterIDs = uintIDToUvec4( clusterID / 4 );
+    uint surfaceTypeID = clusters[clusterIDs.x][clusterIDs.y];
+
+    cluster.surfaceTypeID = ( surfaceTypeID >> (
+                                                 ( 3 - ( clusterID % 4 ) ) * 8
+                                               ) ) & 0x7F;
+    // cluster.indexOffset = clusterData[clusterID * 3];
+    ClusterData data = clusterData[clusterID];
+    // cluster.indexOffset = cluster.indexOffset & 0xFFFFFF;
+    cluster.indexOffset = data.baseIndexOffset;
+    // cluster.triangleCount = ( cluster.indexOffset >> 24 ) + 1; // Clusters have at least 1 triangle, so we can save 1 bit
+    cluster.triangleCount = ( ( data.entityID >> 22 ) & 0xFF ) + 1; // Clusters have at least 1 triangle, so we can save 1 bit
+
+    // cluster.indexOffset = cluster.indexOffset & 0xFFFFFF;
+    return cluster;
+}
+
+void ProcessCluster( const in Cluster cluster ) {
+    uvec2 clusterIDs = uintIDToUvec4( cluster.surfaceTypeID );
+    const uint materialCount = clusterSurfaceTypes[clusterIDs.x][clusterIDs.y];
+    const uint debugID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
+                            + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x
+                            + gl_GlobalInvocationID.x;
+    for( uint i = 1; i <= materialCount; i++ ) {
+        clusterIDs = uintIDToUvec4( cluster.surfaceTypeID + i );
+        const uint materialID = clusterSurfaceTypes[clusterIDs.x][clusterIDs.y];
+        atomicCounterAddARB( atomicMaterialCounters[( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_MATERIALS + materialID], cluster.triangleCount );
+        /* if( i <= 4) {
+            debugSurfaces[debugID * 5 + 1][i - 1] = materialID;
+        } */
+    }
+}
+
+#define MAX_CLUSTERS_NEW 65536 / 4
+
+shared uint localClusters[64];
+shared bool visibleClusters[64];
+
+void PackClusters( const in uint globalID ) {
+    uint count = 0;
+    uint firstClusterID;
+    for( uint i = 0; i < 64; i++ ) {
+        if( visibleClusters[i] ) {
+            if( count == 0 ) {
+                firstClusterID = i;
+            }
+            count++;
+        }
+    }
+    
+    const uint localInvocationCount = min( 64, u_TotalDrawSurfs - globalID );
+    /* const uint localGroupCount = ( u_TotalDrawSurfs - globalID ) % 4 == 0 ? ( u_TotalDrawSurfs - globalID ) / 4
+                                                                         : ( u_TotalDrawSurfs - globalID ) / 4 + 1;
+    for( uint i = 0; i < min( 16, localGroupCount ); i++ ) {
+        const uint clusterData = ( localClusters[i * 4] + ( uint( visibleClusters[i * 4] ) << 7 ) ) << 24
+                               + ( i * 4 + 1 < localInvocationCount ) ?
+                                 ( localClusters[i * 4 + 1] + ( uint( visibleClusters[i * 4 + 1] ) << 7 ) ) << 16 : 0
+                               + ( i * 4 + 1 < localInvocationCount ) ?
+                                 ( localClusters[i * 4 + 2] + ( uint( visibleClusters[i * 4 + 2] ) << 7 ) ) << 8 : 0
+                               + ( i * 4 + 1 < localInvocationCount ) ?
+                                 ( localClusters[i * 4 + 3] + ( uint( visibleClusters[i * 4 + 3] ) << 7 ) ) : 0;
+        clustersVisibility[globalID / 4 + i] = clusterData;
+    } */
+
+    // 
+    int shift = 24;
+    uint j = 0;
+    uint data = 0;
+    while( j < localInvocationCount ) {
+        data += ( localClusters[j] + ( uint( visibleClusters[j] ) << 7 ) ) << shift;
+        shift -= 8;
+        if( shift < 0 ) {
+            clustersVisibility[( globalID + j ) / 4] = data;
+            data = 0;
+            shift = 24;
+        }
+        j++;
+    }
+
+    // debugSurfaces[globalID * 5 + u_Frame * 5 + 2].xy = uvec2( u_Frame, count );
+    if( count == 0 ) {
+        return;
+    }
+
+    const uint culledClusterID = atomicCounterAddARB( clusterCounters[( MAX_VIEWS + 1 ) * u_Frame + u_ViewID], count );
+    const uint workgroupCount = atomicCounter( clusterWorkgroupCounters[( MAX_VIEWS * u_Frame + u_ViewID ) * 3] );
+    if( culledClusterID + count > workgroupCount * 64 ) {
+        atomicCounterIncrement( clusterWorkgroupCounters[( MAX_VIEWS * u_Frame + u_ViewID ) * 3] );
+    }
+
+    uint id = 0;
+    for( uint i = 0; i < 64 && id < count; i++ ) {
+        if( visibleClusters[i] ) {
+            culledClusters[culledClusterID + id + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] = globalID + i;
+            id++;
+        }
+    }
+
+    /* uint offset = 0;
+    if( ( culledClusterID & 1 ) == 1 ) {
+        const uint data = culledClusters[culledClusterID / 2 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] & 0xFFFF0000;
+        culledClusters[culledClusterID / 2 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] = data + globalID + firstClusterID;
+        visibleClusters[firstClusterID] = false;
+        count--;
+        offset = 1;
+    }
+
+    uint id = 0;
+    uint clusterData = 0;
+    bool bitShift = true;
+    for( uint i = 0; i < 64 && id < count; i++ ) {
+        if( visibleClusters[i] ) {
+            clusterData += bitShift ? ( globalID + i ) << 16 : globalID + i;
+            if( !bitShift ) {
+                culledClusters[culledClusterID + id / 2 + offset + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] = clusterData;
+                clusterData = 0;
+            }
+            bitShift = !bitShift;
+            id++;
+        }
+    }
+    if( count - id == 1 ) {
+        clusterData += culledClusters[culledClusterID + id / 2 + offset + 1 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] & 0xFFFF;
+        culledClusters[culledClusterID + id / 2 + 1 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] = clusterData;
+    } */
+}
+
 void main() {
 	const uint globalGroupID = gl_WorkGroupID.z * gl_NumWorkGroups.x * gl_NumWorkGroups.y
 							 + gl_WorkGroupID.y * gl_NumWorkGroups.x
 							 + gl_WorkGroupID.x;
-	const uint globalInvocationID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
-								  + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x
-								  + gl_GlobalInvocationID.x;
+    const uint globalInvocationID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
+                                  + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x
+                                  + gl_GlobalInvocationID.x;
 
 	// Portals
 	const uint portalID = globalInvocationID - u_FirstPortalGroup * 64;
@@ -211,11 +414,33 @@ void main() {
 	}
 
 	// Regular surfaces
-	if( globalInvocationID >= u_TotalDrawSurfs ) {
-		return;
-	}
-	SurfaceDescriptor surface = surfaces[globalInvocationID];
-	bool culled = CullSurface( surface.boundingSphere );
+    if( globalInvocationID >= u_TotalDrawSurfs ) {
+        visibleClusters[gl_LocalInvocationIndex] = false;
+        return;
+    }
+    // SurfaceDescriptor surface = surfaces[globalInvocationID];
+    const ClusterData data = clusterData[globalInvocationID];
+    BoundingSphere surface;
+    surface.origin = vec3( data.x, data.y, data.z );
+    surface.radius = data.radius;
+    const bool culled = CullSurface( surface );
 
-	ProcessSurfaceCommands( surface, !culled );
+    Cluster cluster = UnpackCluster( globalInvocationID );
+    // debugSurfaces[globalInvocationID * 5] = uvec4( globalInvocationID, cluster.triangleCount, cluster.indexOffset, cluster.surfaceTypeID );
+
+    localClusters[gl_LocalInvocationIndex] = cluster.surfaceTypeID;
+    if( !culled ) {
+        ProcessCluster( cluster );
+        visibleClusters[gl_LocalInvocationIndex] = true;
+    } else {
+        visibleClusters[gl_LocalInvocationIndex] = false;
+    }
+
+    // ProcessSurfaceCommands( surface, !culled );
+
+    barrier();
+    if( gl_LocalInvocationIndex == 0 ) {
+        PackClusters( globalInvocationID );
+    }
+    memoryBarrier();
 }

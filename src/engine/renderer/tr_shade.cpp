@@ -830,6 +830,9 @@ static void Render_generic2D( shaderStage_t *pStage )
 
 	// bind u_ColorMap
 	gl_generic2DShader->SetUniform_ColorMapBindless( BindAnimatedImage( 0, &pStage->bundle[TB_COLORMAP] ) );
+	if ( r_texturePacks.Get() ) {
+		gl_generic2DShader->SetUniform_ColorMapModifier( tr.currentImage->texturePackModifier );
+	}
 	gl_generic2DShader->SetUniform_TextureMatrix( tess.svars.texMatrices[ TB_COLORMAP ] );
 
 	if ( glConfig2.depthClampAvailable )
@@ -940,10 +943,18 @@ void Render_generic3D( shaderStage_t *pStage )
 		gl_genericShader->SetUniform_ColorMapBindless(
 			GL_BindToTMU( 0, GetLightMap() )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_genericShader->SetUniform_ColorMapModifier( GetLightMap()->texturePackModifier );
+		}
 	}
 	else
 	{
 		gl_genericShader->SetUniform_ColorMapBindless( BindAnimatedImage( 0, &pStage->bundle[TB_COLORMAP] ) );
+
+		if ( r_texturePacks.Get() ) {
+			gl_genericShader->SetUniform_ColorMapModifier( pStage->bundle[TB_COLORMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	gl_genericShader->SetUniform_TextureMatrix( tess.svars.texMatrices[ TB_COLORMAP ] );
@@ -1254,6 +1265,10 @@ void Render_lightMapping( shaderStage_t *pStage )
 			gl_lightMappingShader->SetUniform_HeightMapBindless(
 				GL_BindToTMU( BIND_HEIGHTMAP, pStage->bundle[TB_HEIGHTMAP].image[0] )
 			);
+
+			if ( r_texturePacks.Get() ) {
+				gl_lightMappingShader->SetUniform_HeightMapModifier( pStage->bundle[TB_HEIGHTMAP].image[0]->texturePackModifier );
+			}
 		}
 	}
 
@@ -1261,6 +1276,10 @@ void Render_lightMapping( shaderStage_t *pStage )
 	gl_lightMappingShader->SetUniform_DiffuseMapBindless(
 		GL_BindToTMU( BIND_DIFFUSEMAP, pStage->bundle[TB_DIFFUSEMAP].image[0] )
 	);
+
+	if ( r_texturePacks.Get() ) {
+		gl_lightMappingShader->SetUniform_DiffuseMapModifier( pStage->bundle[TB_DIFFUSEMAP].image[0]->texturePackModifier );
+	}
 
 	if ( pStage->type != stageType_t::ST_LIGHTMAP )
 	{
@@ -1273,6 +1292,10 @@ void Render_lightMapping( shaderStage_t *pStage )
 		gl_lightMappingShader->SetUniform_NormalMapBindless(
 			GL_BindToTMU( BIND_NORMALMAP, pStage->bundle[TB_NORMALMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShader->SetUniform_NormalMapModifier( pStage->bundle[TB_NORMALMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	// bind u_NormalScale
@@ -1290,6 +1313,10 @@ void Render_lightMapping( shaderStage_t *pStage )
 		gl_lightMappingShader->SetUniform_MaterialMapBindless(
 			GL_BindToTMU( BIND_MATERIALMAP, pStage->bundle[TB_MATERIALMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShader->SetUniform_MaterialMapModifier( pStage->bundle[TB_MATERIALMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	if ( pStage->enableSpecularMapping )
@@ -1413,6 +1440,10 @@ void Render_lightMapping( shaderStage_t *pStage )
 		gl_lightMappingShader->SetUniform_LightMapBindless(
 			GL_BindToTMU( BIND_LIGHTMAP, lightmap )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShader->SetUniform_LightMapModifier( lightmap->texturePackModifier );
+		}
 	} else {
 		gl_lightMappingShader->SetUniform_LightGrid1Bindless( GL_BindToTMU( BIND_LIGHTMAP, lightmap ) );
 	}
@@ -1422,6 +1453,10 @@ void Render_lightMapping( shaderStage_t *pStage )
 		gl_lightMappingShader->SetUniform_DeluxeMapBindless(
 			GL_BindToTMU( BIND_DELUXEMAP, deluxemap )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShader->SetUniform_DeluxeMapModifier( deluxemap->texturePackModifier );
+		}
 	} else {
 		gl_lightMappingShader->SetUniform_LightGrid2Bindless( GL_BindToTMU( BIND_DELUXEMAP, deluxemap ) );
 	}
@@ -1432,6 +1467,10 @@ void Render_lightMapping( shaderStage_t *pStage )
 		gl_lightMappingShader->SetUniform_GlowMapBindless(
 			GL_BindToTMU( BIND_GLOWMAP, pStage->bundle[TB_GLOWMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShader->SetUniform_GlowMapModifier( pStage->bundle[TB_GLOWMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	gl_lightMappingShader->SetRequiredVertexPointers();
@@ -2339,6 +2378,10 @@ void Render_heatHaze( shaderStage_t *pStage )
 		GL_BindToTMU( 0, pStage->bundle[TB_NORMALMAP].image[0] ) 
 	);
 
+	if ( r_texturePacks.Get() ) {
+		gl_heatHazeShader->SetUniform_NormalMapModifier( pStage->bundle[TB_NORMALMAP].image[0]->texturePackModifier );
+	}
+
 	if ( pStage->enableNormalMapping )
 	{
 		gl_heatHazeShader->SetUniform_TextureMatrix( tess.svars.texMatrices[ TB_NORMALMAP ] );
@@ -2581,6 +2624,10 @@ static void Render_fog()
 	gl_fogQuake3Shader->SetUniform_ColorMapBindless(
 		GL_BindToTMU( 0, tr.fogImage ) 
 	);
+
+	if ( r_texturePacks.Get() ) {
+		gl_fogQuake3Shader->SetUniform_ColorMapModifier( tr.fogImage->texturePackModifier );
+	}
 
 	gl_fogQuake3Shader->SetRequiredVertexPointers();
 

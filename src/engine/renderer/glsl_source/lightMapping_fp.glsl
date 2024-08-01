@@ -27,9 +27,18 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define LIGHTMAPPING_GLSL
 
-uniform sampler2D	u_DiffuseMap;
-uniform sampler2D	u_MaterialMap;
-uniform sampler2D	u_GlowMap;
+#if defined(r_texturePacks)
+	uniform sampler2DArray u_DiffuseMap;
+	uniform vec3 u_DiffuseMapModifier;
+	uniform sampler2DArray u_MaterialMap;
+	uniform vec3 u_MaterialMapModifier;
+	uniform sampler2DArray u_GlowMap;
+	uniform vec3 u_GlowMapModifier;
+#else
+	uniform sampler2D u_DiffuseMap;
+	uniform sampler2D u_MaterialMap;
+	uniform sampler2D u_GlowMap;
+#endif
 
 uniform float		u_AlphaThreshold;
 uniform float u_InverseLightFactor;
@@ -42,10 +51,17 @@ IN(smooth) vec3		var_Tangent;
 IN(smooth) vec3		var_Binormal;
 IN(smooth) vec3		var_Normal;
 
-uniform sampler2D u_LightMap;
-uniform sampler3D u_LightGrid1;
+#if defined(r_texturePacks)
+	uniform sampler2DArray u_LightMap;
+	uniform vec3 u_LightMapModifier;
+	uniform sampler2DArray u_DeluxeMap;
+	uniform vec3 u_DeluxeMapModifier;
+#else
+	uniform sampler2D u_LightMap;
+	uniform sampler2D u_DeluxeMap;
+#endif
 
-uniform sampler2D u_DeluxeMap;
+uniform sampler3D u_LightGrid1;
 uniform sampler3D u_LightGrid2;
 
 #if defined(USE_LIGHT_MAPPING) || defined(USE_DELUXE_MAPPING)
@@ -89,15 +105,19 @@ void main()
 	#endif
 
 	// Compute the diffuse term.
+#if defined(r_texturePacks)
+	vec4 diffuse = texture2D(u_DiffuseMap, vec3( texCoords * u_DiffuseMapModifier.xy, u_DiffuseMapModifier.z ));
+#else
 	vec4 diffuse = texture2D(u_DiffuseMap, texCoords);
+#endif
 
 	// Apply vertex blend operation like: alphaGen vertex.
 	diffuse *= var_Color;
 
 	if(abs(diffuse.a + u_AlphaThreshold) <= 1.0)
 	{
-		discard;
-		return;
+		// discard;
+		// return;
 	}
 
 	// Compute normal in world space from normalmap.
@@ -108,7 +128,11 @@ void main()
 	#endif // !r_normalMapping
 
 	// Compute the material term.
+#if defined(r_texturePacks)
+	vec4 material = texture2D(u_MaterialMap, vec3( texCoords * u_MaterialMapModifier.xy, u_MaterialMapModifier.z ));
+#else
 	vec4 material = texture2D(u_MaterialMap, texCoords);
+#endif
 
 	// Compute final color.
 	vec4 color;
@@ -121,7 +145,11 @@ void main()
 
 	#if defined(USE_DELUXE_MAPPING)
 		// Compute light direction in world space from deluxe map.
-		vec4 deluxe = texture2D(u_DeluxeMap, var_TexLight);
+		#if defined(r_texturePacks)
+			vec4 deluxe = texture2D(u_DeluxeMap, vec3( var_TexLight * u_DeluxeMapModifier.xy, u_DeluxeMapModifier.z ));
+		#else
+			vec4 deluxe = texture2D(u_DeluxeMap, var_TexLight);
+		#endif
 		vec3 lightDir = normalize(2.0 * deluxe.xyz - 1.0);
 	#elif defined(USE_GRID_DELUXE_MAPPING)
 		// Compute light direction in world space from light grid.
@@ -131,7 +159,11 @@ void main()
 
 	#if defined(USE_LIGHT_MAPPING)
 		// Compute light color from world space lightmap.
-		vec3 lightColor = texture2D(u_LightMap, var_TexLight).rgb;
+		#if defined(r_texturePacks)
+			vec3 lightColor = texture2D(u_LightMap, vec3( var_TexLight * u_LightMapModifier.xy, u_LightMapModifier.z )).rgb;
+		#else
+			vec3 lightColor = texture2D(u_LightMap, var_TexLight).rgb;
+		#endif
 
 		color.rgb = vec3(0.0);
 	#else
@@ -205,7 +237,11 @@ void main()
 
 	#if defined(r_glowMapping)
 		// Blend glow map.
+#if defined(r_texturePacks)
+		vec3 glow = texture2D(u_GlowMap, vec3( texCoords * u_GlowMapModifier.xy, u_GlowMapModifier.z )).rgb;
+#else
 		vec3 glow = texture2D(u_GlowMap, texCoords).rgb;
+#endif
 
 		/* HACK: use sign to know if there is a light or not, and
 		then if it will receive overbright multiplication or not. */

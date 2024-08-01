@@ -46,6 +46,23 @@ GLSSBO portalSurfacesSSBO( "portalSurfaces", 5, GL_MAP_READ_BIT | GL_MAP_PERSIST
 
 PortalView portalStack[MAX_VIEWS];
 
+GLBuffer drawCommandBuffer( "drawCommands", 6, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLSSBO clusterIndexesBuffer( "clusterIndexes", 7, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer globalIndexesSSBO( "globalIndexes", 8, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer materialIDsSSBO( "materialIDs", 9, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+
+GLBuffer clustersUBO( "clusters", 1, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLUBO clusterSurfaceTypesUBO( "clusterSurfaceTypes", 2, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLSSBO clusterDataSSBO( "clusterData", 10, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLBuffer culledClustersBuffer( "culledClusters", 11, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer atomicMaterialCountersBuffer( "atomicMaterialCounters", 1, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer atomicMaterialCountersBuffer2( "atomicMaterialCounters2", 2, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer clusterCountersBuffer( "clusterCounters", 3, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer clusterWorkgroupCountersBuffer( "clusterWorkgroupCounters", 5, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer clusterVertexesBuffer( "clusterVertexes", 12, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+
+GLSSBO debugSSBO( "debugSurfaces", 13, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+
 MaterialSystem materialSystem;
 
 static void ComputeDynamics( shaderStage_t* pStage ) {
@@ -254,8 +271,16 @@ static void UpdateSurfaceDataGeneric( uint32_t* materials, Material& material, d
 		gl_genericShaderMaterial->SetUniform_ColorMapBindless(
 			GL_BindToTMU( 0, GetLightMap( drawSurf ) )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_genericShaderMaterial->SetUniform_ColorMapModifier( GetLightMap( drawSurf )->texturePackModifier );
+		}
 	} else {
 		gl_genericShaderMaterial->SetUniform_ColorMapBindless( BindAnimatedImage( 0, &pStage->bundle[TB_COLORMAP] ) );
+
+		if ( r_texturePacks.Get() ) {
+			gl_genericShaderMaterial->SetUniform_ColorMapModifier( tr.currentImage->texturePackModifier );
+		}
 	}
 
 	bool needDepthMap = pStage->hasDepthFade || shader->autoSpriteMode;
@@ -430,6 +455,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 			gl_lightMappingShaderMaterial->SetUniform_HeightMapBindless(
 				GL_BindToTMU( BIND_HEIGHTMAP, pStage->bundle[TB_HEIGHTMAP].image[0] )
 			);
+
+			if ( r_texturePacks.Get() ) {
+				gl_lightMappingShaderMaterial->SetUniform_HeightMapModifier( pStage->bundle[TB_HEIGHTMAP].image[0]->texturePackModifier );
+			}
 		}
 	}
 
@@ -437,6 +466,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 	gl_lightMappingShaderMaterial->SetUniform_DiffuseMapBindless(
 		GL_BindToTMU( BIND_DIFFUSEMAP, pStage->bundle[TB_DIFFUSEMAP].image[0] )
 	);
+
+	if ( r_texturePacks.Get() ) {
+		gl_lightMappingShaderMaterial->SetUniform_DiffuseMapModifier( pStage->bundle[TB_DIFFUSEMAP].image[0]->texturePackModifier );
+	}
 
 	if ( pStage->type != stageType_t::ST_LIGHTMAP ) {
 		Tess_ComputeTexMatrices( pStage );
@@ -448,6 +481,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_NormalMapBindless(
 			GL_BindToTMU( BIND_NORMALMAP, pStage->bundle[TB_NORMALMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_NormalMapModifier( pStage->bundle[TB_NORMALMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	// bind u_NormalScale
@@ -463,6 +500,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_MaterialMapBindless(
 			GL_BindToTMU( BIND_MATERIALMAP, pStage->bundle[TB_MATERIALMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_MaterialMapModifier( pStage->bundle[TB_MATERIALMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	if ( pStage->enableSpecularMapping ) {
@@ -561,6 +602,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_LightMapBindless(
 			GL_BindToTMU( BIND_LIGHTMAP, lightmap )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_LightMapModifier( lightmap->texturePackModifier );
+		}
 	} else {
 		gl_lightMappingShaderMaterial->SetUniform_LightGrid1Bindless( GL_BindToTMU( BIND_LIGHTMAP, lightmap ) );
 	}
@@ -570,6 +615,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_DeluxeMapBindless(
 			GL_BindToTMU( BIND_DELUXEMAP, deluxemap )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_DeluxeMapModifier( deluxemap->texturePackModifier );
+		}
 	} else {
 		gl_lightMappingShaderMaterial->SetUniform_LightGrid2Bindless( GL_BindToTMU( BIND_DELUXEMAP, deluxemap ) );
 	}
@@ -579,6 +628,10 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_GlowMapBindless(
 			GL_BindToTMU( BIND_GLOWMAP, pStage->bundle[TB_GLOWMAP].image[0] )
 		);
+
+		if ( r_texturePacks.Get() ) {
+			gl_lightMappingShaderMaterial->SetUniform_GlowMapModifier( pStage->bundle[TB_GLOWMAP].image[0]->texturePackModifier );
+		}
 	}
 
 	gl_lightMappingShaderMaterial->WriteUniformsToBuffer( materials );
@@ -657,6 +710,10 @@ static void UpdateSurfaceDataSkybox( uint32_t* materials, Material& material, dr
 		GL_BindToTMU( 0, pStage->bundle[TB_COLORMAP].image[0] )
 	);
 
+	if ( r_texturePacks.Get() ) {
+		gl_skyboxShaderMaterial->SetUniform_CloudMapModifier( pStage->bundle[TB_COLORMAP].image[0]->texturePackModifier );
+	}
+
 	// u_AlphaThreshold
 	gl_skyboxShaderMaterial->SetUniform_AlphaTest( GLS_ATEST_NONE );
 
@@ -704,6 +761,10 @@ static void UpdateSurfaceDataHeatHaze( uint32_t* materials, Material& material, 
 	gl_heatHazeShaderMaterial->SetUniform_NormalMapBindless(
 		GL_BindToTMU( 0, pStage->bundle[TB_NORMALMAP].image[0] )
 	);
+
+	if ( r_texturePacks.Get() ) {
+		gl_heatHazeShader->SetUniform_NormalMapModifier( pStage->bundle[TB_NORMALMAP].image[0]->texturePackModifier );
+	}
 
 	float deformMagnitude = RB_EvalExpression( &pStage->deformMagnitudeExp, 1.0 );
 	gl_heatHazeShaderMaterial->SetUniform_DeformMagnitude( deformMagnitude );
@@ -911,8 +972,6 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 						hasDynamicStages = true;
 					}
 
-					AddStageTextures( drawSurf, pStage, &material );
-
 					switch ( pStage->type ) {
 						case stageType_t::ST_COLORMAP:
 							// generic2D
@@ -993,6 +1052,45 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 	}
 
 	materialsSSBO.UnmapBuffer();
+}
+
+static void SetAttributeLayoutsStatic( vboAttributeLayout_t* attribs ) {
+	const GLsizei sizeShaderVertex = sizeof( shaderVertex_t );
+
+	attribs[ATTR_INDEX_POSITION].numComponents = 3;
+	attribs[ATTR_INDEX_POSITION].componentType = GL_FLOAT;
+	attribs[ATTR_INDEX_POSITION].normalize = GL_FALSE;
+	attribs[ATTR_INDEX_POSITION].ofs = offsetof( shaderVertex_t, xyz );
+	attribs[ATTR_INDEX_POSITION].stride = sizeShaderVertex;
+	attribs[ATTR_INDEX_POSITION].frameOffset = 0;
+
+	attribs[ATTR_INDEX_COLOR].numComponents = 4;
+	attribs[ATTR_INDEX_COLOR].componentType = GL_UNSIGNED_BYTE;
+	attribs[ATTR_INDEX_COLOR].normalize = GL_TRUE;
+	attribs[ATTR_INDEX_COLOR].ofs = offsetof( shaderVertex_t, color );
+	attribs[ATTR_INDEX_COLOR].stride = sizeShaderVertex;
+	attribs[ATTR_INDEX_COLOR].frameOffset = 0;
+
+	attribs[ATTR_INDEX_QTANGENT].numComponents = 4;
+	attribs[ATTR_INDEX_QTANGENT].componentType = GL_SHORT;
+	attribs[ATTR_INDEX_QTANGENT].normalize = GL_TRUE;
+	attribs[ATTR_INDEX_QTANGENT].ofs = offsetof( shaderVertex_t, qtangents );
+	attribs[ATTR_INDEX_QTANGENT].stride = sizeShaderVertex;
+	attribs[ATTR_INDEX_QTANGENT].frameOffset = 0;
+
+	attribs[ATTR_INDEX_TEXCOORD].numComponents = 4;
+	attribs[ATTR_INDEX_TEXCOORD].componentType = GL_HALF_FLOAT;
+	attribs[ATTR_INDEX_TEXCOORD].normalize = GL_FALSE;
+	attribs[ATTR_INDEX_TEXCOORD].ofs = offsetof( shaderVertex_t, texCoords );
+	attribs[ATTR_INDEX_TEXCOORD].stride = sizeShaderVertex;
+	attribs[ATTR_INDEX_TEXCOORD].frameOffset = 0;
+
+	attribs[ATTR_INDEX_ORIENTATION].numComponents = 4;
+	attribs[ATTR_INDEX_ORIENTATION].componentType = GL_HALF_FLOAT;
+	attribs[ATTR_INDEX_ORIENTATION].normalize = GL_FALSE;
+	attribs[ATTR_INDEX_ORIENTATION].ofs = offsetof( shaderVertex_t, spriteOrientation );
+	attribs[ATTR_INDEX_ORIENTATION].stride = sizeShaderVertex;
+	attribs[ATTR_INDEX_ORIENTATION].frameOffset = 0;
 }
 
 // This generates the buffer GLIndirect commands
@@ -1088,6 +1186,94 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	uint32_t* atomicCommandCounters = (uint32_t*) atomicCommandCountersBuffer.GetData();
 	memset( atomicCommandCounters, 0, MAX_COMMAND_COUNTERS * MAX_VIEWFRAMES * sizeof(uint32_t) );
 
+	//
+
+	drawCommandBuffer.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_MATERIALS * MAX_VIEWFRAMES * INDIRECT_COMMAND_SIZE * sizeof( uint32_t ),
+				  nullptr, GL_DYNAMIC_COPY );
+	drawCommandBuffer.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+
+	clusterIndexesBuffer.BindBuffer();
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_BASE_TRIANGLES * 3 * sizeof( uint32_t ),
+		nullptr, GL_STATIC_DRAW );
+	uint32_t* clusterIndexes = clusterIndexesBuffer.MapBufferRange( MAX_BASE_TRIANGLES * 3 );
+
+	globalIndexesSSBO.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_VIEWFRAME_TRIANGLES * MAX_VIEWFRAMES * 3 * sizeof( uint32_t ),
+		nullptr, GL_DYNAMIC_COPY );
+	globalIndexesSSBO.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+
+	materialIDsSSBO.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_VIEWFRAME_TRIANGLES * MAX_VIEWFRAMES * 3 * sizeof( uint32_t ),
+		nullptr, GL_STATIC_DRAW );
+	uint32_t* materialIDs = materialIDsSSBO.MapBufferRange( GL_SHADER_STORAGE_BUFFER, MAX_VIEWFRAME_TRIANGLES * MAX_VIEWFRAMES * 3 );
+
+	clustersUBO.BindBuffer( GL_UNIFORM_BUFFER );
+	clustersUBO.BufferStorage( GL_UNIFORM_BUFFER, MAX_CLUSTERS_NEW, 1, nullptr );
+	clustersUBO.MapAll( GL_UNIFORM_BUFFER );
+	uint8_t* baseClusters = ( uint8_t* ) clustersUBO.GetData();
+	memset( baseClusters, 0, MAX_CLUSTERS_NEW * sizeof( uint32_t ) );
+
+	clusterSurfaceTypesUBO.BindBuffer();
+	clusterSurfaceTypesUBO.BufferStorage( MAX_CLUSTERS_NEW, 1, nullptr );
+	clusterSurfaceTypesUBO.MapAll();
+	uint32_t* surfaceTypes = ( uint32_t* ) clusterSurfaceTypesUBO.GetData();
+	memset( surfaceTypes, 0, MAX_CLUSTERS_NEW * sizeof( uint32_t ) );
+
+	clusterDataSSBO.BindBuffer();
+	clusterDataSSBO.BufferStorage( MAX_CLUSTERS_NEW * ( 8 + maxStages ), 1, nullptr );
+	clusterDataSSBO.MapAll();
+	uint32_t* clusterData = clusterDataSSBO.GetData();
+	memset( clusterData, 0, MAX_CLUSTERS_NEW * ( 8 + maxStages ) * sizeof( uint32_t ) );
+
+	culledClustersBuffer.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_CLUSTERS_NEW * MAX_VIEWFRAMES * sizeof( uint32_t ),
+		nullptr, GL_DYNAMIC_COPY );
+	culledClustersBuffer.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+
+	atomicMaterialCountersBuffer.BindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+	glBufferData( GL_ATOMIC_COUNTER_BUFFER, MAX_MATERIALS * MAX_VIEWFRAMES * sizeof( uint32_t ),
+		nullptr, GL_DYNAMIC_COPY );
+	atomicMaterialCountersBuffer.UnBindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+
+	atomicMaterialCountersBuffer2.BindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+	glBufferData( GL_ATOMIC_COUNTER_BUFFER, MAX_MATERIALS * MAX_VIEWFRAMES * sizeof( uint32_t ),
+		nullptr, GL_DYNAMIC_COPY );
+	atomicMaterialCountersBuffer2.UnBindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+
+	clusterCountersBuffer.BindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+	glBufferData( GL_ATOMIC_COUNTER_BUFFER, ( MAX_VIEWFRAMES * 2 + MAX_FRAMES ) * sizeof( uint32_t ),
+		nullptr, GL_DYNAMIC_COPY );
+	clusterCountersBuffer.UnBindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+
+	clusterWorkgroupCountersBuffer.BindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+	glBufferData( GL_ATOMIC_COUNTER_BUFFER, MAX_VIEWFRAMES * 3 * sizeof( uint32_t ),
+		nullptr, GL_DYNAMIC_COPY );
+	clusterWorkgroupCountersBuffer.UnBindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+
+	clusterVertexesBuffer.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	glBufferData( GL_SHADER_STORAGE_BUFFER, MAX_FRAMES * MAX_FRAME_TRIANGLES * 3 * sizeof( shaderVertex_t ),
+		nullptr, GL_STATIC_DRAW );
+	shaderVertex_t* clusterVertexes =
+		(shaderVertex_t*) clusterVertexesBuffer.MapBufferRange( GL_SHADER_STORAGE_BUFFER, MAX_FRAMES * MAX_FRAME_TRIANGLES * 3 * 8 );
+	clusterVertexesBuffer.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
+
+	debugSSBO.GenBuffer();
+	debugSSBO.BindBuffer();
+	glBufferData( GL_SHADER_STORAGE_BUFFER, surfaceDescriptorsCount * 20 * sizeof( uint32_t ),
+		nullptr, GL_STATIC_DRAW );
+	uint32_t* debugSurfaces = debugSSBO.MapBufferRange( surfaceDescriptorsCount * 20 );
+	memset( debugSurfaces, 0, surfaceDescriptorsCount * 20 * sizeof( uint32_t ) );
+	debugSSBO.UnmapBuffer();
+
+	//
+
+	VBO_t* lastVBO = nullptr;
+	IBO_t* lastIBO = nullptr;
+
+	const uint totalVertexCount = GetTotalVertexCount();
+	Log::Warn( "total vertexes: %u", totalVertexCount );
+
 	for ( int i = 0; i < tr.refdef.numDrawSurfs; i++ ) {
 		drawSurf = &tr.refdef.drawSurfs[i];
 		if ( drawSurf->entity != &tr.worldEntity ) {
@@ -1104,15 +1290,15 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			continue;
 		}
 
-		tess.multiDrawPrimitives = 0;
-		tess.numIndexes = 0;
-		tess.numVertexes = 0;
-		tess.attribsSet = 0;
-
 		// Don't add SF_SKIP surfaces
 		if ( *drawSurf->surface == surfaceType_t::SF_SKIP ) {
 			continue;
 		}
+
+		tess.multiDrawPrimitives = 0;
+		tess.numIndexes = 0;
+		tess.numVertexes = 0;
+		tess.attribsSet = 0;
 
 		rb_surfaceTable[Util::ordinal( *( drawSurf->surface ) )]( drawSurf->surface );
 		// Depth prepass surfaces are added as stages to the main surface instead
@@ -1120,11 +1306,35 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			continue;
 		}
 
+		if ( !glState.currentVBO->mapped ) {
+			if ( lastVBO != nullptr && lastVBO->mapped ) {
+				Tess_UnMapVBO( lastVBO );
+			}
+			Tess_MapVBO( glState.currentVBO );
+			lastVBO = glState.currentVBO;
+		}
+		if ( !glState.currentIBO->mapped ) {
+			if ( lastIBO != nullptr && lastIBO->mapped ) {
+				Tess_UnMapIBO( lastIBO );
+			}
+			Tess_MapIBO( glState.currentIBO );
+			lastIBO = glState.currentIBO;
+		}
+
+		shaderVertex_t* verts = ( shaderVertex_t* ) lastVBO->data;
+		glIndex_t* indices = ( glIndex_t* ) lastIBO->data;
+
 		SurfaceDescriptor surface;
 		VectorCopy( ( ( srfGeneric_t* ) drawSurf->surface )->origin, surface.boundingSphere.origin );
 		surface.boundingSphere.radius = ( ( srfGeneric_t* ) drawSurf->surface )->radius;
 
 		const bool depthPrePass = drawSurf->depthSurface != nullptr;
+
+		const Material* material = &materialPacks[drawSurf->materialPackIDs[0]].materials[drawSurf->materialIDs[0]];
+		const GLIndirectBuffer::GLIndirectCommand& drawCmd = material->drawCommands[drawSurf->drawCommandIDs[0]].cmd;
+		GenerateDrawSurfClusters( drawSurf, drawCmd.count, drawCmd.firstIndex,
+								  baseClusters, surfaceTypes, clusterData, clusterVertexes, materialIDs, 
+								  totalVertexCount, clusterIndexes, lastVBO, lastIBO );
 
 		if ( depthPrePass ) {
 			const drawSurf_t* depthDrawSurf = drawSurf->depthSurface;
@@ -1157,9 +1367,26 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		surfaceDescriptors += descriptorSize;
 	}
 
+	Log::Warn( "clusters: %u cluster tris: %u total tris: %u", clusterCount, clusterTriangles, totalTriangles );
+
+	if ( lastVBO != nullptr && lastVBO->mapped ) {
+		Tess_UnMapVBO( lastVBO );
+	}
+	
+	if ( lastIBO != nullptr && lastIBO->mapped ) {
+		Tess_UnMapIBO( lastIBO );
+	}
+
 	for ( int i = 0; i < MAX_VIEWFRAMES; i++ ) {
 		memcpy( surfaceCommands + surfaceCommandsCount * i, surfaceCommands, surfaceCommandsCount * sizeof( SurfaceCommand ) );
 	}
+
+	/* for ( uint i = 0; i < totalVertexCount * totalMaterialCount; i++ ) {
+		Log::Warn( "v %u: %f %f %f m: %u", i, clusterVertexes[i].xyz[0], clusterVertexes[i].xyz[1], clusterVertexes[i].xyz[2],
+				   materialIDs[i] );
+	} */
+
+	SetAttributeLayoutsStatic( clusterVertexLayout );
 
 	surfaceDescriptorsSSBO.BindBuffer();
 	surfaceDescriptorsSSBO.UnmapBuffer();
@@ -1176,7 +1403,248 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	surfaceBatchesUBO.BindBuffer();
 	surfaceBatchesUBO.UnmapBuffer();
 
+	clusterIndexesBuffer.BindBuffer();
+	clusterIndexesBuffer.UnmapBuffer();
+
+	materialIDsSSBO.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	materialIDsSSBO.UnmapBuffer();
+
+	culledClustersBuffer.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	culledClustersBuffer.UnmapBuffer();
+
+	atomicMaterialCountersBuffer.BindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+	atomicMaterialCountersBuffer.UnmapBuffer();
+
+	atomicMaterialCountersBuffer2.BindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+	atomicMaterialCountersBuffer2.UnmapBuffer();
+
+	clusterCountersBuffer.BindBuffer( GL_ATOMIC_COUNTER_BUFFER );
+	clusterCountersBuffer.UnmapBuffer();
+
+	clusterVertexesBuffer.BindBuffer( GL_SHADER_STORAGE_BUFFER );
+	clusterVertexesBuffer.UnmapBuffer();
+
+	Log::Notice( "SurfaceTypes: %u", clusterSurfaceTypes.size() );
+	for ( const SurfaceType& surfaceType : clusterSurfaceTypes ) {
+		std::string surfaceMats = "id: " + std::to_string( surfaceType.id ) + " count: " + std::to_string( surfaceType.count ) + " | ";
+		for ( uint i = 0; i < surfaceType.count; i++ ) {
+			surfaceMats += std::to_string( surfaceType.materialIDs[i] ) + " ";
+		}
+		Log::Notice( surfaceMats );
+	}
+
 	GL_CheckErrors();
+}
+
+uint MaterialSystem::GetTotalVertexCount() {
+	uint minIndex = UINT32_MAX;
+	uint maxIndex = -UINT32_MAX;
+	VBO_t* VBO = nullptr;
+	IBO_t* IBO = nullptr;
+
+	for ( int i = 0; i < tr.refdef.numDrawSurfs; i++ ) {
+		drawSurf_t* drawSurf = &tr.refdef.drawSurfs[i];
+		if ( drawSurf->entity != &tr.worldEntity ) {
+			continue;
+		}
+
+		shader_t* shader = drawSurf->shader;
+		if ( !shader ) {
+			continue;
+		}
+
+		shader = shader->remappedShader ? shader->remappedShader : shader;
+		if ( shader->isSky || shader->isPortal ) {
+			continue;
+		}
+
+		// Don't add SF_SKIP surfaces
+		if ( *drawSurf->surface == surfaceType_t::SF_SKIP ) {
+			continue;
+		}
+
+		tess.multiDrawPrimitives = 0;
+		tess.numIndexes = 0;
+		tess.numVertexes = 0;
+		tess.attribsSet = 0;
+
+		rb_surfaceTable[Util::ordinal( *( drawSurf->surface ) )]( drawSurf->surface );
+
+		// Depth prepass surfaces are added as stages to the main surface instead
+		if ( drawSurf->materialSystemSkip ) {
+			continue;
+		}
+
+		VBO = glState.currentVBO;
+		IBO = glState.currentIBO;
+
+		const Material* material = &materialPacks[drawSurf->materialPackIDs[0]].materials[drawSurf->materialIDs[0]];
+		const GLIndirectBuffer::GLIndirectCommand& drawCmd = material->drawCommands[drawSurf->drawCommandIDs[0]].cmd;
+		const uint indexCount = drawCmd.count;
+		const uint firstIndex = drawCmd.firstIndex;
+
+		totalTriangles += indexCount / 3;
+		// Log::Warn( "drawSurf: %s tris: %u", drawSurf->shader->name, indexCount / 3 );
+
+		uint index = 0;
+		glIndex_t* indexes = IBO->savedData;
+		bool firstCluster = true;
+		shaderVertex_t* vertexes = VBO->shaderVertexData;
+		while ( index < indexCount ) {
+			for ( uint i = 0; i < 3; i++ ) {
+				minIndex = indexes[index + firstIndex + i] < minIndex ? indexes[index + firstIndex + i] : minIndex;
+				maxIndex = indexes[index + firstIndex + i] > maxIndex ? indexes[index + firstIndex + i] : maxIndex;
+			}
+
+			index += 3;
+		}
+	}
+
+	return maxIndex - minIndex + 1;
+}
+
+void MaterialSystem::GenerateDrawSurfClusters( drawSurf_t* drawSurf, const uint indexCount, const uint firstIndex,
+											   uint8_t* baseClusters, uint32_t* surfaceTypes, uint32_t* clusterData,
+											   shaderVertex_t* clusterVertexes, uint32_t* materialIDs, const uint totalVertexCount,
+											   uint32_t* clusterIndexes, VBO_t* VBO, IBO_t* IBO ) {
+	SurfaceType surfaceType;
+
+	const bool depthPrePass = drawSurf->depthSurface != nullptr;
+	const drawSurf_t* depthDrawSurf = drawSurf->depthSurface;
+
+	const Material* material = &materialPacks[drawSurf->materialPackIDs[0]].materials[drawSurf->materialIDs[0]];
+	const GLIndirectBuffer::GLIndirectCommand& drawCmd = material->drawCommands[drawSurf->drawCommandIDs[0]].cmd;
+
+	if ( depthPrePass ) {
+		const Material* material = &materialPacks[depthDrawSurf->materialPackIDs[0]].materials[depthDrawSurf->materialIDs[0]];
+		surfaceType.materialIDs[0] = material->globalID;
+		surfaceType.count++;
+	}
+
+	for ( int i = 0; i < MAX_SHADER_STAGES; i++ ) {
+		if ( drawSurf->initialized[i] ) {
+			surfaceType.materialIDs[i + ( depthPrePass ? 1 : 0 )] =
+				materialPacks[drawSurf->materialPackIDs[i]].materials[drawSurf->materialIDs[i]].globalID;
+			surfaceType.count++;
+		}
+	}
+
+	std::vector<SurfaceType>::iterator it = std::find( clusterSurfaceTypes.begin(), clusterSurfaceTypes.end(), surfaceType );
+
+	uint8_t surfaceTypeID = 0;
+	if ( it == clusterSurfaceTypes.end() ) {
+		surfaceTypeID = surfaceTypeLast;
+		surfaceType.id = surfaceTypeID;
+		clusterSurfaceTypes.emplace_back( surfaceType );
+
+		surfaceTypes[surfaceTypeLast] = surfaceType.count;
+		surfaceTypeLast++;
+		for ( uint i = 0; i < surfaceType.count; i++ ) {
+			surfaceTypes[surfaceTypeLast] = surfaceType.materialIDs[i];
+			surfaceTypeLast++;
+		}
+	} else {
+		surfaceTypeID = it->id;
+	}
+
+	uint index = 0;
+	glIndex_t* indexes = IBO->savedData;
+	bool firstCluster = true;
+	shaderVertex_t* vertexes = VBO->shaderVertexData;
+	while ( index < indexCount ) {
+		uint triangleCount = 0;
+		const uint clusterIndexOffset = currentBaseClusterIndex;
+		BoundingSphere boundingSphere{ 0.0, 0.0, 0.0, 0.0 };
+		vec3_t clusterCenter{ 0.0, 0.0, 0.0 };
+		vec3_t clusterBBoxMin{ FLT_MAX, FLT_MAX, FLT_MAX };
+		vec3_t clusterBBoxMax{ -FLT_MAX, -FLT_MAX, -FLT_MAX };
+		uint mat[16];
+
+		// currentClusterVertex = firstIndex;
+		uint clusterVertexTemp = currentClusterVertex;
+
+		uint minIndex = UINT32_MAX;
+		uint maxIndex = -UINT32_MAX;
+
+		while ( triangleCount < std::min( 256u, ( indexCount - index ) / 3 ) ) {
+			for ( uint i = 0; i < 3; i++ ) {
+				clusterIndexes[currentBaseClusterIndex + i] = indexes[index + firstIndex + i];
+
+				clusterVertexes[indexes[index + firstIndex + i]] = vertexes[indexes[index + firstIndex + i]];
+				minIndex = indexes[index + firstIndex + i] < minIndex ? indexes[index + firstIndex + i] : minIndex;
+				maxIndex = indexes[index + firstIndex + i] > maxIndex ? indexes[index + firstIndex + i] : maxIndex;
+				// currentClusterVertex++;
+
+				VectorMin( clusterBBoxMin, vertexes[indexes[index + firstIndex + i]].xyz, clusterBBoxMin );
+				VectorMax( clusterBBoxMax, vertexes[indexes[index + firstIndex + i]].xyz, clusterBBoxMax );
+			}
+
+			currentBaseClusterIndex += 3;
+			index += 3;
+			triangleCount++;
+		}
+		VectorAdd( clusterBBoxMin, clusterBBoxMax, clusterCenter );
+		VectorScale( clusterCenter, 0.5, clusterCenter );
+		vec3_t tempVec;
+		VectorSubtract( clusterBBoxMax, clusterCenter, tempVec );
+		float radius = VectorLength( tempVec );
+		// Log::Warn( "%f %f %f %f", clusterCenter[0], clusterCenter[1], clusterCenter[2], radius );
+		// Log::Warn( "drawSurf: %s cluster: %u tris: %u", drawSurf->shader->name, clusterCount, triangleCount );
+
+		baseClusters[currentBaseCluster] = surfaceTypeID;
+		ClusterData data;
+		data.baseIndexOffset = clusterIndexOffset; // ( ( triangleCount - 1 ) << 24 ) | clusterIndexOffset;
+		data.indexOffset = 0;
+		data.entityID = ( triangleCount - 1 ) << 22;
+		VectorCopy( clusterCenter, data.boundingSphere.origin );
+		data.boundingSphere.radius = radius;
+
+		if ( depthPrePass ) {
+			const Material* material = &materialPacks[depthDrawSurf->materialPackIDs[0]].materials[depthDrawSurf->materialIDs[0]];
+			data.materials[0] =
+				material->drawCommands[depthDrawSurf->drawCommandIDs[0]].cmd.baseInstance;
+			mat[0] = material->globalID;
+		}
+
+		for ( uint i = 0; i < surfaceType.count - ( depthPrePass ? 1 : 0 ); i++ ) {
+			const Material* material = &materialPacks[drawSurf->materialPackIDs[0]].materials[drawSurf->materialIDs[0]];
+
+			data.materials[i + ( depthPrePass ? 1 : 0 )] =
+				material->drawCommands[drawSurf->drawCommandIDs[0]].cmd.baseInstance;
+			mat[i + ( depthPrePass ? 1 : 0 )] = material->globalID;
+		}
+
+		uint vertexCount = maxIndex - minIndex + 1;
+		for ( uint i = 0; i < surfaceType.count; i++ ) {
+			// memcpy( &clusterVertexes[currentClusterVertex], &clusterVertexes[clusterVertexTemp],
+			// 		vertexCount * sizeof( shaderVertex_t ) );
+			if ( i > 0 ) {
+				memcpy( &clusterVertexes[minIndex + totalVertexCount * mat[i]], &clusterVertexes[minIndex],
+					vertexCount * sizeof( shaderVertex_t ) );
+			}
+
+			for ( uint j = 0; j < vertexCount; j++ ) {
+				materialIDs[minIndex + totalVertexCount * mat[i] + j] = data.materials[i];
+			}
+			data.materials[i] = totalVertexCount * mat[i];
+			currentClusterVertex += vertexCount;
+		}
+		memcpy( &clusterData[currentBaseCluster * ( 8 + maxStages )], &data, ( 8 + maxStages ) * sizeof( uint32_t ) );
+
+		if ( firstCluster ) {
+			drawSurf->baseCluster = currentBaseCluster;
+			firstCluster = false;
+		}
+
+		/* Log::Warn("surfaceType: %u %u %u %u %u", surfaceType.count, surfaceType.materialIDs[0], surfaceType.materialIDs[1], surfaceType.materialIDs[2],
+			surfaceType.materialIDs[3] );
+		Log::Warn( "mat: %u %u %u %u", mat[0], mat[1], mat[2], mat[3] ); */
+
+		drawSurf->clusterCount++;
+		currentBaseCluster++;
+		clusterCount++;
+		clusterTriangles += triangleCount;
+	}
 }
 
 void MaterialSystem::GenerateDepthImages( const int width, const int height, imageParams_t imageParms ) {
@@ -1429,11 +1897,11 @@ static void ProcessMaterialLiquid( Material* material, shaderStage_t* pStage ) {
 	material->program = gl_liquidShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage ) {
+void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint* packIDs, uint& stage,
+						  uint& previousMaterialID ) {
 	Material material;
 
-	uint32_t materialPack = 0;
-	uint32_t previousMaterialID = 0;
+	uint materialPack = 0;
 	if ( shader->sort == Util::ordinal( shaderSort_t::SS_DEPTH ) ) {
 		materialPack = 0;
 	} else if ( shader->sort >= Util::ordinal( shaderSort_t::SS_ENVIRONMENT_FOG )
@@ -1467,6 +1935,8 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 	if ( pStage->texturesDynamic ) {
 		drawSurf->texturesDynamic[stage] = true;
 	}
+
+	AddStageTextures( drawSurf, pStage, &material );
 
 	switch ( pStage->type ) {
 		case stageType_t::ST_COLORMAP:
@@ -1586,6 +2056,7 @@ void MaterialSystem::GenerateWorldMaterials() {
 	drawSurf_t* drawSurf;
 	totalDrawSurfs = 0;
 
+	uint32_t previousMaterialID = 0;
 	uint32_t packIDs[3] = { 0, 0, 0 };
 	skipDrawCommands = true;
 
@@ -1610,6 +2081,11 @@ void MaterialSystem::GenerateWorldMaterials() {
 			continue;
 		}
 
+		tess.multiDrawPrimitives = 0;
+		tess.numIndexes = 0;
+		tess.numVertexes = 0;
+		tess.attribsSet = 0;
+
 		rb_surfaceTable[Util::ordinal( *( drawSurf->surface ) )]( drawSurf->surface );
 
 		// Only add the main surface for surfaces with depth pre-pass to the total count
@@ -1618,20 +2094,37 @@ void MaterialSystem::GenerateWorldMaterials() {
 		}
 
 		uint32_t stage = 0;
+		Log::Warn( "%i: %s", i, drawSurf->shader->name );
 		for ( shaderStage_t* pStage = drawSurf->shader->stages; pStage < drawSurf->shader->lastStage; pStage++ ) {
-			ProcessStage( drawSurf, pStage, shader, packIDs, stage );
+			Log::Warn( "stage %u", stage );
+			ProcessStage( drawSurf, pStage, shader, packIDs, stage, previousMaterialID );
+
+			uint32_t texturePack = materialPacks[drawSurf->materialPackIDs[stage - 1]].materials[drawSurf->materialIDs[stage - 1]]
+				.texturePacks[IH_COLORMAP];
+			if ( texturePack != -1 ) {
+				for ( const image_t* image : tr.texturePacks[texturePack].images ) {
+					Log::Warn( "%s", image->name );
+				}
+				/* Log::Warn("%s %u: %u %u %u", shader->name, stage,
+					texturePack, tr.texturePacks[texturePack].texture->texnum,
+					tr.texturePacks[texturePack].texture->texture->bindlessTextureHandle );*/
+			} else {
+				// Log::Warn( "%s %u: %u", shader->name, stage, texturePack );
+			}
+
+			stage++;
 		}
 	}
 	skipDrawCommands = false;
 
 	GenerateWorldMaterialsBuffer();
 
-	uint32_t totalCount = 0;
+	totalMaterialCount = 0;
 	for ( MaterialPack& pack : materialPacks ) {
-		totalCount += pack.materials.size();
+		totalMaterialCount += pack.materials.size();
 	}
-	Log::Notice( "Generated %u materials from %u surfaces", totalCount, tr.refdef.numDrawSurfs );
-	/* for ( const MaterialPack& materialPack : materialPacks ) {
+	Log::Notice( "Generated %u materials from %u surfaces", totalMaterialCount, tr.refdef.numDrawSurfs );
+	for ( const MaterialPack& materialPack : materialPacks ) {
 		Log::Notice( "materialPack sort: %i %i", Util::ordinal( materialPack.fromSort ), Util::ordinal( materialPack.toSort ) );
 		for ( const Material& material : materialPack.materials ) {
 			Log::Notice( "id: %u, useSync: %b, sync: %u, program: %i, stateBits: %u, totalDrawSurfCount: %u, shader: %s, vbo: %s, ibo: %s"
@@ -1639,8 +2132,12 @@ void MaterialSystem::GenerateWorldMaterials() {
 				material.id, material.useSync, material.syncMaterial, material.program, material.stateBits, material.totalDrawSurfCount,
 				material.shader->GetName(), material.vbo->name, material.ibo->name, material.currentStaticDrawSurfCount,
 				material.currentDynamicDrawSurfCount, material.cullType );
+			for ( uint32_t i = 0; i < 8; i++ ) {
+				Log::Notice( "TexturePack %u: %u texture id: %u", i, material.texturePacks[i],
+					material.texturePacks[i] != -1 ? tr.texturePacks[material.texturePacks[i]].texture->texnum : -1 );
+			}
 		}
-	} */
+	}
 
 	r_nocull->integer = current_r_nocull;
 	r_drawworld->integer = current_r_drawworld;
@@ -1662,12 +2159,21 @@ void MaterialSystem::AddAllWorldSurfaces() {
 void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material ) {
 	for ( const textureBundle_t& bundle : pStage->bundle ) {
 		if ( bundle.isVideoMap ) {
-			material->AddTexture( tr.cinematicImage[bundle.videoMapHandle]->texture );
+			image_t* image = tr.cinematicImage[bundle.videoMapHandle];
+			if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+				image = tr.texturePacks[image->texturePackImage].texture;
+			}
+			material->AddTexture( image->texture );
 			continue;
 		}
 
 		for ( image_t* image : bundle.image ) {
 			if ( image ) {
+				if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+					Log::Warn( "%u %s %u", image->hint, image->name, image->texturePackImage );
+					material->texturePacks[image->hint] = image->texturePackImage;
+					image = tr.texturePacks[image->texturePackImage].texture;
+				}
 				material->AddTexture( image->texture );
 			}
 		}
@@ -1714,6 +2220,9 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 	image_t* lightmap = tr.whiteImage;
 	image_t* deluxemap = tr.whiteImage;
 
+	uint32_t lightmapTexPack = 0;
+	uint32_t deluxemapTexPack = 0;
+
 	switch ( lightMode ) {
 		case lightMode_t::VERTEX:
 			break;
@@ -1724,6 +2233,10 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 
 		case lightMode_t::MAP:
 			lightmap = GetLightMap( drawSurf );
+			if ( r_texturePacks.Get() && lightmap->assignedTexturePack ) {
+				lightmapTexPack = lightmap->texturePackImage;
+				lightmap = tr.texturePacks[lightmap->texturePackImage].texture;
+			}
 			break;
 
 		default:
@@ -1733,6 +2246,10 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 	switch ( deluxeMode ) {
 		case deluxeMode_t::MAP:
 			deluxemap = GetDeluxeMap( drawSurf );
+			if ( r_texturePacks.Get() && deluxemap->assignedTexturePack ) {
+				deluxemapTexPack = deluxemap->texturePackImage;
+				deluxemap = tr.texturePacks[deluxemap->texturePackImage].texture;
+			}
 			break;
 
 		case deluxeMode_t::GRID:
@@ -1745,6 +2262,12 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 
 	material->AddTexture( lightmap->texture );
 	material->AddTexture( deluxemap->texture );
+
+	material->texturePacks[IH_LIGHTMAP] = lightmapTexPack;
+	material->texturePacks[IH_DELUXEMAP] = deluxemapTexPack;
+
+	Log::Warn( "lightmap %s %u", lightmap->name, lightmap->texturePackImage );
+	Log::Warn( "deluxemap %s %u", deluxemap->name, deluxemap->texturePackImage );
 
 	if ( glConfig2.dynamicLight ) {
 		if ( r_dynamicLightRenderer.Get() == Util::ordinal( dynamicLightRenderer_t::TILED ) ) {
@@ -1762,7 +2285,7 @@ void MaterialSystem::UpdateDynamicSurfaces() {
 	materialsSSBO.BindBuffer();
 	uint32_t* materialsData = materialsSSBO.MapBufferRange( dynamicDrawSurfsOffset, dynamicDrawSurfsSize );
 	// Shader uniforms are set to 0 if they're not specified, so make sure we do that here too
-	memset( materialsData, 0, 4 * dynamicDrawSurfsSize );
+	memset( materialsData, 0, dynamicDrawSurfsSize * sizeof( uint32_t ) );
 	for ( drawSurf_t& drawSurf : dynamicDrawSurfs ) {
 		uint32_t stage = 0;
 		for ( shaderStage_t* pStage = drawSurf.shader->stages; pStage < drawSurf.shader->lastStage; pStage++ ) {
@@ -1820,10 +2343,23 @@ void MaterialSystem::UpdateDynamicSurfaces() {
 
 void MaterialSystem::UpdateFrameData() {
 	atomicCommandCountersBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	drawCommandBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	atomicMaterialCountersBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER, 0 );
+	atomicMaterialCountersBuffer2.BindBufferBase( GL_SHADER_STORAGE_BUFFER, 1 );
+	clusterCountersBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER, 2 );
+	clusterWorkgroupCountersBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER, 3 );
+
 	gl_clearSurfacesShader->BindProgram( 0 );
 	gl_clearSurfacesShader->SetUniform_Frame( nextFrame );
-	gl_clearSurfacesShader->DispatchCompute( MAX_VIEWS, 1, 1 );
+	gl_clearSurfacesShader->SetUniform_MaxViewFrameTriangles( MAX_VIEWFRAME_TRIANGLES );
+	gl_clearSurfacesShader->DispatchCompute( MAX_MATERIALS / 64 * MAX_VIEWS, 1, 1 );
+	
 	atomicCommandCountersBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	drawCommandBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	atomicMaterialCountersBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, 0 );
+	atomicMaterialCountersBuffer2.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, 1 );
+	clusterCountersBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, 2 );
+	clusterWorkgroupCountersBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, 3 );
 
 	GL_CheckErrors();
 }
@@ -1894,7 +2430,28 @@ void MaterialSystem::CullSurfaces() {
 	}
 
 	GL_CheckErrors();
+	drawCommandBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER, 0 );
+	clusterIndexesBuffer.BindBufferBase();
+	globalIndexesSSBO.BindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	clustersUBO.BindBufferBase( GL_UNIFORM_BUFFER );
+	clustersUBO.BindBufferBase( GL_SHADER_STORAGE_BUFFER, 12 );
+	clusterSurfaceTypesUBO.BindBufferBase();
+	clusterDataSSBO.BindBufferBase();
+	culledClustersBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	atomicMaterialCountersBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	clusterCountersBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	clusterWorkgroupCountersBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
 
+	debugSSBO.BindBufferBase();
+
+	gl_cullShader->BindProgram( 0 );
+	gl_cullShader->SetUniform_Frame( nextFrame );
+	gl_cullShader->SetUniform_TotalDrawSurfs( clusterCount );
+	gl_cullShader->SetUniform_MaxViewFrameTriangles( MAX_VIEWFRAME_TRIANGLES );
+	gl_cullShader->SetUniform_UseFrustumCulling( r_gpuFrustumCulling.Get() );
+	gl_cullShader->SetUniform_UseOcclusionCulling( r_gpuOcclusionCulling.Get() );
+	gl_cullShader->SetUniform_ViewWidth( depthImage->width );
+	gl_cullShader->SetUniform_ViewHeight( depthImage->height );
 	for ( uint32_t view = 0; view < frames[nextFrame].viewCount; view++ ) {
 		vec3_t origin;
 		frustum_t* frustum = &frames[nextFrame].viewFrames[view].frustum;
@@ -1912,21 +2469,14 @@ void MaterialSystem::CullSurfaces() {
 			MatrixCopy( backEnd.viewParms.world.modelViewMatrix, viewMatrix );
 		}
 
-		gl_cullShader->BindProgram( 0 );
-		uint32_t globalWorkGroupX = totalDrawSurfs % MAX_COMMAND_COUNTERS == 0 ?
-			totalDrawSurfs / MAX_COMMAND_COUNTERS : totalDrawSurfs / MAX_COMMAND_COUNTERS + 1;
+		uint globalWorkGroupX = clusterCount % MAX_COMMAND_COUNTERS == 0 ?
+			clusterCount / MAX_COMMAND_COUNTERS : clusterCount / MAX_COMMAND_COUNTERS + 1;
 		GL_Bind( depthImage );
-		gl_cullShader->SetUniform_Frame( nextFrame );
-		gl_cullShader->SetUniform_ViewID( view );
-		gl_cullShader->SetUniform_TotalDrawSurfs( totalDrawSurfs );
-		gl_cullShader->SetUniform_UseFrustumCulling( r_gpuFrustumCulling.Get() );
-		gl_cullShader->SetUniform_UseOcclusionCulling( r_gpuOcclusionCulling.Get() );
-		gl_cullShader->SetUniform_CameraPosition( origin );
-		gl_cullShader->SetUniform_ModelViewMatrix( viewMatrix );
 		gl_cullShader->SetUniform_FirstPortalGroup( globalWorkGroupX );
 		gl_cullShader->SetUniform_TotalPortals( totalPortals );
-		gl_cullShader->SetUniform_ViewWidth( depthImage->width );
-		gl_cullShader->SetUniform_ViewHeight( depthImage->height );
+		gl_cullShader->SetUniform_ViewID( view );
+		gl_cullShader->SetUniform_CameraPosition( backEnd.viewParms.pvsOrigin );
+		gl_cullShader->SetUniform_ModelViewMatrix( backEnd.viewParms.world.modelViewMatrix );
 		gl_cullShader->SetUniform_SurfaceCommandsOffset( surfaceCommandsCount * ( MAX_VIEWS * nextFrame + view ) );
 		gl_cullShader->SetUniform_P00( glState.projectionMatrix[glState.stackIndex][0] );
 		gl_cullShader->SetUniform_P11( glState.projectionMatrix[glState.stackIndex][5] );
@@ -1953,15 +2503,32 @@ void MaterialSystem::CullSurfaces() {
 		gl_cullShader->SetUniform_Frustum( frustumPlanes );
 
 		gl_cullShader->DispatchCompute( globalWorkGroupX, 1, 1 );
+	}
+	culledClustersBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	clusterCountersBuffer.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
 
-		gl_processSurfacesShader->BindProgram( 0 );
-		gl_processSurfacesShader->SetUniform_Frame( nextFrame );
+	materialIDsSSBO.BindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	clusterCountersBuffer.BindBufferBase( GL_UNIFORM_BUFFER, 4 );
+	atomicMaterialCountersBuffer.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	atomicMaterialCountersBuffer.BindBufferBase( GL_UNIFORM_BUFFER, 5 );
+	atomicMaterialCountersBuffer2.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	clusterWorkgroupCountersBuffer.BindBuffer( GL_DISPATCH_INDIRECT_BUFFER );
+	clusterVertexesBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER );
+
+	gl_processSurfacesShader->BindProgram( 0 );
+	gl_processSurfacesShader->SetUniform_Frame( nextFrame );
+	gl_processSurfacesShader->SetUniform_MaxViewFrameTriangles( MAX_VIEWFRAME_TRIANGLES );
+
+	glMemoryBarrier( GL_UNIFORM_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT | GL_COMMAND_BARRIER_BIT );
+	for ( uint view = 0; view < frames[nextFrame].viewCount; view++ ) {
+		culledClustersBuffer.BindBufferRange( GL_UNIFORM_BUFFER, 3, ( nextFrame * MAX_VIEWS + view ) * MAX_CLUSTERS_NEW, MAX_CLUSTERS_NEW );
+
 		gl_processSurfacesShader->SetUniform_ViewID( view );
+		gl_processSurfacesShader->SetUniform_CameraPosition( backEnd.viewParms.pvsOrigin );
 		gl_processSurfacesShader->SetUniform_SurfaceCommandsOffset( surfaceCommandsCount * ( MAX_VIEWS * nextFrame + view ) );
 		gl_processSurfacesShader->SetUniform_CulledCommandsOffset( culledCommandsCount * ( MAX_VIEWS * nextFrame + view ) );
 
-		glMemoryBarrier( GL_SHADER_STORAGE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT );
-		gl_processSurfacesShader->DispatchCompute( totalBatchCount, 1, 1 );
+		gl_processSurfacesShader->DispatchComputeIndirect( ( MAX_VIEWS * nextFrame + view ) * 3 );
 	}
 
 	surfaceDescriptorsSSBO.UnBindBufferBase();
@@ -1973,6 +2540,24 @@ void MaterialSystem::CullSurfaces() {
 	if ( totalPortals > 0 ) {
 		portalSurfacesSSBO.UnBindBufferBase();
 	}
+	drawCommandBuffer.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER, 0 );
+	clusterIndexesBuffer.UnBindBufferBase();
+	globalIndexesSSBO.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
+	clustersUBO.UnBindBufferBase( GL_UNIFORM_BUFFER );
+	clustersUBO.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, 12 );
+	clusterSurfaceTypesUBO.UnBindBufferBase();
+	clusterDataSSBO.UnBindBufferBase();
+	materialIDsSSBO.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
+
+	culledClustersBuffer.UnBindBufferBase( GL_UNIFORM_BUFFER );
+	atomicMaterialCountersBuffer.UnBindBufferBase( GL_UNIFORM_BUFFER );
+	atomicMaterialCountersBuffer2.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	clusterCountersBuffer.UnBindBufferBase( GL_UNIFORM_BUFFER, 5 );
+	clusterWorkgroupCountersBuffer.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+	clusterWorkgroupCountersBuffer.UnBindBuffer( GL_DISPATCH_INDIRECT_BUFFER );
+	clusterVertexesBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
+
+	debugSSBO.UnBindBufferBase();
 
 	GL_CheckErrors();
 }
@@ -2198,6 +2783,57 @@ void MaterialSystem::AddPortalSurfaces() {
 	portalSurfacesSSBO.AreaIncr();
 }
 
+void MaterialSystem::VertexAttribsState( uint32_t stateBits ) {
+	VertexAttribPointers( stateBits );
+	glState.vertexAttribsState = 0;
+
+	for ( uint i = 0; i < ATTR_INDEX_MAX; i++ ) {
+		uint32_t bit = BIT( i );
+		if ( ( stateBits & bit ) ) {
+			if ( r_logFile->integer ) {
+				static char buf[MAX_STRING_CHARS];
+				Q_snprintf( buf, sizeof( buf ), "glEnableVertexAttribArray( %s )\n", attributeNames[i] );
+
+				GLimp_LogComment( buf );
+			}
+
+			glEnableVertexAttribArray( i );
+		} else {
+			if ( r_logFile->integer ) {
+				static char buf[MAX_STRING_CHARS];
+				Q_snprintf( buf, sizeof( buf ), "glDisableVertexAttribArray( %s )\n", attributeNames[i] );
+
+				GLimp_LogComment( buf );
+			}
+
+			glDisableVertexAttribArray( i );
+		}
+	}
+}
+
+void MaterialSystem::VertexAttribPointers( uint32_t attribBits ) {
+	if ( r_logFile->integer ) {
+		// don't just call LogComment, or we will get a call to va() every frame!
+		GLimp_LogComment( va( "--- GL_VertexAttribPointers( %s ) ---\n", glState.currentVBO->name ) );
+	}
+
+	for ( uint i = 0; i < ATTR_INDEX_MAX; i++ ) {
+		uint32_t bit = BIT( i );
+		if ( ( attribBits & bit ) != 0 ) {
+			const vboAttributeLayout_t* layout = &clusterVertexLayout[i];
+
+			if ( r_logFile->integer ) {
+				static char buf[MAX_STRING_CHARS];
+				Q_snprintf( buf, sizeof( buf ), "glVertexAttribPointer( %s )\n", attributeNames[i] );
+
+				GLimp_LogComment( buf );
+			}
+
+			glVertexAttribPointer( i, layout->numComponents, layout->componentType, layout->normalize, layout->stride, BUFFER_OFFSET( layout->ofs ) );
+		}
+	}
+}
+
 void MaterialSystem::RenderMaterials( const shaderSort_t fromSort, const shaderSort_t toSort, const uint32_t viewID ) {
 	if ( !r_drawworld->integer ) {
 		return;
@@ -2210,7 +2846,7 @@ void MaterialSystem::RenderMaterials( const shaderSort_t fromSort, const shaderS
 		// StartFrame();
 
 		// Make sure compute dispatches from the last frame finished writing to memory
-		glMemoryBarrier( GL_COMMAND_BARRIER_BIT );
+		glMemoryBarrier( GL_COMMAND_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT );
 		frameStart = false;
 	}
 
@@ -2270,6 +2906,10 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 
 			gl_genericShaderMaterial->SetUniform_ModelMatrix( backEnd.orientation.transformMatrix );
 			gl_genericShaderMaterial->SetUniform_ModelViewProjectionMatrix( glState.modelViewProjectionMatrix[glState.stackIndex] );
+
+			if ( material.texturePacks[IH_COLORMAP] != -1 ) {
+				gl_genericShaderMaterial->SetUniform_ColorMapBindless( GL_BindToTMU( 0, tr.texturePacks[material.texturePacks[IH_COLORMAP]].texture ) );
+			}
 			break;
 		case stageType_t::ST_LIGHTMAP:
 		case stageType_t::ST_DIFFUSEMAP:
@@ -2286,6 +2926,44 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 			gl_lightMappingShaderMaterial->SetUniform_numLights( backEnd.refdef.numLights );
 			gl_lightMappingShaderMaterial->SetUniform_ModelMatrix( backEnd.orientation.transformMatrix );
 			gl_lightMappingShaderMaterial->SetUniform_ModelViewProjectionMatrix( glState.modelViewProjectionMatrix[glState.stackIndex] );
+
+			if ( !material.hasHeightMapInNormalMap ) {
+				if ( material.texturePacks[IH_HEIGHTMAP] != -1 ) {
+					gl_lightMappingShaderMaterial->SetUniform_HeightMapBindless(
+						GL_BindToTMU( BIND_HEIGHTMAP, tr.texturePacks[material.texturePacks[IH_HEIGHTMAP]].texture )
+					);
+				}
+			}
+			if ( material.texturePacks[IH_COLORMAP] != -1 ) {
+				gl_lightMappingShaderMaterial->SetUniform_DiffuseMapBindless(
+					GL_BindToTMU( BIND_DIFFUSEMAP, tr.texturePacks[material.texturePacks[IH_COLORMAP]].texture )
+				);
+			}
+			if ( material.texturePacks[IH_NORMALMAP] != -1 ) {
+				gl_lightMappingShaderMaterial->SetUniform_NormalMapBindless(
+					GL_BindToTMU( BIND_NORMALMAP, tr.texturePacks[material.texturePacks[IH_NORMALMAP]].texture )
+				);
+			}
+			if ( material.texturePacks[IH_MATERIALMAP] != -1 ) {
+				gl_lightMappingShaderMaterial->SetUniform_MaterialMapBindless(
+					GL_BindToTMU( BIND_MATERIALMAP, tr.texturePacks[material.texturePacks[IH_MATERIALMAP]].texture )
+				);
+			}
+			if ( material.texturePacks[IH_LIGHTMAP] != -1 ) {
+				gl_lightMappingShaderMaterial->SetUniform_LightMapBindless(
+					GL_BindToTMU( BIND_LIGHTMAP, tr.texturePacks[material.texturePacks[IH_LIGHTMAP]].texture )
+				);
+			}
+			if ( material.texturePacks[IH_DELUXEMAP] != -1 ) {
+				gl_lightMappingShaderMaterial->SetUniform_DeluxeMapBindless(
+					GL_BindToTMU( BIND_DELUXEMAP, tr.texturePacks[material.texturePacks[IH_DELUXEMAP]].texture )
+				);
+			}
+			if ( material.texturePacks[IH_GLOWMAP] != -1 ) {
+				gl_lightMappingShaderMaterial->SetUniform_GlowMapBindless(
+					GL_BindToTMU( BIND_GLOWMAP, tr.texturePacks[material.texturePacks[IH_GLOWMAP]].texture )
+				);
+			}
 			break;
 		case stageType_t::ST_LIQUIDMAP:
 			BindShaderLiquid( &material );
@@ -2334,9 +3012,15 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 			break;
 	}
 
-	R_BindVBO( material.vbo );
-	R_BindIBO( material.ibo );
-	material.shader->SetRequiredVertexPointers();
+	materialIDsSSBO.BindBuffer( GL_ARRAY_BUFFER );
+	glEnableVertexAttribArray( 8 );
+	// glVertexAttribPointer( 8, 1, GL_UNSIGNED_INT, GL_FALSE, 0,
+	// 					   BUFFER_OFFSET( MAX_VIEWFRAME_TRIANGLES * ( MAX_VIEWS * currentFrame + viewID ) * 3 * sizeof( uint32_t ) ) );
+	glVertexAttribIPointer( 8, 1, GL_UNSIGNED_INT, 0, BUFFER_OFFSET( 0 ) );
+	// glState.currentVBO = nullptr;
+	// R_BindVBO( material.vbo );
+	// R_BindIBO( material.ibo );
+	// material.shader->SetRequiredVertexPointers();
 
 	if ( !material.texturesResident ) {
 		for ( Texture* texture : material.textures ) {
@@ -2372,17 +3056,28 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 	}
 	material.texturesResident = true;
 
-	culledCommandsBuffer.BindBuffer( GL_DRAW_INDIRECT_BUFFER );
+	// culledCommandsBuffer.BindBuffer( GL_DRAW_INDIRECT_BUFFER );
 
-	atomicCommandCountersBuffer.BindBuffer( GL_PARAMETER_BUFFER_ARB );
+	// atomicCommandCountersBuffer.BindBuffer( GL_PARAMETER_BUFFER_ARB );
 
-	glMultiDrawElementsIndirectCountARB( GL_TRIANGLES, GL_UNSIGNED_INT,
+	drawCommandBuffer.BindBuffer( GL_DRAW_INDIRECT_BUFFER );
+	globalIndexesSSBO.BindBuffer( GL_ELEMENT_ARRAY_BUFFER );
+	clusterVertexesBuffer.BindBuffer( GL_ARRAY_BUFFER );
+	// GL_VertexAttribsState( ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, true );
+	VertexAttribsState( ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR );
+	glState.currentVBO = nullptr;
+	glState.currentIBO = nullptr;
+
+	/* glMultiDrawElementsIndirectCountARB(GL_TRIANGLES, GL_UNSIGNED_INT,
 		BUFFER_OFFSET( material.surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH * sizeof( GLIndirectBuffer::GLIndirectCommand )
 					   + ( culledCommandsCount * ( MAX_VIEWS * currentFrame + viewID )
 					   * sizeof( GLIndirectBuffer::GLIndirectCommand ) ) ),
 		material.globalID * sizeof( uint32_t )
 		+ ( MAX_COMMAND_COUNTERS * ( MAX_VIEWS * currentFrame + viewID ) ) * sizeof( uint32_t ),
-		material.drawCommands.size(), 0 );
+		material.drawCommands.size(), 0 ); */
+	glMultiDrawElementsIndirect( GL_TRIANGLES, GL_UNSIGNED_INT,
+		BUFFER_OFFSET( ( material.globalID + MAX_MATERIALS * MAX_VIEWS * currentFrame ) * sizeof( GLIndirectBuffer::GLIndirectCommand ) ),
+		1, 0 );
 
 	if( r_showTris->integer && ( material.stateBits & GLS_DEPTHMASK_TRUE ) == 0 ) {
 		switch ( material.stageType ) {
@@ -2392,22 +3087,30 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 			case stageType_t::ST_COLLAPSE_DIFFUSEMAP:
 				gl_lightMappingShaderMaterial->SetUniform_ShowTris( 1 );
 				GL_State( GLS_DEPTHTEST_DISABLE );
-				glMultiDrawElementsIndirectCountARB( GL_LINES, GL_UNSIGNED_INT,
+				/* glMultiDrawElementsIndirectCountARB(GL_LINES, GL_UNSIGNED_INT,
 					BUFFER_OFFSET( material.surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH * sizeof( GLIndirectBuffer::GLIndirectCommand )
 					+ ( culledCommandsCount * ( MAX_VIEWS * currentFrame + viewID )
 					* sizeof( GLIndirectBuffer::GLIndirectCommand ) ) ),
 					material.globalID * sizeof( uint32_t )
 					+ ( MAX_COMMAND_COUNTERS * ( MAX_VIEWS * currentFrame + viewID ) ) * sizeof( uint32_t ),
-					material.drawCommands.size(), 0 );
+					material.drawCommands.size(), 0 ); */
+				glMultiDrawElementsIndirect( GL_LINES, GL_UNSIGNED_INT,
+					BUFFER_OFFSET( ( material.globalID + MAX_MATERIALS * MAX_VIEWS * currentFrame ) * sizeof( GLIndirectBuffer::GLIndirectCommand ) ),
+					1, 0 );
 				gl_lightMappingShaderMaterial->SetUniform_ShowTris( 0 );
 			default:
 				break;
 		}
 	}
 
-	culledCommandsBuffer.UnBindBuffer( GL_DRAW_INDIRECT_BUFFER );
+	glDisableVertexAttribArray( 8 );
+	
+	drawCommandBuffer.UnBindBuffer( GL_DRAW_INDIRECT_BUFFER );
+	globalIndexesSSBO.UnBindBuffer( GL_ELEMENT_ARRAY_BUFFER );
 
-	atomicCommandCountersBuffer.UnBindBuffer( GL_PARAMETER_BUFFER_ARB );
+	// culledCommandsBuffer.UnBindBuffer( GL_DRAW_INDIRECT_BUFFER );
+
+	// atomicCommandCountersBuffer.UnBindBuffer( GL_PARAMETER_BUFFER_ARB );
 
 	if ( material.usePolygonOffset ) {
 		glDisable( GL_POLYGON_OFFSET_FILL );

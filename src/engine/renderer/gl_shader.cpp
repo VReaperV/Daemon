@@ -438,6 +438,7 @@ static std::string GenVersionDeclaration() {
 		// ARB_shader_draw_parameters set to -1, because we might get a 4.6 GL context, where the core variables have different names
 		{ glConfig2.shaderDrawParametersAvailable, -1, "ARB_shader_draw_parameters" },
 		{ glConfig2.SSBOAvailable, 430, "ARB_shader_storage_buffer_object" },
+		{ glConfig2.explicitAttribLocationAvailable, 430, "ARB_explicit_attrib_location" },
 	};
 
 	for ( const auto& extension : extensions ) {
@@ -471,6 +472,7 @@ static std::string GenComputeVersionDeclaration() {
 		{ glConfig2.explicitUniformLocationAvailable, 430, "ARB_explicit_uniform_location" },
 		{ glConfig2.shaderImageLoadStoreAvailable, 420, "ARB_shader_image_load_store" },
 		{ glConfig2.shaderAtomicCountersAvailable, 420, "ARB_shader_atomic_counters" },
+		{ glConfig2.shaderAtomicCounterOpsAvailable, 420, "ARB_shader_atomic_counter_ops" },
 		{ glConfig2.bindlessTexturesAvailable, -1, "ARB_bindless_texture" },
 	};
 
@@ -515,6 +517,12 @@ static std::string GenVertexHeader() {
 		str += "#define baseInstance gl_BaseInstanceARB\n\n";
 	}
 
+	if ( glConfig2.materialSystemAvailable ) {
+		str += "layout(location = 8) in uint attr_MatID;\n";
+		str += "OUT(flat) uint in_MatID;\n";
+		str += "#define matID attr_MatID\n";
+	}
+
 	return str;
 }
 
@@ -546,7 +554,12 @@ static std::string GenFragmentHeader() {
 		str += "IN(flat) int in_drawID;\n";
 		str += "IN(flat) int in_baseInstance;\n";
 		str += "#define drawID in_drawID\n";
-		str += "#define baseInstance in_baseInstance\n\n";
+		str += "#define baseInstance in_baseInstance\n";
+	}
+
+	if ( glConfig2.materialSystemAvailable ) {
+		str += "IN(flat) uint in_MatID;\n";
+		str += "#define matID in_MatID\n\n";
 	}
 
 	return str;
@@ -673,6 +686,10 @@ static std::string GenEngineConstants() {
 	if ( r_highPrecisionRendering.Get() )
 	{
 		AddDefine( str, "r_highPrecisionRendering", 1 );
+	}
+
+	if ( r_texturePacks.Get() ) {
+		AddDefine( str, "r_texturePacks", 1 );
 	}
 
 	if ( glConfig2.dynamicLight )
@@ -1316,8 +1333,18 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	* #define uniformx materials[baseInstance].uniformx
 	*/
 
+	/* if ( isVertexShader ) {
+		newShaderText  = "layout(location = 8) in uint attr_MatID;\n";
+		newShaderText += "OUT(flat) uint in_MatID;\n";
+		newShaderText += "#define matID attr_MatID\n\n";
+	} else {
+		newShaderText = "#define matID in_MatID\n\n";
+	} */
+
+	uint32_t count = 0;
+
 	for( GLUniform* uniform : shader->_uniforms ) {
-		if ( uniform->IsGlobal() ) {
+		if ( uniform->IsGlobal() || uniform->IsTexture() ) {
 			continue;
 		}
 
@@ -1348,7 +1375,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 			materialDefines += "_initial uvec2("; // We'll need this to create sampler objects later
 		}
 
-		materialDefines += " materials[baseInstance].";
+		materialDefines += " materials[matID].";
 		materialDefines += uniform->GetName();
 		
 		if ( uniform->IsTexture() ) {
@@ -1356,6 +1383,8 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 		}
 
 		materialDefines += "\n";
+
+		count++;
 	}
 
 	// Array of structs is aligned to the largest member of the struct
@@ -1376,7 +1405,8 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	*  their values will be sourced from a buffer instead
 	*  Global uniforms (like u_ViewUp and u_ViewOrigin) will still be set as regular uniforms */
 	while( std::getline( shaderTextStream, line, '\n' ) ) {
-		if( !( line.find( "uniform" ) == std::string::npos || line.find( ";" ) == std::string::npos ) ) {
+		if( line.find( "uniform" ) != std::string::npos && line.find( "sampler" ) == std::string::npos
+			&& line.find( ";" ) != std::string::npos ) {
 			continue;
 		}
 		shaderMain += line + "\n";
@@ -1394,7 +1424,11 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 
 	materialDefines += "\n";
 
-	newShaderText = "#define USE_MATERIAL_SYSTEM\n" + materialStruct + materialBlock + materialDefines + shaderMain;
+	if( count == 0 ) {
+		newShaderText += materialDefines + shaderMain;
+	} else {
+		newShaderText += "#define USE_MATERIAL_SYSTEM\n" + materialStruct + materialBlock + materialDefines + shaderMain;
+	}
 	return newShaderText;
 }
 
@@ -1765,7 +1799,7 @@ void GLShader::PostProcessUniforms() {
 
 	std::vector<GLUniform*> globalUniforms;
 	for ( GLUniform* uniform : _uniforms ) {
-		if ( uniform->IsGlobal() ) {
+		if ( uniform->IsGlobal() || uniform->IsTexture() ) {
 			globalUniforms.emplace_back( uniform );
 		}
 	}
@@ -1807,7 +1841,11 @@ void GLShader::PostProcessUniforms() {
 	}
 	_uniforms = tmp;
 
-	padding = ( structAlignment - ( structSize % structAlignment ) ) % structAlignment;
+	if ( structAlignment == 0 ) {
+		padding = 0;
+	} else {
+		padding = ( structAlignment - ( structSize % structAlignment ) ) % structAlignment;
+	}
 	std430Size = structSize;
 	for ( GLUniform* uniform : globalUniforms ) {
 		_uniforms.emplace_back( uniform );
@@ -1941,7 +1979,7 @@ void GLShader::DispatchCompute( const GLuint globalWorkgroupX, const GLuint glob
 void GLShader::DispatchComputeIndirect( const GLintptr indirectBuffer ) {
 	ASSERT_EQ( _currentProgram, glState.currentProgram );
 	ASSERT( _hasComputeShader );
-	glDispatchComputeIndirect( indirectBuffer );
+	glDispatchComputeIndirect( indirectBuffer * sizeof( uint32_t ) );
 }
 
 void GLShader::SetRequiredVertexPointers( bool vertexSprite )
@@ -1980,6 +2018,7 @@ GLShader_generic2D::GLShader_generic2D( GLShaderManager *manager ) :
 	GLShader( "generic2D", "generic", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
+	u_ColorMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_AlphaThreshold( this ),
 	u_ModelMatrix( this ),
@@ -2007,6 +2046,7 @@ GLShader_generic::GLShader_generic( GLShaderManager *manager ) :
 	GLShader( "generic", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
+	u_ColorMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_ViewUp( this ),
@@ -2039,6 +2079,7 @@ GLShader_genericMaterial::GLShader_genericMaterial( GLShaderManager* manager ) :
 	GLShader( "genericMaterial", "generic", true, ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
+	u_ColorMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_ViewUp( this ),
@@ -2082,6 +2123,13 @@ GLShader_lightMapping::GLShader_lightMapping( GLShaderManager *manager ) :
 	u_LightTiles( this ),
 	u_LightTilesInt( this ),
 	u_LightsTexture( this ),
+	u_DiffuseMapModifier( this ),
+	u_MaterialMapModifier( this ),
+	u_LightMapModifier( this ),
+	u_DeluxeMapModifier( this ),
+	u_GlowMapModifier( this ),
+	u_NormalMapModifier( this ),
+	u_HeightMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_SpecularExponent( this ),
 	u_ColorModulate( this ),
@@ -2150,6 +2198,13 @@ GLShader_lightMappingMaterial::GLShader_lightMappingMaterial( GLShaderManager* m
 	u_LightGrid1( this ),
 	u_LightGrid2( this ),
 	u_LightTilesInt( this ),
+	u_DiffuseMapModifier( this ),
+	u_MaterialMapModifier( this ),
+	u_LightMapModifier( this ),
+	u_DeluxeMapModifier( this ),
+	u_GlowMapModifier( this ),
+	u_NormalMapModifier( this ),
+	u_HeightMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_SpecularExponent( this ),
 	u_ColorModulate( this ),
@@ -2472,6 +2527,7 @@ GLShader_skybox::GLShader_skybox( GLShaderManager *manager ) :
 	GLShader( "skybox", ATTR_POSITION, manager ),
 	u_ColorMapCube( this ),
 	u_CloudMap( this ),
+	u_CloudMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_CloudHeight( this ),
@@ -2494,6 +2550,7 @@ GLShader_skyboxMaterial::GLShader_skyboxMaterial( GLShaderManager* manager ) :
 	GLShader( "skyboxMaterial", "skybox", true, ATTR_POSITION, manager ),
 	u_ColorMapCube( this ),
 	u_CloudMap( this ),
+	u_CloudMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_CloudHeight( this ),
@@ -2513,6 +2570,7 @@ void GLShader_skyboxMaterial::SetShaderProgramUniforms( shaderProgram_t* shaderP
 GLShader_fogQuake3::GLShader_fogQuake3( GLShaderManager *manager ) :
 	GLShader( "fogQuake3", ATTR_POSITION | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
+	u_ColorMapModifier( this ),
 	u_ModelMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),
 	u_InverseLightFactor( this ),
@@ -2536,6 +2594,7 @@ void GLShader_fogQuake3::SetShaderProgramUniforms( shaderProgram_t *shaderProgra
 GLShader_fogQuake3Material::GLShader_fogQuake3Material( GLShaderManager* manager ) :
 	GLShader( "fogQuake3Material", "fogQuake3", true, ATTR_POSITION | ATTR_QTANGENT, manager ),
 	u_ColorMap( this ),
+	u_ColorMapModifier( this ),
 	u_ModelMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),
 	u_InverseLightFactor( this ),
@@ -2558,6 +2617,7 @@ GLShader_fogGlobal::GLShader_fogGlobal( GLShaderManager *manager ) :
 	GLShader( "fogGlobal", ATTR_POSITION, manager ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
+	u_ColorMapModifier( this ),
 	u_ViewOrigin( this ),
 	u_ViewMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),
@@ -2580,6 +2640,8 @@ GLShader_heatHaze::GLShader_heatHaze( GLShaderManager *manager ) :
 	u_CurrentMap( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
+	u_NormalMapModifier( this ),
+	u_HeightMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_ViewUp( this ),
@@ -2611,7 +2673,7 @@ GLShader_heatHazeMaterial::GLShader_heatHazeMaterial( GLShaderManager* manager )
 	GLShader( "heatHazeMaterial", "heatHaze", true, ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
 	u_CurrentMap( this ),
 	u_NormalMap( this ),
-	u_HeightMap( this ),
+	u_NormalMapModifier( this ),
 	u_TextureMatrix( this ),
 	u_ViewOrigin( this ),
 	u_ViewUp( this ),
@@ -2920,6 +2982,7 @@ GLShader_cull::GLShader_cull( GLShaderManager* manager ) :
 	u_Frame( this ),
 	u_ViewID( this ),
 	u_TotalDrawSurfs( this ),
+	u_MaxViewFrameTriangles( this ),
 	u_SurfaceCommandsOffset( this ),
 	u_Frustum( this ),
 	u_UseFrustumCulling( this ),
@@ -2947,13 +3010,16 @@ void GLShader_depthReduction::SetShaderProgramUniforms( shaderProgram_t* shaderP
 
 GLShader_clearSurfaces::GLShader_clearSurfaces( GLShaderManager* manager ) :
 	GLShader( "clearSurfaces", ATTR_POSITION, manager, false, false, true ),
-	u_Frame( this ) {
+	u_Frame( this ),
+	u_MaxViewFrameTriangles( this ) {
 }
 
 GLShader_processSurfaces::GLShader_processSurfaces( GLShaderManager* manager ) :
 	GLShader( "processSurfaces", ATTR_POSITION, manager, false, false, true ),
 	u_Frame( this ),
 	u_ViewID( this ),
+	u_CameraPosition( this ),
+	u_MaxViewFrameTriangles( this ),
 	u_SurfaceCommandsOffset( this ),
 	u_CulledCommandsOffset( this ) {
 }

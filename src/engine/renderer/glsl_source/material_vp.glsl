@@ -36,6 +36,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #if defined(USE_MATERIAL_SYSTEM)
 
+in_MatID = matID;
+
 #ifdef HAVE_ARB_shader_draw_parameters
   in_drawID = drawID;
   in_baseInstance = baseInstance;

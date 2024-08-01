@@ -95,7 +95,11 @@ void	main()
 	vec4 color;
 
 #if defined(r_liquidMapping)
-	refractColor = texture2D(u_CurrentMap, texScreen).rgb;
+	#if defined(r_texturePacks)
+		refractColor = texture2D(u_CurrentMap, vec3( texScreen * u_CurrentMapModifier.xy, u_CurrentMapModifier.z )).rgb;
+	#else
+		refractColor = texture2D(u_CurrentMap, texScreen).rgb;
+	#endif
 	reflectColor.rgb = texture2D(u_PortalMap, texScreen).rgb;
 	reflectColor.a = 1.0;
 #else // !r_liquidMapping
