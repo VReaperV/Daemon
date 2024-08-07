@@ -165,6 +165,7 @@ set(GLSLSOURCELIST
     ${ENGINE_DIR}/renderer/glsl_source/cameraEffects_fp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/cameraEffects_vp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/computeLight_fp.glsl
+    ${ENGINE_DIR}/renderer/glsl_source/adaptiveLightingReduction_cp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/contrast_fp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/contrast_vp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/debugShadowMap_fp.glsl

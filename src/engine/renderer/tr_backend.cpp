@@ -3361,6 +3361,43 @@ void RB_FXAA()
 	GL_CheckErrors();
 }
 
+static void RB_AdaptiveLightingReduction() {
+	int width = tr.luminanceImage->width;
+	int height = tr.luminanceImage->height;
+
+	gl_adaptiveLightingReductionShader->BindProgram( 0 );
+
+	uint32_t globalWorkgroupX = ( width + 7 ) / 8;
+	uint32_t globalWorkgroupY = ( height + 7 ) / 8;
+
+	GL_Bind( tr.currentRenderImage[backEnd.currentMainFBO] );
+	glBindImageTexture( 2, tr.luminanceImage->texnum, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F );
+
+	gl_adaptiveLightingReductionShader->SetUniform_InitialDepthLevel( true );
+	gl_adaptiveLightingReductionShader->SetUniform_ViewWidth( width );
+	gl_adaptiveLightingReductionShader->SetUniform_ViewHeight( height );
+	gl_adaptiveLightingReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
+
+	int mipLevels = log2f( width > height ? width : height ) + 1;
+	for ( int i = 0; i < mipLevels; i++ ) {
+		width = width > 1 ? width >> 1 : 1;
+		height = height > 1 ? height >> 1 : 1;
+
+		globalWorkgroupX = ( width + 7 ) / 8;
+		globalWorkgroupY = ( height + 7 ) / 8;
+
+		glBindImageTexture( 1, tr.luminanceImage->texnum, i, GL_FALSE, 0, GL_READ_ONLY, GL_R32F );
+		glBindImageTexture( 2, tr.luminanceImage->texnum, i + 1, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F );
+
+		gl_adaptiveLightingReductionShader->SetUniform_InitialDepthLevel( false );
+		gl_adaptiveLightingReductionShader->SetUniform_ViewWidth( width );
+		gl_adaptiveLightingReductionShader->SetUniform_ViewHeight( height );
+		gl_adaptiveLightingReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
+
+		glMemoryBarrier( GL_SHADER_IMAGE_ACCESS_BARRIER_BIT );
+	}
+}
+
 void RB_CameraPostFX()
 {
 	matrix_t ortho;
@@ -3403,6 +3440,14 @@ void RB_CameraPostFX()
 	gl_cameraEffectsShader->SetUniform_ColorMap3DBindless(
 		GL_BindToTMU( 3, tr.colorGradeImage )
 	);
+
+	if ( r_adaptiveLighting.Get() ) {
+		const int width = tr.luminanceImage->width;
+		const int height = tr.luminanceImage->height;
+		const int mipLevel = log2f( width > height ? width : height );
+
+		glBindImageTexture( 4, tr.luminanceImage->texnum, mipLevel, GL_FALSE, 0, GL_READ_ONLY, GL_R32F );
+	}
 
 	// draw viewport
 	Tess_InstantQuad( *gl_cameraEffectsShader,
@@ -4968,6 +5013,10 @@ static void RB_RenderPostProcess()
 		// We'll only use the results from those shaders in the next frame so we don't block the pipeline
 		materialSystem.CullSurfaces();
 		materialSystem.EndFrame();
+	}
+
+	if ( r_adaptiveLighting.Get() ) {
+		RB_AdaptiveLightingReduction();
 	}
 
 	RB_FXAA();

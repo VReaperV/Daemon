@@ -2452,10 +2452,8 @@ static void R_CreateBloomRenderFBOImage()
 
 static void R_CreateCurrentRenderImage()
 {
-	int  width, height;
-
-	width = glConfig.vidWidth;
-	height = glConfig.vidHeight;
+	int width = glConfig.vidWidth;
+	int height = glConfig.vidHeight;
 
 	imageParams_t imageParams = {};
 	imageParams.bits = IF_NOPICMIP;
@@ -2470,6 +2468,25 @@ static void R_CreateCurrentRenderImage()
 
 	tr.currentRenderImage[0] = R_CreateImage( "_currentRender[0]", nullptr, width, height, 1, imageParams );
 	tr.currentRenderImage[1] = R_CreateImage( "_currentRender[1]", nullptr, width, height, 1, imageParams );
+
+	if ( r_adaptiveLighting.Get() ) {
+		const int luminanceWidth = width >> 1;
+		const int luminanceHeight = height >> 1;
+
+		const int mipLevels = log2f( luminanceWidth > luminanceHeight ? luminanceWidth : luminanceHeight ) + 1;
+		imageParams.bits ^= IF_NOPICMIP;
+		imageParams.bits |= IF_ONECOMP32F;
+		tr.luminanceImage = R_CreateImage( "_luminanceImage", nullptr, luminanceWidth, luminanceHeight, mipLevels, imageParams );
+
+		GL_Bind( tr.luminanceImage );
+		int mipmapWidth = luminanceWidth;
+		int mipmapHeight = luminanceHeight;
+		for ( int j = 0; j < mipLevels; j++ ) {
+			glTexImage2D( GL_TEXTURE_2D, j, GL_R32F, mipmapWidth, mipmapHeight, 0, GL_RED, GL_FLOAT, nullptr );
+			mipmapWidth >>= 1;
+			mipmapHeight >>= 1;
+		}
+	}
 
 	imageParams = {};
 	imageParams.bits = IF_NOPICMIP | IF_PACKED_DEPTH24_STENCIL8;

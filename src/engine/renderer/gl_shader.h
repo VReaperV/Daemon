@@ -4259,6 +4259,16 @@ public:
 	void SetShaderProgramUniforms( shaderProgram_t *shaderProgram ) override;
 };
 
+class GLShader_adaptiveLightingReduction :
+	public GLShader,
+	public u_ViewWidth,
+	public u_ViewHeight,
+	public u_InitialDepthLevel {
+	public:
+	GLShader_adaptiveLightingReduction( GLShaderManager* manager );
+	void SetShaderProgramUniforms( shaderProgram_t* shaderProgram ) override;
+};
+
 class GLShader_shadowFill :
 	public GLShader,
 	public u_ColorMap,
@@ -4793,6 +4803,7 @@ extern GLShader_lightMappingMaterial            *gl_lightMappingShaderMaterial;
 extern GLShader_forwardLighting_omniXYZ         *gl_forwardLightingShader_omniXYZ;
 extern GLShader_forwardLighting_projXYZ         *gl_forwardLightingShader_projXYZ;
 extern GLShader_forwardLighting_directionalSun  *gl_forwardLightingShader_directionalSun;
+extern GLShader_adaptiveLightingReduction       *gl_adaptiveLightingReductionShader;
 extern GLShader_shadowFill                      *gl_shadowFillShader;
 extern GLShader_reflection                      *gl_reflectionShader;
 extern GLShader_reflectionMaterial              *gl_reflectionShaderMaterial;

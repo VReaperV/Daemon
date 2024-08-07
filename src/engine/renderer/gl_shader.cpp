@@ -52,6 +52,7 @@ GLShader_lightMappingMaterial            *gl_lightMappingShaderMaterial = nullpt
 GLShader_forwardLighting_omniXYZ         *gl_forwardLightingShader_omniXYZ = nullptr;
 GLShader_forwardLighting_projXYZ         *gl_forwardLightingShader_projXYZ = nullptr;
 GLShader_forwardLighting_directionalSun  *gl_forwardLightingShader_directionalSun = nullptr;
+GLShader_adaptiveLightingReduction       *gl_adaptiveLightingReductionShader = nullptr;
 GLShader_shadowFill                      *gl_shadowFillShader = nullptr;
 GLShader_reflection                      *gl_reflectionShader = nullptr;
 GLShader_reflectionMaterial              *gl_reflectionShaderMaterial = nullptr;
@@ -438,6 +439,8 @@ static std::string GenVersionDeclaration() {
 		// ARB_shader_draw_parameters set to -1, because we might get a 4.6 GL context, where the core variables have different names
 		{ glConfig2.shaderDrawParametersAvailable, -1, "ARB_shader_draw_parameters" },
 		{ glConfig2.SSBOAvailable, 430, "ARB_shader_storage_buffer_object" },
+		{ glConfig2.shadingLanguage420PackAvailable, 420, "ARB_shading_language_420pack" },
+		{ glConfig2.shaderImageLoadStoreAvailable, 420, "ARB_shader_image_load_store" },
 	};
 
 	for ( const auto& extension : extensions ) {
@@ -2506,6 +2509,17 @@ void GLShader_forwardLighting_directionalSun::SetShaderProgramUniforms( shaderPr
 	glUniform1i( glGetUniformLocation( shaderProgram->program, "u_ShadowClipMap3" ), 13 );
 	glUniform1i( glGetUniformLocation( shaderProgram->program, "u_ShadowClipMap4" ), 14 );
 	glUniform1i( glGetUniformLocation( shaderProgram->program, "u_HeightMap" ), 15 );
+}
+
+GLShader_adaptiveLightingReduction::GLShader_adaptiveLightingReduction( GLShaderManager* manager ) :
+	GLShader( "adaptiveLightingReduction", ATTR_POSITION, manager, false, false, true ),
+	u_ViewWidth( this ),
+	u_ViewHeight( this ),
+	u_InitialDepthLevel( this ) {
+}
+
+void GLShader_adaptiveLightingReduction::SetShaderProgramUniforms( shaderProgram_t* shaderProgram ) {
+	glUniform1i( glGetUniformLocation( shaderProgram->program, "initialRenderImage" ), 0 );
 }
 
 GLShader_shadowFill::GLShader_shadowFill( GLShaderManager *manager ) :

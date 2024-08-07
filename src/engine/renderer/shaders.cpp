@@ -14,6 +14,7 @@
 #include "cameraEffects_fp.glsl.h"
 #include "cameraEffects_vp.glsl.h"
 #include "computeLight_fp.glsl.h"
+#include "adaptiveLightingReduction_cp.glsl.h"
 #include "contrast_fp.glsl.h"
 #include "contrast_vp.glsl.h"
 #include "debugShadowMap_fp.glsl.h"
@@ -66,6 +67,7 @@
 #include "clearSurfaces_cp.glsl.h"
 
 std::unordered_map<std::string, std::string> shadermap({
+	{ "glsl/adaptiveLightingReduction_cp.glsl", std::string( reinterpret_cast< const char* >( adaptiveLightingReduction_cp_glsl ), sizeof( adaptiveLightingReduction_cp_glsl ) ) },
 	{ "glsl/blurX_fp.glsl", std::string(reinterpret_cast<const char*>(blurX_fp_glsl), sizeof(blurX_fp_glsl)) },
 	{ "glsl/blurX_vp.glsl", std::string(reinterpret_cast<const char*>(blurX_vp_glsl), sizeof(blurX_vp_glsl)) },
 	{ "glsl/blurY_fp.glsl", std::string(reinterpret_cast<const char*>(blurY_fp_glsl), sizeof(blurY_fp_glsl)) },

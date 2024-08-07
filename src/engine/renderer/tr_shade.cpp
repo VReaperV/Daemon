@@ -105,9 +105,9 @@ static void GLSL_InitGPUShadersOrError()
 		gl_shaderManager.load( gl_genericShaderMaterial );
 		gl_shaderManager.load( gl_lightMappingShaderMaterial );
 
-		gl_shaderManager.load( gl_cullShader );
 		gl_shaderManager.load( gl_clearSurfacesShader );
 		gl_shaderManager.load( gl_processSurfacesShader );
+		gl_shaderManager.load( gl_depthReductionShader );
 	}
 
 	if ( glConfig2.dynamicLight )
@@ -147,6 +147,10 @@ static void GLSL_InitGPUShadersOrError()
 				gl_shaderManager.load( gl_forwardLightingShader_projXYZ );
 			}
 		}
+	}
+
+	if ( r_adaptiveLighting.Get() ) {
+		gl_shaderManager.load( gl_adaptiveLightingReductionShader );
 	}
 
 	if ( r_reflectionMapping->integer != 0 )
