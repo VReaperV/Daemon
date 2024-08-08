@@ -37,6 +37,7 @@ Maryland 20850 USA.
 void         CM_LoadMap(Str::StringRef name);
 void         CM_ClearMap();
 
+clipHandle_t CM_InlineBSPModel( const char* name, int index );
 clipHandle_t CM_InlineModel( int index );  // 0 = world, 1 + are bmodels
 clipHandle_t CM_TempBoxModel( const vec3_t mins, const vec3_t maxs, bool capsule );
 

@@ -2495,6 +2495,7 @@ static void AddPak(pakType_t type, Str::StringRef filename, Str::StringRef baseP
 
 	if (!ParsePakName(filename.begin(), filename.end(), name, version, checksum) || (isPakDir && checksum)) {
 		fsLogs.Warn("Invalid pak name: '%s'", fullPath);
+		ParsePakName( filename.begin(), filename.end(), name, version, checksum ) || ( isPakDir && checksum );
 		return;
 	}
 

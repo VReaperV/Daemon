@@ -177,6 +177,12 @@ struct clipMap_t
 
 	int          numSubModels;
 	cmodel_t     *cmodels;
+	struct MapModelPair {
+		std::string name;
+		uint32_t start;
+		uint32_t count;
+	};
+	std::vector<MapModelPair> mergedMapModels;
 
 	int          numBrushes;
 	cbrush_t     *brushes;

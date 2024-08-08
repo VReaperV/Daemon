@@ -288,12 +288,16 @@ struct lump_t
 #define LUMP_VISIBILITY   16
 #define HEADER_LUMPS      17
 
+struct bspPatchHeader {
+	int enabledLumps[HEADER_LUMPS] = {};
+};
+
 struct dheader_t
 {
-	int    ident;
-	int    version;
+	int    ident = 0;
+	int    version = 0;
 
-	lump_t lumps[ HEADER_LUMPS ];
+	lump_t lumps[ HEADER_LUMPS ] = {};
 };
 
 struct dmodel_t

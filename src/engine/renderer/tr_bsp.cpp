@@ -44,6 +44,16 @@ static int        c_vboWorldSurfaces;
 static int        c_vboLightSurfaces;
 static int        c_vboShadowSurfaces;
 
+struct dModelAdjust {
+	bool enabled = false;
+	std::string name;
+	vec3_t center;
+	uint32_t mergedBSPIndex;
+};
+
+static std::vector<dModelAdjust> BSPModelAdjust;
+static bool adjustModels;
+
 //===============================================================================
 
 /*
@@ -3508,6 +3518,8 @@ static void R_LoadSurfaces( lump_t *surfs, lump_t *verts, lump_t *indexLump )
 	s_worldData.surfaces = out;
 	s_worldData.numSurfaces = count;
 
+	Log::Warn( "%i surfaces:", count );
+
 	for ( i = 0; i < count; i++, in++, out++ )
 	{
 		switch ( LittleLong( in->surfaceType ) )
@@ -3564,7 +3576,7 @@ static void R_LoadSurfaces( lump_t *surfs, lump_t *verts, lump_t *indexLump )
 R_LoadSubmodels
 =================
 */
-static void R_LoadSubmodels( lump_t *l )
+static void R_LoadSubmodels( lump_t *l, std::string &externalSubmodels )
 {
 	dmodel_t   *in;
 	bspModel_t *out;
@@ -3572,11 +3584,18 @@ static void R_LoadSubmodels( lump_t *l )
 
 	Log::Debug("...loading submodels" );
 
-	in = ( dmodel_t * )( fileBase + l->fileofs );
+	if ( externalSubmodels.empty() ) {
+		in = ( dmodel_t * )( fileBase + l->fileofs );
 
-	if ( l->filelen % sizeof( *in ) )
-	{
-		Sys::Drop( "LoadMap: funny lump size in %s", s_worldData.name );
+		if ( l->filelen % sizeof( *in ) )
+		{
+			Sys::Drop( "LoadMap: funny lump size in %s", s_worldData.name );
+		}
+	} else {
+		/* int len = externalEntities.length();
+		cm.entityString = ( char* ) CM_Alloc( len + 1 );
+		cm.numEntityChars = len;
+		memcpy( cm.entityString, externalEntities.c_str(), len + 1 ); */
 	}
 
 	count = l->filelen / sizeof( *in );
@@ -3586,6 +3605,9 @@ static void R_LoadSubmodels( lump_t *l )
 
 	for ( i = 0; i < count; i++, in++, out++ )
 	{
+		/* Log::Warn("submodel %i: %s mins: %f %f %f maxs: %f %f %f firstSurface: %i numSurfs: %i firstBrush: %i numBrushes: %i",
+			i, BSPModelAdjust[i].name, in->mins[0], in->mins[1], in->mins[2], in->maxs[0], in->maxs[1], in->maxs[2],
+			in->firstSurface, in->numSurfaces, in->firstBrush, in->numBrushes ); */
 		model_t *model;
 
 		model = R_AllocModel();
@@ -3612,8 +3634,50 @@ static void R_LoadSubmodels( lump_t *l )
 
 		// ydnar: allocate decal memory
 		j = ( i == 0 ? MAX_WORLD_DECALS : MAX_ENTITY_DECALS );
-		out->decals = (decal_t*) ri.Hunk_Alloc( j * sizeof( *out->decals ), ha_pref::h_low );
+		out->decals = ( decal_t* ) ri.Hunk_Alloc( j * sizeof( *out->decals ), ha_pref::h_low );
 		memset( out->decals, 0, j * sizeof( *out->decals ) );
+
+		if ( !adjustModels ) {
+			continue;
+		}
+
+		dModelAdjust* mAdjust = &BSPModelAdjust[i];
+		if ( mAdjust->enabled ) {
+			VectorSubtract( out->bounds[0], mAdjust->center, out->bounds[0] );
+			VectorSubtract( out->bounds[1], mAdjust->center, out->bounds[1] );
+
+			for ( bspSurface_t* surface = out->firstSurface; surface < out->firstSurface + out->numSurfaces; surface++ ) {
+				if ( *surface->data == surfaceType_t::SF_FACE ) {
+					srfSurfaceFace_t* face = ( srfSurfaceFace_t* ) surface->data;
+					VectorSubtract( face->bounds[0], mAdjust->center, face->bounds[0] );
+					VectorSubtract( face->bounds[1], mAdjust->center, face->bounds[1] );
+					// VectorCopy( vec3_origin, face->plane.normal );
+					// face->plane.dist = 0.0;
+
+					for ( srfVert_t* vertex = face->verts; vertex < face->verts + face->numVerts; vertex++ ) {
+						VectorSubtract( vertex->xyz, mAdjust->center, vertex->xyz );
+					}
+				} else if ( *surface->data == surfaceType_t::SF_GRID ) {
+					srfGridMesh_t* grid = ( srfGridMesh_t* ) surface->data;
+					VectorSubtract( grid->bounds[0], mAdjust->center, grid->bounds[0] );
+					VectorSubtract( grid->bounds[1], mAdjust->center, grid->bounds[1] );
+
+					for ( srfVert_t* vertex = grid->verts; vertex < grid->verts + grid->numVerts; vertex++ ) {
+						VectorSubtract( vertex->xyz, mAdjust->center, vertex->xyz );
+					}
+				} else if ( *surface->data == surfaceType_t::SF_TRIANGLES ) {
+					srfTriangles_t* tri = ( srfTriangles_t* ) surface->data;
+					VectorSubtract( tri->bounds[0], mAdjust->center, tri->bounds[0] );
+					VectorSubtract( tri->bounds[1], mAdjust->center, tri->bounds[1] );
+
+					for ( srfVert_t* vertex = tri->verts; vertex < tri->verts + tri->numVerts; vertex++ ) {
+						VectorSubtract( vertex->xyz, mAdjust->center, vertex->xyz );
+					}
+				} else {
+					continue;
+				}
+			}
+		}
 	}
 }
 
@@ -3738,6 +3802,253 @@ static void R_LoadNodesAndLeafs( lump_t *nodeLump, lump_t *leafLump )
 }
 
 //=============================================================================
+
+static void R_InsertLump( dheader_t* header, uint lumpIndex, lump_t* lump, const char* lumpInsert, std::string& data ) {
+	uint32_t insertSize = lump->filelen;
+	data.insert( header->lumps[lumpIndex].fileofs + header->lumps[lumpIndex].filelen, lumpInsert, insertSize );
+	header->lumps[lumpIndex].filelen += insertSize;
+
+	for ( uint i = lumpIndex + 1; i < HEADER_LUMPS; i++ ) {
+		header->lumps[i].fileofs += insertSize;
+	}
+}
+
+static void R_MergeBSP( std::string& name, bspPatchHeader* bspPatchHeader, dheader_t* header, const char* BSPString, std::string& data ) {
+	static const char* lumpNames[HEADER_LUMPS] = { "entity", "shader", "plane", "node", "leaf", "leaf surface",
+		"leaf brush", "model", "brush", "brush side", "vertex", "index", "fog", "surface", "lightmap", "lightgrid",
+		"visibility"
+	};
+
+	static const int loadOrder[HEADER_LUMPS] = { LUMP_ENTITIES, LUMP_SHADERS, LUMP_PLANES, LUMP_NODES, LUMP_LEAFS, LUMP_LEAFSURFACES,
+		LUMP_LEAFBRUSHES, LUMP_DRAWVERTS, LUMP_DRAWINDEXES, LUMP_BRUSHSIDES, LUMP_BRUSHES, LUMP_SURFACES, LUMP_FOGS,
+		LUMP_MODELS, LUMP_LIGHTMAPS, LUMP_LIGHTGRID, LUMP_VISIBILITY
+	};
+
+	dheader_t* mergeHeader = ( dheader_t* ) BSPString;
+	byte* mergeBase = ( byte* ) mergeHeader;
+
+	int version = LittleLong( mergeHeader->version );
+
+	if ( version != BSP_VERSION && version != BSP_VERSION_Q3 ) {
+		Sys::Drop( "R_MergeBSP: wrong version number (%i should be %i for ET or %i for Q3)",
+			version, BSP_VERSION, BSP_VERSION_Q3 );
+	}
+
+	// swap all the lumps
+	for ( uint i = 0; i < sizeof( dheader_t ) / 4; i++ ) {
+		( ( int* ) mergeHeader )[i] = LittleLong( ( ( int* ) mergeHeader )[i] );
+	}
+
+	int firstVertex = header->lumps[LUMP_DRAWVERTS].filelen / sizeof( drawVert_t );
+	int firstIndex = header->lumps[LUMP_DRAWINDEXES].filelen / sizeof( int );
+	int firstSurface = header->lumps[LUMP_SURFACES].filelen / sizeof( dsurface_t );
+	int firstShader = header->lumps[LUMP_SHADERS].filelen / sizeof( dshader_t );
+	int firstPlane = header->lumps[LUMP_PLANES].filelen / sizeof( dplane_t );
+	int firstBrushSide = header->lumps[LUMP_BRUSHSIDES].filelen / sizeof( dbrushside_t );
+	int firstBrush = header->lumps[LUMP_BRUSHES].filelen / sizeof( dbrush_t );
+
+	for ( uint i = 0; i < HEADER_LUMPS; i++ ) {
+		uint32_t index = loadOrder[i];
+		if ( bspPatchHeader->enabledLumps[index] ) {
+			switch ( index ) {
+				case LUMP_SHADERS:
+				case LUMP_PLANES:
+				case LUMP_LIGHTMAPS:
+				case LUMP_DRAWVERTS:
+				case LUMP_DRAWINDEXES:
+					R_InsertLump( header, index, &mergeHeader->lumps[index], BSPString + mergeHeader->lumps[index].fileofs, data );
+					break;
+				case LUMP_BRUSHSIDES:
+				{
+					std::vector<dbrushside_t> brushSides;
+					int brushSideCount = mergeHeader->lumps[index].filelen / sizeof( dbrushside_t );
+					brushSides.resize( brushSideCount );
+					dbrushside_t* mergeBrushSides = ( dbrushside_t* ) ( BSPString + mergeHeader->lumps[index].fileofs );
+
+					for ( uint32_t j = 0; j < brushSideCount; j++ ) {
+						brushSides[j] = mergeBrushSides[j];
+						brushSides[j].shaderNum += firstShader;
+						brushSides[j].planeNum += firstPlane;
+					}
+
+					const char* brushSidesString = ( const char* ) brushSides.data();
+					R_InsertLump( header, index, &mergeHeader->lumps[index], brushSidesString, data );
+					break;
+				}
+				case LUMP_BRUSHES:
+				{
+					std::vector<dbrush_t> brushes;
+					int brushCount = mergeHeader->lumps[index].filelen / sizeof( dbrush_t );
+					brushes.resize( brushCount );
+					dbrush_t* mergeBrushes = ( dbrush_t* ) ( BSPString + mergeHeader->lumps[index].fileofs );
+
+					for ( uint32_t j = 0; j < brushCount; j++ ) {
+						brushes[j] = mergeBrushes[j];
+						brushes[j].firstSide += firstBrushSide;
+						brushes[j].shaderNum += firstShader;
+					}
+
+					const char* brushesString = ( const char* ) brushes.data();
+					R_InsertLump( header, index, &mergeHeader->lumps[index], brushesString, data );
+					break;
+				}
+				case LUMP_SURFACES:
+				{
+					std::vector<dsurface_t> surfaces;
+					int surfaceCount = mergeHeader->lumps[index].filelen / sizeof( dsurface_t );
+					surfaces.resize( surfaceCount );
+					dsurface_t* mergeSurfaces = ( dsurface_t* ) ( BSPString + mergeHeader->lumps[index].fileofs );
+
+					for ( uint32_t j = 0; j < surfaceCount; j++ ) {
+						surfaces[j] = mergeSurfaces[j];
+						surfaces[j].firstVert += firstVertex;
+						surfaces[j].firstIndex += firstIndex;
+						surfaces[j].shaderNum += firstShader;
+					}
+
+					const char* surfacesString = ( const char* ) surfaces.data();
+					R_InsertLump( header, index, &mergeHeader->lumps[index], surfacesString, data );
+					break;
+				}
+				case LUMP_MODELS:
+				{
+					std::vector<dmodel_t> BSPModels;
+					int modelCount = mergeHeader->lumps[index].filelen / sizeof( dmodel_t );
+					BSPModels.resize( modelCount );
+					dmodel_t* mergeModels = ( dmodel_t* ) ( BSPString + mergeHeader->lumps[index].fileofs );
+
+					for ( uint32_t j = 0; j < modelCount; j++ ) {
+						BSPModels[j] = mergeModels[j];
+						BSPModels[j].firstSurface += firstSurface;
+						BSPModels[j].firstBrush += firstBrush;
+						dModelAdjust mAdjust;
+						vec3_t center = { 0.0, 0.0, 0.0 };
+
+						if ( firstSurface > 0 ) {
+							mAdjust.enabled = true;
+							mAdjust.name = name;
+							VectorAdd( BSPModels[j].maxs, BSPModels[j].mins, center );
+							VectorScale( center, 0.5, center );
+							for ( uint32_t k = 0; k < 3; k++ ) {
+								// BSPModels[j].mins[k] = -center[k];// *10.0;
+								// BSPModels[j].maxs[k] = center[k];// *10.0;
+							}
+						}
+						VectorCopy( center, mAdjust.center );
+
+						BSPModelAdjust.emplace_back( mAdjust );
+					}
+
+					const char* modelsString = ( const char* ) BSPModels.data();
+					R_InsertLump( header, index, &mergeHeader->lumps[index], modelsString, data );
+					break;
+				}
+				default:
+					if ( header->lumps[index].filelen == 0 ) {
+						R_InsertLump( header, index, &mergeHeader->lumps[index], BSPString + mergeHeader->lumps[index].fileofs, data );
+					} else {
+						Log::Warn( "Merging %s lumps is currently unsupported, skipping", lumpNames[index] );
+					}
+					break;
+			}
+		}
+	}
+}
+
+static bool R_LoadBSP( const std::string& path, dheader_t* header, std::string& data ) {
+	std::error_code err;
+
+	std::string BSPFile = path + ".bsp";
+	std::string BSPData = FS::PakPath::ReadFile( BSPFile, err );
+	if ( err ) {
+		const std::error_code notFound( Util::ordinal( FS::filesystem_error::no_such_file ), FS::filesystem_category() );
+		if ( err != notFound ) {
+			Sys::Drop( "Could not read file '%s': %s", BSPFile.c_str(), err.message() );
+		}
+		return false;
+	}
+
+	Log::Notice( "Loading BSP file %s", BSPFile );
+
+	bspPatchHeader patchHeader;
+	for ( uint i = 0; i < HEADER_LUMPS; i++ ) {
+		patchHeader.enabledLumps[i] = 1;
+	}
+	std::string mapName = FS::Path::BaseName( path );
+	R_MergeBSP( mapName, &patchHeader, header, BSPData.data(), data );
+
+	return true;
+}
+
+static bool R_LoadBSPPatch( const std::string& path, dheader_t* header, std::string& data ) {
+	std::error_code err;
+
+	std::string BSPPatchFile = path + ".bsp-patch";
+	std::string BSPPatch = FS::PakPath::ReadFile( BSPPatchFile, err );
+	Log::Warn( "BSPPatch file: %s", BSPPatchFile );
+	if ( err ) {
+		const std::error_code notFound( Util::ordinal( FS::filesystem_error::no_such_file ), FS::filesystem_category() );
+		if ( err != notFound ) {
+			Sys::Drop( "Could not read file '%s': %s", BSPPatchFile.c_str(), err.message() );
+		}
+		return false;
+	}
+
+	Log::Notice( "Patching BSP file with %s", BSPPatchFile );
+
+	bspPatchHeader* patchHeader = ( bspPatchHeader* ) BSPPatch.data();
+	std::string mapName = FS::Path::BaseName( path );
+	R_MergeBSP( mapName, patchHeader, header, BSPPatch.data() + 68, data );
+
+	return true;
+}
+
+static bool R_LoadMapMetaData( const std::string &path, dheader_t *header, std::string &data ) {
+	std::error_code err;
+
+	std::string metadataFile = path + ".metadata";
+	std::string metadata = FS::PakPath::ReadFile( metadataFile, err );
+	if ( err ) {
+		const std::error_code notFound( Util::ordinal( FS::filesystem_error::no_such_file ), FS::filesystem_category() );
+		if ( err != notFound ) {
+			Sys::Drop( "Could not read file '%s': %s", metadataFile.c_str(), err.message() );
+		}
+		return false;
+	}
+
+	std::istringstream metadataStream( metadata );
+	std::string line;
+
+	std::string dirPath = FS::Path::DirName( path ) + "/";
+
+	while ( std::getline( metadataStream, line, '\n' ) ) {
+		line.erase( std::remove( line.begin(), line.end(), '\r' ), line.end() );
+		const size_t firstNonSpace = line.find_first_not_of( " \t" );
+
+		std::string::size_type position = line.find( "bsp-patch" );
+		if ( position != std::string::npos && position == firstNonSpace ) {
+			std::string BSPPatchPath = dirPath + line.substr( position + 10, std::string::npos );
+			R_LoadBSPPatch( BSPPatchPath, header, data );
+			continue;
+		}
+
+		position = line.find( "bsp" );
+		if ( position != std::string::npos && position == firstNonSpace ) {
+			std::string BSPPath = dirPath + line.substr( position + 4, std::string::npos );
+			R_LoadBSP( BSPPath, header, data );
+			continue;
+		}
+
+		position = line.find( "//" );
+		if ( position != std::string::npos && position == firstNonSpace ) {
+			continue;
+		}
+
+		Log::Warn( "Incorrect metadata entry format: %s, in %s", line, metadataFile );
+	}
+
+	return true;
+}
 
 /*
 =================
@@ -4311,6 +4622,8 @@ void R_LoadEntities( lump_t *l, std::string &externalEntities )
 		w->entityString = (char*) ri.Hunk_Alloc( externalEntities.length() + 1, ha_pref::h_low );
 		Q_strncpyz( w->entityString, externalEntities.c_str(), externalEntities.length() + 1 );
 	}
+
+	Log::Warn( w->entityString );
 
 	w->entityParsePoint = w->entityString;
 
@@ -6887,15 +7200,6 @@ void RE_LoadWorldMap( const char *name )
 
 	tr.worldMapLoaded = true;
 
-	// load it
-	std::error_code err;
-	std::string buffer = FS::PakPath::ReadFile( name, err );
-
-	if ( err )
-	{
-		Sys::Drop( "RE_LoadWorldMap: %s not found", name );
-	}
-
 	// clear tr.world so if the level fails to load, the next
 	// try will not look at the partially loaded version
 	tr.world = nullptr;
@@ -6914,26 +7218,65 @@ void RE_LoadWorldMap( const char *name )
 
 	startMarker = (byte*) ri.Hunk_Alloc( 0, ha_pref::h_low );
 
-	header = ( dheader_t * ) buffer.data();
-	fileBase = ( byte * ) header;
+	std::string basePath = FS::Path::StripExtension( name );
+	std::string data;
 
-	i = LittleLong( header->version );
+	dheader_t mergeHeader;
+	std::error_code err;
+	if ( !R_LoadMapMetaData( basePath, &mergeHeader, data ) ) {
+		// load it
+		/* if ( !R_LoadBSP(basePath, &mergeHeader, data) ) {
+			Sys::Drop( "RE_LoadWorldMap: %s not found", name );
+		} */
+		data = FS::PakPath::ReadFile( name, err );
 
-	if ( i != BSP_VERSION && i != BSP_VERSION_Q3 )
-	{
-		Sys::Drop( "RE_LoadWorldMap: %s has wrong version number (%i should be %i for ET or %i for Q3)",
-		           name, i, BSP_VERSION, BSP_VERSION_Q3 );
+		if ( err ) {
+			Sys::Drop( "RE_LoadWorldMap: %s not found", name );
+		}
+
+		header = ( dheader_t* ) data.data();
+		fileBase = ( byte* ) header;
+		adjustModels = false;
+
+		i = LittleLong( header->version );
+
+		/* if ( i != BSP_VERSION && i != BSP_VERSION_Q3 ) {
+			Sys::Drop( "RE_LoadWorldMap: %s has wrong version number (%i should be %i for ET or %i for Q3)",
+				name, i, BSP_VERSION, BSP_VERSION_Q3 );
+		} */
+
+		// swap all the lumps
+		for ( unsigned j = 0; j < sizeof( dheader_t ) / 4; j++ ) {
+			( ( int* ) header )[j] = LittleLong( ( ( int* ) header )[j] );
+		}
+	} else {
+		header = &mergeHeader;
+		fileBase = ( byte* ) data.data();
+		adjustModels = true;
 	}
 
-	// swap all the lumps
-	for ( unsigned j = 0; j < sizeof( dheader_t ) / 4; j++ )
-	{
-		( ( int * ) header ) [ j ] = LittleLong( ( ( int * ) header ) [ j ] );
+	/* byte* test = ( byte* ) data.data();
+	for ( uint lumpID = 0; lumpID < HEADER_LUMPS; lumpID++ ) {
+		byte* testLump = test + mergeHeader.lumps[lumpID].fileofs;
+		byte* origLump = fileBase + header->lumps[lumpID].fileofs;
+		uint count = mergeHeader.lumps[lumpID].filelen < header->lumps[lumpID].filelen ?
+			mergeHeader.lumps[lumpID].filelen : header->lumps[lumpID].filelen;
+		if ( mergeHeader.lumps[lumpID].filelen != header->lumps[lumpID].filelen ) {
+			Log::Warn( "test" );
+		}
+		for ( uint i = 0; i < count; i++ ) {
+			if ( testLump[i] != origLump[i] ) {
+				Log::Warn( "lump %u: test: %X orig: %X", i, testLump[i], origLump[i] );
+			}
+		}
+	} */
+
+	for ( int i = 0; i < HEADER_LUMPS; i++ ) {
+		Log::Warn( "lump %u offset: %i len: %i", i, header->lumps[i].fileofs, header->lumps[i].filelen );
 	}
 
 	// load into heap
-
-	std::string externalEntitiesFileName = FS::Path::StripExtension( name ) + ".ent";
+	std::string externalEntitiesFileName = basePath + ".ent";
 	std::string externalEntities = FS::PakPath::ReadFile( externalEntitiesFileName, err );
 	if ( err )
 	{
@@ -6958,7 +7301,16 @@ void RE_LoadWorldMap( const char *name )
 
 	R_LoadNodesAndLeafs( &header->lumps[ LUMP_NODES ], &header->lumps[ LUMP_LEAFS ] );
 
-	R_LoadSubmodels( &header->lumps[ LUMP_MODELS ] );
+	std::string externalSubmodelsFile = basePath + ".bsp-model";
+	std::string externalSubmodels = FS::PakPath::ReadFile( externalSubmodelsFile, err );
+	if ( err ) {
+		const std::error_code notFound( Util::ordinal( FS::filesystem_error::no_such_file ), FS::filesystem_category() );
+		if ( err != notFound ) {
+			Sys::Drop( "Could not read file '%s': %s", externalSubmodelsFile.c_str(), err.message() );
+		}
+		externalSubmodels = "";
+	}
+	R_LoadSubmodels( &header->lumps[ LUMP_MODELS ], externalSubmodels );
 
 	// moved fog lump loading here, so fogs can be tagged with a model num
 	R_LoadFogs( &header->lumps[ LUMP_FOGS ], &header->lumps[ LUMP_BRUSHES ], &header->lumps[ LUMP_BRUSHSIDES ] );

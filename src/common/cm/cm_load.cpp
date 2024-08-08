@@ -54,6 +54,17 @@ cmodel_t  box_model;
 cplane_t  *box_planes;
 cbrush_t  *box_brush;
 
+struct cmModelAdjust {
+	bool enabled = false;
+	std::string name;
+	vec3_t center;
+	uint32_t mergedBSPIndex;
+};
+
+static std::vector<cmModelAdjust> BSPModelAdjust;
+static uint32_t mergedBSPIndex;
+static bool adjustModels;
+
 void      CM_InitBoxHull();
 void      CM_FloodAreaConnections();
 
@@ -86,6 +97,259 @@ void CM_FreeAll()
 
 ===============================================================================
 */
+
+static void CM_InsertLump( dheader_t* header, uint lumpIndex, lump_t* lump, const char* lumpInsert, std::string& data ) {
+	uint32_t insertSize = lump->filelen;
+	data.insert( header->lumps[lumpIndex].fileofs + header->lumps[lumpIndex].filelen, lumpInsert, insertSize );
+	header->lumps[lumpIndex].filelen += insertSize;
+
+	for ( uint i = lumpIndex + 1; i < HEADER_LUMPS; i++ ) {
+		header->lumps[i].fileofs += insertSize;
+	}
+}
+
+static void CM_MergeBSP( std::string& name, bspPatchHeader* bspPatchHeader, dheader_t* header, const char* BSPString, std::string& data ) {
+	static const char* lumpNames[HEADER_LUMPS] = { "entity", "shader", "plane", "node", "leaf", "leaf surface",
+		"leaf brush", "model", "brush", "brush side", "vertex", "index", "fog", "surface", "lightmap", "lightgrid",
+		"visibility"
+	};
+
+	static const int loadOrder[HEADER_LUMPS] = { LUMP_ENTITIES, LUMP_SHADERS, LUMP_PLANES, LUMP_NODES, LUMP_LEAFS, LUMP_LEAFSURFACES,
+		LUMP_LEAFBRUSHES, LUMP_DRAWVERTS, LUMP_DRAWINDEXES, LUMP_BRUSHSIDES, LUMP_BRUSHES, LUMP_SURFACES, LUMP_FOGS,
+		LUMP_MODELS, LUMP_LIGHTMAPS, LUMP_LIGHTGRID, LUMP_VISIBILITY
+	};
+
+	dheader_t* mergeHeader = ( dheader_t* ) BSPString;
+	byte* mergeBase = ( byte* ) mergeHeader;
+
+	int version = LittleLong( mergeHeader->version );
+
+	if ( version != BSP_VERSION && version != BSP_VERSION_Q3 ) {
+		Sys::Drop( "R_MergeBSP: wrong version number (%i should be %i for ET or %i for Q3)",
+			version, BSP_VERSION, BSP_VERSION_Q3 );
+	}
+
+	// swap all the lumps
+	for ( uint i = 0; i < sizeof( dheader_t ) / 4; i++ ) {
+		( ( int* ) mergeHeader )[i] = LittleLong( ( ( int* ) mergeHeader )[i] );
+	}
+
+	int firstVertex = header->lumps[LUMP_DRAWVERTS].filelen / sizeof( drawVert_t );
+	int firstIndex = header->lumps[LUMP_DRAWINDEXES].filelen / sizeof( int );
+	int firstSurface = header->lumps[LUMP_SURFACES].filelen / sizeof( dsurface_t );
+	int firstShader = header->lumps[LUMP_SHADERS].filelen / sizeof( dshader_t );
+	int firstPlane = header->lumps[LUMP_PLANES].filelen / sizeof( dplane_t );
+	int firstBrushSide = header->lumps[LUMP_BRUSHSIDES].filelen / sizeof( dbrushside_t );
+	int firstBrush = header->lumps[LUMP_BRUSHES].filelen / sizeof( dbrush_t );
+
+	for ( uint i = 0; i < HEADER_LUMPS; i++ ) {
+		uint32_t index = loadOrder[i];
+		if ( bspPatchHeader->enabledLumps[index] ) {
+			switch ( index ) {
+				case LUMP_SHADERS:
+				case LUMP_PLANES:
+				case LUMP_LIGHTMAPS:
+				case LUMP_DRAWVERTS:
+				case LUMP_DRAWINDEXES:
+					CM_InsertLump( header, index, &mergeHeader->lumps[index], BSPString + mergeHeader->lumps[index].fileofs, data );
+					break;
+				case LUMP_BRUSHSIDES:
+				{
+					std::vector<dbrushside_t> brushSides;
+					int brushSideCount = mergeHeader->lumps[index].filelen / sizeof( dbrushside_t );
+					brushSides.resize( brushSideCount );
+					dbrushside_t* mergeBrushSides = ( dbrushside_t* ) ( BSPString + mergeHeader->lumps[index].fileofs );
+
+					for ( uint32_t j = 0; j < brushSideCount; j++ ) {
+						brushSides[j] = mergeBrushSides[j];
+						brushSides[j].shaderNum += firstShader;
+						brushSides[j].planeNum += firstPlane;
+					}
+
+					const char* brushSidesString = ( const char* ) brushSides.data();
+					CM_InsertLump( header, index, &mergeHeader->lumps[index], brushSidesString, data );
+					break;
+				}
+				case LUMP_BRUSHES:
+				{
+					std::vector<dbrush_t> brushes;
+					int brushCount = mergeHeader->lumps[index].filelen / sizeof( dbrush_t );
+					brushes.resize( brushCount );
+					dbrush_t* mergeBrushes = ( dbrush_t* ) ( BSPString + mergeHeader->lumps[index].fileofs );
+
+					for ( uint32_t j = 0; j < brushCount; j++ ) {
+						brushes[j] = mergeBrushes[j];
+						brushes[j].firstSide += firstBrushSide;
+						brushes[j].shaderNum += firstShader;
+					}
+
+					const char* brushesString = ( const char* ) brushes.data();
+					CM_InsertLump( header, index, &mergeHeader->lumps[index], brushesString, data );
+					break;
+				}
+				case LUMP_SURFACES:
+				{
+					std::vector<dsurface_t> surfaces;
+					int surfaceCount = mergeHeader->lumps[index].filelen / sizeof( dsurface_t );
+					surfaces.resize( surfaceCount );
+					dsurface_t* mergeSurfaces = ( dsurface_t* ) ( BSPString + mergeHeader->lumps[index].fileofs );
+
+					for ( uint32_t j = 0; j < surfaceCount; j++ ) {
+						surfaces[j] = mergeSurfaces[j];
+						surfaces[j].firstVert += firstVertex;
+						surfaces[j].firstIndex += firstIndex;
+						surfaces[j].shaderNum += firstShader;
+					}
+
+					const char* surfacesString = ( const char* ) surfaces.data();
+					CM_InsertLump( header, index, &mergeHeader->lumps[index], surfacesString, data );
+					break;
+				}
+				case LUMP_MODELS:
+				{
+					std::vector<dmodel_t> BSPModels;
+					int modelCount = mergeHeader->lumps[index].filelen / sizeof( dmodel_t );
+					BSPModels.resize( modelCount );
+					dmodel_t* mergeModels = ( dmodel_t* ) ( BSPString + mergeHeader->lumps[index].fileofs );
+
+					for ( uint32_t j = 0; j < modelCount; j++ ) {
+						BSPModels[j] = mergeModels[j];
+						BSPModels[j].firstSurface += firstSurface;
+						BSPModels[j].firstBrush += firstBrush;
+						cmModelAdjust mAdjust;
+						mAdjust.name = "";
+						vec3_t center = { 0.0, 0.0, 0.0 };
+						mAdjust.mergedBSPIndex = mergedBSPIndex;
+
+						if ( firstSurface > 0 ) {
+							mAdjust.name = name;
+							// Q_strncpyz( mAdjust.name, name.c_str(), 128 );
+							VectorAdd( BSPModels[j].maxs, BSPModels[j].mins, center );
+							VectorScale( center, 0.5, center );
+							for ( uint32_t k = 0; k < 3; k++ ) {
+								// BSPModels[j].mins[k] = -center[k];// *10.0;
+								//	BSPModels[j].maxs[k] = center[k];// *10.0;
+							}
+						}
+						VectorCopy( center, mAdjust.center );
+
+						BSPModelAdjust.push_back( mAdjust );
+					}
+					mergedBSPIndex++;
+
+					const char* modelsString = ( const char* ) BSPModels.data();
+					CM_InsertLump( header, index, &mergeHeader->lumps[index], modelsString, data );
+					break;
+				}
+				default:
+					if ( header->lumps[index].filelen == 0 ) {
+						CM_InsertLump( header, index, &mergeHeader->lumps[index], BSPString + mergeHeader->lumps[index].fileofs, data );
+					} else {
+						Log::Warn( "Merging %s lumps is currently unsupported, skipping", lumpNames[index] );
+					}
+					break;
+			}
+		}
+	}
+}
+
+static bool CM_LoadBSP( const std::string& path, dheader_t* header, std::string& data ) {
+	std::error_code err;
+
+	std::string BSPFile = path + ".bsp";
+	std::string BSPData = FS::PakPath::ReadFile( BSPFile, err );
+	if ( err ) {
+		const std::error_code notFound( Util::ordinal( FS::filesystem_error::no_such_file ), FS::filesystem_category() );
+		if ( err != notFound ) {
+			Sys::Drop( "Could not read file '%s': %s", BSPFile.c_str(), err.message() );
+		}
+		return false;
+	}
+
+	Log::Notice( "Loading BSP file %s", BSPFile );
+
+	bspPatchHeader patchHeader;
+	for ( uint i = 0; i < HEADER_LUMPS; i++ ) {
+		patchHeader.enabledLumps[i] = 1;
+	}
+	std::string mapName = FS::Path::BaseName( path );
+	CM_MergeBSP( mapName, &patchHeader, header, BSPData.data(), data );
+
+	return true;
+}
+
+static bool CM_LoadBSPPatch( const std::string& path, dheader_t* header, std::string& data ) {
+	std::error_code err;
+
+	std::string BSPPatchFile = path + ".bsp-patch";
+	std::string BSPPatch = FS::PakPath::ReadFile( BSPPatchFile, err );
+	Log::Warn( "BSPPatch file: %s", BSPPatchFile );
+	if ( err ) {
+		const std::error_code notFound( Util::ordinal( FS::filesystem_error::no_such_file ), FS::filesystem_category() );
+		if ( err != notFound ) {
+			Sys::Drop( "Could not read file '%s': %s", BSPPatchFile.c_str(), err.message() );
+		}
+		return false;
+	}
+
+	Log::Notice( "Patching BSP file with %s", BSPPatchFile );
+
+	bspPatchHeader* patchHeader = ( bspPatchHeader* ) BSPPatch.data();
+	std::string mapName = FS::Path::BaseName( path );
+	CM_MergeBSP( mapName, patchHeader, header, BSPPatch.data() + 68, data );
+
+	return true;
+}
+
+static bool CM_LoadMapMetaData( const std::string& path, dheader_t* header, std::string& data ) {
+	std::error_code err;
+
+	std::string metadataFile = path + ".metadata";
+	std::string metadata = FS::PakPath::ReadFile( metadataFile, err );
+	if ( err ) {
+		const std::error_code notFound( Util::ordinal( FS::filesystem_error::no_such_file ), FS::filesystem_category() );
+		if ( err != notFound ) {
+			Sys::Drop( "Could not read file '%s': %s", metadataFile.c_str(), err.message() );
+		}
+		return false;
+	}
+
+	std::istringstream metadataStream( metadata );
+	std::string line;
+
+	std::string dirPath = FS::Path::DirName( path ) + "/";
+	mergedBSPIndex = 0;
+
+	while ( std::getline( metadataStream, line, '\n' ) ) {
+		line.erase( std::remove( line.begin(), line.end(), '\r' ), line.end() );
+		const size_t firstNonSpace = line.find_first_not_of( " \t" );
+
+		std::string::size_type position = line.find( "bsp-patch" );
+		if ( position != std::string::npos && position == firstNonSpace ) {
+			std::string BSPPatchPath = dirPath + line.substr( position + 10, std::string::npos );
+			CM_LoadBSPPatch( BSPPatchPath, header, data );
+			Log::Warn( "bsp-patch: %s", BSPPatchPath );
+			continue;
+		}
+
+		position = line.find( "bsp" );
+		if ( position != std::string::npos && position == firstNonSpace ) {
+			std::string BSPPath = dirPath + line.substr( position + 4, std::string::npos );
+			CM_LoadBSP( BSPPath, header, data );
+			Log::Warn( "bsp: %s", BSPPath );
+			continue;
+		}
+
+		position = line.find( "//" );
+		if ( position != std::string::npos && position == firstNonSpace ) {
+			continue;
+		}
+
+		Log::Warn( "Incorrect metadata entry format: %s, in %s", line, metadataFile );
+	}
+
+	return true;
+}
 
 /*
 =================
@@ -158,15 +422,32 @@ static void CMod_LoadSubmodels(const byte *const cmod_base, const lump_t *l)
 	cm.cmodels = ( cmodel_t * ) CM_Alloc( count * sizeof( *cm.cmodels ) );
 	cm.numSubModels = count;
 
+	uint32_t mergeIndex = UINT32_MAX;
 	for ( i = 0; i < count; i++, in++, out++ )
 	{
 		out = &cm.cmodels[ i ];
+
+		if ( adjustModels ) {
+			if ( mergeIndex != BSPModelAdjust[i].mergedBSPIndex ) {
+				mergeIndex = BSPModelAdjust[i].mergedBSPIndex;
+				clipMap_t::MapModelPair modelPair;
+				modelPair.start = i;
+				modelPair.count = 0;
+				modelPair.name = BSPModelAdjust[i].name;
+				cm.mergedMapModels.push_back( modelPair );
+			}
+			cm.mergedMapModels[mergeIndex].count++;
+		}
 
 		for ( j = 0; j < 3; j++ )
 		{
 			// spread the mins / maxs by a pixel
 			out->mins[ j ] = LittleFloat( in->mins[ j ] ) - 1;
 			out->maxs[ j ] = LittleFloat( in->maxs[ j ] ) + 1;
+		}
+		if ( adjustModels ) {
+			VectorSubtract( out->mins, BSPModelAdjust[i].center, out->mins );
+			VectorSubtract( out->maxs, BSPModelAdjust[i].center, out->maxs );
 		}
 
 		if ( i == 0 )
@@ -182,6 +463,10 @@ static void CMod_LoadSubmodels(const byte *const cmod_base, const lump_t *l)
 		for ( j = 0; j < out->leaf.numLeafBrushes; j++ )
 		{
 			indexes[ j ] = LittleLong( in->firstBrush ) + j;
+			if ( adjustModels ) {
+				VectorSubtract( cm.brushes[indexes[j]].bounds[0], BSPModelAdjust[i].center, cm.brushes[indexes[j]].bounds[0] );
+				VectorSubtract( cm.brushes[indexes[j]].bounds[1], BSPModelAdjust[i].center, cm.brushes[indexes[j]].bounds[1] );
+			}
 		}
 
 		out->leaf.numLeafSurfaces = LittleLong( in->numSurfaces );
@@ -764,16 +1049,11 @@ void CM_LoadMap(Str::StringRef name)
 {
 	dheader_t       header;
 
-	cmLog.Debug( "CM_LoadMap(%s)", name);
+	cmLog.Debug( "CM_LoadMap(%s)", name );
 
 	std::string mapFile = "maps/" + name + ".bsp";
 
 	std::error_code err;
-	std::string mapData = FS::PakPath::ReadFile(mapFile, err);
-	if (err) {
-		Sys::Drop("Could not load %s", mapFile.c_str());
-	}
-
 	std::string externalEntities = FS::PakPath::ReadFile( "maps/" + name + ".ent", err );
 	if ( err )
 	{
@@ -797,20 +1077,33 @@ void CM_LoadMap(Str::StringRef name)
 		return;
 	}
 
-	header = * ( dheader_t * ) mapData.data();
+	std::string data;
+	if ( !CM_LoadMapMetaData( "maps/" + name, &header, data ) ) {
+		/* if ( !CM_LoadBSP("maps/" + name, &header, data) ) {
+			Sys::Drop( "Could not load %s", mapFile.c_str() );
+		} */
+		data = FS::PakPath::ReadFile( mapFile, err );
+		if ( err ) {
+			Sys::Drop( "Could not load %s", mapFile.c_str() );
+		}
+		header = * ( dheader_t * ) data.data();
+		adjustModels = false;
 
-	for (unsigned i = 0; i < sizeof( dheader_t ) / 4; i++ )
-	{
-		( ( int * ) &header ) [ i ] = LittleLong( ( ( int * ) &header ) [ i ] );
+		for (unsigned i = 0; i < sizeof( dheader_t ) / 4; i++ )
+		{
+			( ( int * ) &header ) [ i ] = LittleLong( ( ( int * ) &header ) [ i ] );
+		}
+
+		/* if ( header.version != BSP_VERSION && header.version != BSP_VERSION_Q3 )
+		{
+			Sys::Drop( "CM_LoadMap: %s has wrong version number (%i should be %i for ET or %i for Q3)",
+					   name.c_str(), header.version, BSP_VERSION, BSP_VERSION_Q3 );
+		} */
+	} else {
+		adjustModels = true;
 	}
+	const byte* const cmod_base = reinterpret_cast<const byte*>( data.data() );
 
-	if ( header.version != BSP_VERSION && header.version != BSP_VERSION_Q3 )
-	{
-		Sys::Drop( "CM_LoadMap: %s has wrong version number (%i should be %i for ET or %i for Q3)",
-		           name.c_str(), header.version, BSP_VERSION, BSP_VERSION_Q3 );
-	}
-
-	const byte *const cmod_base = reinterpret_cast<const byte*>(mapData.data());
 
 	// load into heap
 	CMod_LoadShaders(cmod_base, &header.lumps[LUMP_SHADERS]);
@@ -868,6 +1161,28 @@ cmodel_t       *CM_ClipHandleToModel( clipHandle_t handle )
 	Sys::Drop( "CM_ClipHandleToModel: bad handle %i (max %d)", handle, cm.numSubModels );
 }
 
+clipHandle_t CM_InlineBSPModel( const char* mapName, int index ) {
+	if ( index < 0 || index >= cm.numSubModels ) {
+		Sys::Drop( "CM_InlineModel: bad number" );
+	}
+
+	std::vector<clipMap_t::MapModelPair>::iterator it =
+		std::find_if( cm.mergedMapModels.begin(), cm.mergedMapModels.end(), [&mapName]( const clipMap_t::MapModelPair& modelPair ) {
+			return !modelPair.name.compare( mapName );
+		}
+	);
+
+	if ( it == cm.mergedMapModels.end() ) {
+		Sys::Drop( "CM_InlineModel: bad map name for BSP model: %s", mapName );
+	}
+
+	if ( index >= it->count ) {
+		Sys::Drop( "CM_InlineModel: bad merged model index for BSP model: %s-%i", mapName, index );
+	}
+
+	return index + it->start;
+}
+
 /*
 ==================
 CM_InlineModel
@@ -875,6 +1190,7 @@ CM_InlineModel
 */
 clipHandle_t CM_InlineModel( int index )
 {
+
 	if ( index < 0 || index >= cm.numSubModels )
 	{
 		Sys::Drop( "CM_InlineModel: bad number" );
