@@ -1359,6 +1359,18 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	std::string materialBlock = "layout(std430, binding = 0) readonly buffer materialsSSBO {\n"
 									 "  Material materials[];\n"
 									 "};\n\n";
+	std::string texDataBlock = "struct TexData {\n"
+	                           "	uvec2 u_DiffuseMap;\n"
+	                           "	uvec2 u_NormalMap;\n"
+	                           "	uvec2 u_HeightMap;\n"
+	                           "	uvec2 u_MaterialMap;\n"
+	                           "	uvec2 u_GlowMap;\n"
+	                           "	uvec2 u_LightMap;\n"
+	                           "	uvec2 u_DeluxeMap;\n"
+	                           "};\n"
+	                           "layout(std430, binding = 6) readonly buffer texDataSSBO {\n"
+	                           "  TexData texData[];\n"
+	                           "};\n\n";
 	std::string materialDefines;
 
 	/* Generate the struct and defines in the form of:
@@ -1377,24 +1389,26 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 			continue;
 		}
 
-		if ( uniform->IsTexture() ) {
-			materialStruct += "  uvec2 ";
-			materialStruct += uniform->GetName();
-		} else {
-			materialStruct += "  " + uniform->GetType() + " " + uniform->GetName();
-		}
+		if ( !uniform->UseTexData() ) {
+			if ( uniform->IsTexture() ) {
+				materialStruct += "  uvec2 ";
+				materialStruct += uniform->GetName();
+			} else {
+				materialStruct += "  " + uniform->GetType() + " " + uniform->GetName();
+			}
 
-		if ( uniform->GetComponentSize() ) {
-			materialStruct += "[ " + std::to_string( uniform->GetComponentSize() ) + " ]";
-		}
-		materialStruct += ";\n";
+			if ( uniform->GetComponentSize() ) {
+				materialStruct += "[ " + std::to_string( uniform->GetComponentSize() ) + " ]";
+			}
+			materialStruct += ";\n";
 
-		// vec3 is aligned to 4 components, so just pad it with int
-		// TODO: Try to move 1 component uniforms here to avoid wasting memory
-		if ( uniform->GetSTD430Size() == 3 ) {
-			materialStruct += "  int ";
-			materialStruct += uniform->GetName();
-			materialStruct += "_padding;\n";
+			// vec3 is aligned to 4 components, so just pad it with int
+			// TODO: Try to move 1 component uniforms here to avoid wasting memory
+			if ( uniform->GetSTD430Size() == 3 ) {
+				materialStruct += "  int ";
+				materialStruct += uniform->GetName();
+				materialStruct += "_padding;\n";
+			}
 		}
 
 		materialDefines += "#define ";
@@ -1404,7 +1418,11 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 			materialDefines += "_initial uvec2("; // We'll need this to create sampler objects later
 		}
 
-		materialDefines += " materials[baseInstance].";
+		if( uniform->UseTexData() ) {
+			materialDefines += " texData[baseInstance >> 16].";
+		} else {
+			materialDefines += " materials[baseInstance & 0xFFFF].";
+		}
 		materialDefines += uniform->GetName();
 		
 		if ( uniform->IsTexture() ) {
@@ -1451,7 +1469,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 
 	materialDefines += "\n";
 
-	newShaderText = "#define USE_MATERIAL_SYSTEM\n" + materialStruct + materialBlock + materialDefines + shaderMain;
+	newShaderText = "#define USE_MATERIAL_SYSTEM\n" + materialStruct + materialBlock + texDataBlock + materialDefines + shaderMain;
 	return newShaderText;
 }
 
@@ -1966,7 +1984,7 @@ void GLShader::PostProcessUniforms() {
 
 	std::vector<GLUniform*> globalUniforms;
 	for ( GLUniform* uniform : _uniforms ) {
-		if ( uniform->IsGlobal() ) {
+		if ( uniform->IsGlobal() || uniform->UseTexData() ) {
 			globalUniforms.emplace_back( uniform );
 		}
 	}
@@ -2166,7 +2184,7 @@ void GLShader::SetRequiredVertexPointers()
 void GLShader::WriteUniformsToBuffer( uint32_t* buffer ) {
 	uint32_t* bufPtr = buffer;
 	for ( GLUniform* uniform : _uniforms ) {
-		if ( !uniform->IsGlobal() ) {
+		if ( !uniform->IsGlobal() && !uniform->UseTexData() ) {
 			bufPtr = uniform->WriteToBuffer( bufPtr );
 		}
 	}

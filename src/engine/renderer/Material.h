@@ -143,6 +143,46 @@ struct Material {
 	}
 };
 
+struct TextureData {
+	const textureBundle_t* texBundles[MAX_TEXTURE_BUNDLES] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+
+	image_t* lightmap;
+	image_t* deluxemap;
+
+	bool operator==( const TextureData& other ) const {
+		for ( int i = 0; i < MAX_TEXTURE_BUNDLES; i++ ) {
+			const textureBundle_t* bundle = texBundles[i];
+			const textureBundle_t* otherBundle = other.texBundles[i];
+
+			if ( bundle->numImages != otherBundle->numImages ) {
+				return false;
+			}
+
+			if ( ( bundle->numImages > 1 ) && ( bundle->imageAnimationSpeed != otherBundle->imageAnimationSpeed ) ) {
+				return false;
+			}
+
+			const uint8_t numImages = bundle->numImages > 0 ? bundle->numImages : 1;
+			for ( int j = 0; j < numImages; j++ ) {
+				if ( bundle->image[j] != otherBundle->image[j] ) {
+					return false;
+				}
+			}
+		}
+
+		return lightmap == other.lightmap && deluxemap == other.deluxemap;
+	}
+
+	TextureData() {
+	}
+
+	TextureData( const TextureData& other ) {
+		memcpy( texBundles, other.texBundles, MAX_TEXTURE_BUNDLES * sizeof( textureBundle_t* ) );
+		lightmap = other.lightmap;
+		deluxemap = other.deluxemap;
+	}
+};
+
 enum class MaterialDebugMode {
 	NONE,
 	DEPTH,
@@ -256,6 +296,8 @@ class MaterialSystem {
 		{ shaderSort_t::SS_ENVIRONMENT_NOFOG, shaderSort_t::SS_POST_PROCESS }
 	};
 
+	std::vector<TextureData> texData;
+
 	bool frameStart = false;
 
 	void AddTexture( Texture* texture );
@@ -276,7 +318,7 @@ class MaterialSystem {
 
 	void GenerateDepthImages( const int width, const int height, imageParams_t imageParms );
 
-	void AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material );
+	void AddStageTextures( drawSurf_t* drawSurf, const uint32_t stage, Material* material );
 	void ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage,
 		uint32_t& previousMaterialID );
 	void GenerateWorldMaterials();
@@ -324,6 +366,7 @@ class MaterialSystem {
 };
 
 extern GLSSBO materialsSSBO; // Global
+extern GLSSBO texDataSSBO; // Per Global
 
 extern GLSSBO surfaceDescriptorsSSBO; // Global
 extern GLSSBO surfaceCommandsSSBO; // Per viewframe, GPU updated

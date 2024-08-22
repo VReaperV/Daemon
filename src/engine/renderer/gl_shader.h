@@ -424,12 +424,14 @@ protected:
 	const bool _global; // This uniform won't go into materials SSBO if true
 	const int _components;
 	const bool _isTexture;
+	const bool _useTexData;
 
 	size_t      _firewallIndex;
 	size_t      _locationIndex;
 
 	GLUniform( GLShader *shader, const char *name, const char* type, const GLuint std430Size, const GLuint std430Alignment,
-								 const bool global, const int components = 0, const bool isTexture = false ) :
+	                             const bool global, const int components = 0,
+	                             const bool isTexture = false, const bool useTexData = false ) :
 		_shader( shader ),
 		_name( name ),
 		_type( type ),
@@ -438,6 +440,7 @@ protected:
 		_global( global ),
 		_components( components ),
 		_isTexture( isTexture ),
+		_useTexData( useTexData ),
 		_firewallIndex( 0 ),
 		_locationIndex( 0 )
 	{
@@ -482,6 +485,10 @@ public:
 		return _isTexture;
 	}
 
+	bool UseTexData() const {
+		return _useTexData;
+	}
+
 	// This should return a pointer to the memory right after the one this uniform wrote to
 	virtual uint32_t* WriteToBuffer( uint32_t* buffer );
 
@@ -498,9 +505,10 @@ public:
 
 class GLUniformSampler : protected GLUniform {
 	protected:
-	GLUniformSampler( GLShader* shader, const char* name, const char* type, const GLuint size, const bool global = false ) :
+	GLUniformSampler( GLShader* shader, const char* name, const char* type, const GLuint size, const bool global = false,
+		const bool useTexData = false ) :
 		GLUniform( shader, name, type, glConfig2.bindlessTexturesAvailable ? size * 2 : size,
-									   glConfig2.bindlessTexturesAvailable ? size * 2 : size, global, 0, true ) {
+									   glConfig2.bindlessTexturesAvailable ? size * 2 : size, global, 0, true, useTexData ) {
 	}
 
 	inline GLint GetLocation() {
@@ -575,8 +583,8 @@ class GLUniformSampler1D : protected GLUniformSampler {
 
 class GLUniformSampler2D : protected GLUniformSampler {
 	protected:
-	GLUniformSampler2D( GLShader* shader, const char* name, const bool global = false ) :
-		GLUniformSampler( shader, name, "sampler2D", 1, global ) {
+	GLUniformSampler2D( GLShader* shader, const char* name, const bool global = false, const bool useTexData = false ) :
+		GLUniformSampler( shader, name, "sampler2D", 1, global, useTexData ) {
 	}
 
 	inline GLint GetLocation() {
@@ -2218,7 +2226,7 @@ class u_DiffuseMap :
 	GLUniformSampler2D {
 	public:
 	u_DiffuseMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_DiffuseMap" ) {
+		GLUniformSampler2D( shader, "u_DiffuseMap", false, true ) {
 	}
 
 	void SetUniform_DiffuseMapBindless( GLuint64 bindlessHandle ) {
@@ -2234,7 +2242,7 @@ class u_HeightMap :
 	GLUniformSampler2D {
 	public:
 	u_HeightMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_HeightMap" ) {
+		GLUniformSampler2D( shader, "u_HeightMap", false, true ) {
 	}
 
 	void SetUniform_HeightMapBindless( GLuint64 bindlessHandle ) {
@@ -2250,7 +2258,7 @@ class u_NormalMap :
 	GLUniformSampler2D {
 	public:
 	u_NormalMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_NormalMap" ) {
+		GLUniformSampler2D( shader, "u_NormalMap", false, true ) {
 	}
 
 	void SetUniform_NormalMapBindless( GLuint64 bindlessHandle ) {
@@ -2266,7 +2274,7 @@ class u_MaterialMap :
 	GLUniformSampler2D {
 	public:
 	u_MaterialMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_MaterialMap" ) {
+		GLUniformSampler2D( shader, "u_MaterialMap", false, true ) {
 	}
 
 	void SetUniform_MaterialMapBindless( GLuint64 bindlessHandle ) {
@@ -2282,7 +2290,7 @@ class u_LightMap :
 	GLUniformSampler {
 	public:
 	u_LightMap( GLShader* shader ) :
-		GLUniformSampler( shader, "u_LightMap", "sampler2D", 1 ) {
+		GLUniformSampler( shader, "u_LightMap", "sampler2D", 1, false, true ) {
 	}
 
 	void SetUniform_LightMapBindless( GLuint64 bindlessHandle ) {
@@ -2298,7 +2306,7 @@ class u_DeluxeMap :
 	GLUniformSampler {
 	public:
 	u_DeluxeMap( GLShader* shader ) :
-		GLUniformSampler( shader, "u_DeluxeMap", "sampler2D", 1 ) {
+		GLUniformSampler( shader, "u_DeluxeMap", "sampler2D", 1, false, true ) {
 	}
 
 	void SetUniform_DeluxeMapBindless( GLuint64 bindlessHandle ) {
@@ -2314,7 +2322,7 @@ class u_GlowMap :
 	GLUniformSampler2D {
 	public:
 	u_GlowMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_GlowMap" ) {
+		GLUniformSampler2D( shader, "u_GlowMap", false, true ) {
 	}
 
 	void SetUniform_GlowMapBindless( GLuint64 bindlessHandle ) {
