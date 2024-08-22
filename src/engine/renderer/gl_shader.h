@@ -424,12 +424,14 @@ protected:
 	const bool _global; // This uniform won't go into materials SSBO if true
 	const int _components;
 	const bool _isTexture;
+	const bool _useLightMapData;
 
 	size_t      _firewallIndex;
 	size_t      _locationIndex;
 
 	GLUniform( GLShader *shader, const char *name, const char* type, const GLuint std430Size, const GLuint std430Alignment,
-								 const bool global, const int components = 0, const bool isTexture = false ) :
+	                             const bool global, const int components = 0,
+	                             const bool isTexture = false, const bool useLightMapData = false ) :
 		_shader( shader ),
 		_name( name ),
 		_type( type ),
@@ -438,6 +440,7 @@ protected:
 		_global( global ),
 		_components( components ),
 		_isTexture( isTexture ),
+		_useLightMapData( useLightMapData ),
 		_firewallIndex( 0 ),
 		_locationIndex( 0 )
 	{
@@ -482,6 +485,10 @@ public:
 		return _isTexture;
 	}
 
+	bool UseLightmapData() const {
+		return _useLightMapData;
+	}
+
 	// This should return a pointer to the memory right after the one this uniform wrote to
 	virtual uint32_t* WriteToBuffer( uint32_t* buffer );
 
@@ -498,9 +505,10 @@ public:
 
 class GLUniformSampler : protected GLUniform {
 	protected:
-	GLUniformSampler( GLShader* shader, const char* name, const char* type, const GLuint size, const bool global = false ) :
+	GLUniformSampler( GLShader* shader, const char* name, const char* type, const GLuint size, const bool global = false,
+		const bool useLightMapData = false ) :
 		GLUniform( shader, name, type, glConfig2.bindlessTexturesAvailable ? size * 2 : size,
-									   glConfig2.bindlessTexturesAvailable ? size * 2 : size, global, 0, true ) {
+									   glConfig2.bindlessTexturesAvailable ? size * 2 : size, global, 0, true, useLightMapData ) {
 	}
 
 	inline GLint GetLocation() {
@@ -1531,6 +1539,10 @@ class GLUBO : public GLBuffer {
 		GLBuffer::BindBuffer( GL_UNIFORM_BUFFER );
 	}
 
+	void UnBindBuffer() {
+		GLBuffer::UnBindBuffer( GL_UNIFORM_BUFFER );
+	}
+
 	void BufferStorage( const GLsizeiptr areaSize, const GLsizeiptr areaCount, const void* data ) {
 		GLBuffer::BufferStorage( GL_UNIFORM_BUFFER, areaSize, areaCount, data );
 	}
@@ -2154,6 +2166,7 @@ class u_ColorMap :
 	GLUniformSampler2D {
 	public:
 	u_ColorMap( GLShader* shader ) :
+		// While u_ColorMap is used for some screen-space shaders, it's never global in material system shaders
 		GLUniformSampler2D( shader, "u_ColorMap" ) {
 	}
 
@@ -2282,7 +2295,7 @@ class u_LightMap :
 	GLUniformSampler {
 	public:
 	u_LightMap( GLShader* shader ) :
-		GLUniformSampler( shader, "u_LightMap", "sampler2D", 1 ) {
+		GLUniformSampler( shader, "u_LightMap", "sampler2D", 1, true ) {
 	}
 
 	void SetUniform_LightMapBindless( GLuint64 bindlessHandle ) {
@@ -2298,7 +2311,7 @@ class u_DeluxeMap :
 	GLUniformSampler {
 	public:
 	u_DeluxeMap( GLShader* shader ) :
-		GLUniformSampler( shader, "u_DeluxeMap", "sampler2D", 1 ) {
+		GLUniformSampler( shader, "u_DeluxeMap", "sampler2D", 1, true ) {
 	}
 
 	void SetUniform_DeluxeMapBindless( GLuint64 bindlessHandle ) {
