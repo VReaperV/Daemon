@@ -1560,6 +1560,8 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 	stage++;
 }
 
+static std::unordered_map<std::string, shaderStage_t*> stages;
+
 /* This will only generate the materials themselves
 *  A material represents a distinct global OpenGL state (e. g. blend function, depth test, depth write etc.)
 *  Materials can have a dependency on other materials to make sure that consecutive stages are rendered in the proper order */
@@ -1621,7 +1623,11 @@ void MaterialSystem::GenerateWorldMaterials() {
 		uint32_t previousMaterialID = 0;
 		for ( shaderStage_t* pStage = drawSurf->shader->stages; pStage < drawSurf->shader->lastStage; pStage++ ) {
 			ProcessStage( drawSurf, pStage, shader, packIDs, stage, previousMaterialID );
+			std::string test = drawSurf->shader->name;
+			test += "|" + std::to_string( stage );
+			stages[test] = pStage;
 		}
+		Log::Warn( drawSurf->shader->name );
 	}
 	skipDrawCommands = false;
 
@@ -1642,6 +1648,9 @@ void MaterialSystem::GenerateWorldMaterials() {
 				material.currentDynamicDrawSurfCount, material.cullType );
 		}
 	} */
+	for ( const std::pair<std::string, shaderStage_t*> &pair : stages ) {
+		Log::Warn( "%s %X", pair.first, pair.second );
+	}
 
 	r_nocull->integer = current_r_nocull;
 	r_drawworld->integer = current_r_drawworld;
