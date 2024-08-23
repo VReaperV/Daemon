@@ -1415,8 +1415,6 @@ void MaterialSystem::GenerateWorldMaterials() {
 
 	Log::Debug( "Generating world materials" );
 
-	R_SyncRenderThread();
-
 	R_AddWorldSurfaces();
 
 	Log::Notice( "World bounds: min: %f %f %f max: %f %f %f", tr.viewParms.visBounds[0][0], tr.viewParms.visBounds[0][1],
@@ -2037,8 +2035,6 @@ void MaterialSystem::Free() {
 	portalBounds.clear();
 	skyShaders.clear();
 	renderedMaterials.clear();
-
-	R_SyncRenderThread();
 
 	surfaceCommandsSSBO.UnmapBuffer();
 	culledCommandsBuffer.UnmapBuffer();
