@@ -130,6 +130,7 @@ void GL_TextureMode( const char *string )
 
 			// Getting bindless handle makes the texture immutable, so generate it again because we used glTexParameter*
 			if ( glConfig2.bindlessTexturesAvailable ) {
+				Log::Warn( "regen handle (tex mode): %s %u %u", image->name, image->texnum, image->texture->bindlessTextureHandle );
 				image->texture->GenBindlessHandle();
 			}
 		}
@@ -2833,6 +2834,8 @@ static void R_CreateColorGradeImage()
 	imageParams.filterType = filterType_t::FT_LINEAR;
 	imageParams.wrapType = wrapTypeEnum_t::WT_EDGE_CLAMP;
 
+	Log::Warn( "creating color grade image" );
+
 	tr.colorGradeImage = R_Create3DImage( "_colorGrade", data, REF_COLORGRADEMAP_SIZE, REF_COLORGRADEMAP_SIZE, REF_COLORGRADE_SLOTS * REF_COLORGRADEMAP_SIZE, imageParams );
 
 	ri.Hunk_FreeTempMemory( data );
@@ -2851,6 +2854,8 @@ void R_CreateBuiltinImages()
 	byte  *out;
 	float s, value;
 	byte  intensity;
+
+	Log::Warn( "creating built-in images..." );
 
 	R_CreateDefaultImage();
 
@@ -2953,6 +2958,8 @@ void R_CreateBuiltinImages()
 	R_CreateBlackCubeImage();
 	R_CreateWhiteCubeImage();
 	R_CreateColorGradeImage();
+
+	Log::Warn( "done" );
 }
 
 /*
@@ -3053,8 +3060,10 @@ void R_ShutdownImages()
 {
 	Log::Debug("------- R_ShutdownImages -------" );
 
+	Log::Warn( "shutdown images" );
 	for ( image_t *image : tr.images )
 	{
+		Log::Warn( "%s %u %u resident: %b", image->name, image->texnum, image->texture->bindlessTextureHandle, image->texture->IsResident() );
 		if ( image->texture->IsResident() ) {
 			image->texture->MakeNonResident();
 		}

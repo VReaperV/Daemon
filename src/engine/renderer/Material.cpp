@@ -1405,6 +1405,8 @@ static void ProcessMaterialLiquid( Material* material, shaderStage_t* pStage ) {
 *  A material represents a distinct global OpenGL state (e. g. blend function, depth test, depth write etc.)
 *  Materials can have a dependency on other materials to make sure that consecutive stages are rendered in the proper order */
 void MaterialSystem::GenerateWorldMaterials() {
+	Log::Warn( "gen materials" );
+
 	const int current_r_nocull = r_nocull->integer;
 	const int current_r_drawworld = r_drawworld->integer;
 	r_nocull->integer = 1;
@@ -1625,14 +1627,18 @@ void MaterialSystem::AddAllWorldSurfaces() {
 }
 
 void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material ) {
+	Log::Warn( "adding stage tex" );
 	for ( const textureBundle_t& bundle : pStage->bundle ) {
 		if ( bundle.isVideoMap ) {
+			Log::Warn( "video map: %s %u %u", tr.cinematicImage[bundle.videoMapHandle]->name,
+				tr.cinematicImage[bundle.videoMapHandle]->texnum, tr.cinematicImage[bundle.videoMapHandle]->texture->bindlessTextureHandle );
 			material->AddTexture( tr.cinematicImage[bundle.videoMapHandle]->texture );
 			continue;
 		}
 
 		for ( image_t* image : bundle.image ) {
 			if ( image ) {
+				Log::Warn( "bundle: %s %u %u", image->name, image->texnum, image->texture->bindlessTextureHandle );
 				material->AddTexture( image->texture );
 			}
 		}
@@ -1708,7 +1714,9 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 			break;
 	}
 
+	Log::Warn( "lightmap: %s %u %u", lightmap->name, lightmap->texnum, lightmap->texture->bindlessTextureHandle );
 	material->AddTexture( lightmap->texture );
+	Log::Warn( "deluxemap: %s %u %u", deluxemap->name, deluxemap->texnum, deluxemap->texture->bindlessTextureHandle );
 	material->AddTexture( deluxemap->texture );
 
 	if ( glConfig2.dynamicLight ) {

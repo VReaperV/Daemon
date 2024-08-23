@@ -184,10 +184,12 @@ GLuint64 GL_BindToTMU( int unit, image_t *image )
 
 	if ( glConfig2.bindlessTexturesAvailable ) {
 		if ( materialSystem.generatingWorldCommandBuffer ) {
+			Log::Warn( "bindless generating: %s %u %u", image->name, image->texnum, image->texture->bindlessTextureHandle );
 			materialSystem.AddTexture( image->texture );
 			return image->texture->bindlessTextureHandle;
 		}
 
+		Log::Warn( "bindless non-generating: %s %u %u", image->name, image->texnum, image->texture->bindlessTextureHandle );
 		return tr.textureManager.BindTexture( 0, image->texture );
 	}
 
@@ -5025,6 +5027,7 @@ void RE_UploadCinematic( int cols, int rows, const byte *data, int client, bool 
 
 		// Getting bindless handle makes the texture immutable, so generate it again because we used glTexParameter*
 		if ( glConfig2.bindlessTexturesAvailable ) {
+			Log::Warn( "regen handle (cin): %s %u %u", tr.cinematicImage[client]->name, tr.cinematicImage[client]->texnum, tr.cinematicImage[client]->texture->bindlessTextureHandle );
 			tr.cinematicImage[ client ]->texture->GenBindlessHandle();
 		}
 	}

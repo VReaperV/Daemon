@@ -59,7 +59,9 @@ void Texture::MakeNonResident() {
 }
 
 void Texture::GenBindlessHandle() {
+	Log::Warn( "generating handle for %u", textureHandle );
 	bindlessTextureHandle = glGetTextureHandleARB( textureHandle );
+	Log::Warn( "%u", bindlessTextureHandle );
 
 	if ( bindlessTextureHandle == 0 ) {
 		Sys::Drop( "Failed to generate bindless texture handle" );

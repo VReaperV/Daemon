@@ -966,6 +966,7 @@ void GLShaderManager::buildPermutation( GLShader *shader, int macroIndex, int de
 			}
 
 			BindAttribLocations( shaderProgram->program );
+			Log::Warn( "link deform" );
 			LinkProgram( shaderProgram->program );
 		}
 		else if ( !LoadShaderBinary( shader, i ) )
@@ -1241,6 +1242,8 @@ void GLShaderManager::CompileGPUShaders( GLShader *shader, shaderProgram_t *prog
 		shader->GetMainShaderName(),
 		compileMacros.empty() ? "none" : compileMacros );
 
+	Log::Warn( "compiling: %s", shader->_name );
+
 	// add them
 	std::string vertexShaderTextWithMacros = macrosString + shader->_vertexShaderText;
 	std::string fragmentShaderTextWithMacros = macrosString + shader->_fragmentShaderText;
@@ -1292,7 +1295,9 @@ void GLShaderManager::CompileAndLinkGPUShaderProgram( GLShader *shader, shaderPr
 		glAttachShader( program->program, program->CS );
 	}
 
+	Log::Warn( "bind attr: %s", shader->_name );
 	BindAttribLocations( program->program );
+	Log::Warn( "link: %s", shader->_name );
 	LinkProgram( program->program );
 }
 
