@@ -1166,6 +1166,9 @@ enum class shaderProfilerRenderSubGroupsMode {
 		bool        noFog; // used only for shaders that have fog disabled, so we can enable it for individual stages
 
 		bool useMaterialSystem = false;
+		uint materialsSSBOOffset = 0;
+		bool initialized = false;
+		bool bufferInitialized = false;
 		uint materialPackID = 0;
 		uint materialID = 0;
 		bool dynamic = false;
@@ -1613,11 +1616,6 @@ enum class shaderProfilerRenderSubGroupsMode {
 		bool          bspSurface;
 		int fog;
 
-		uint materialsSSBOOffset[ MAX_SHADER_STAGES ];
-		bool initialized[ MAX_SHADER_STAGES ];
-		uint materialIDs[ MAX_SHADER_STAGES ];
-		uint materialPackIDs[ MAX_SHADER_STAGES ];
-		bool texturesDynamic[ MAX_SHADER_STAGES ];
 		uint drawCommandIDs[ MAX_SHADER_STAGES ];
 
 		drawSurf_t* depthSurface;
