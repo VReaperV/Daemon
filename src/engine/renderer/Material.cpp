@@ -1566,7 +1566,9 @@ void MaterialSystem::GenerateDrawSurfClusters( drawSurf_t* drawSurf, const uint 
 		uint minIndex = UINT32_MAX;
 		uint maxIndex = -UINT32_MAX;
 
-		while ( triangleCount < std::min( 256u, ( indexCount - index ) / 3 ) ) {
+		const uint32_t maxTris = ( indexCount - index ) / 3;
+
+		while ( triangleCount < std::min( 256u, maxTris ) ) {
 			for ( uint i = 0; i < 3; i++ ) {
 				clusterIndexes[currentBaseClusterIndex + i] = indexes[index + firstIndex + i];
 
@@ -1607,10 +1609,10 @@ void MaterialSystem::GenerateDrawSurfClusters( drawSurf_t* drawSurf, const uint 
 		}
 
 		for ( uint i = 0; i < surfaceType.count - ( depthPrePass ? 1 : 0 ); i++ ) {
-			const Material* material = &materialPacks[drawSurf->materialPackIDs[0]].materials[drawSurf->materialIDs[0]];
+			const Material* material = &materialPacks[drawSurf->materialPackIDs[i]].materials[drawSurf->materialIDs[i]];
 
 			data.materials[i + ( depthPrePass ? 1 : 0 )] =
-				material->drawCommands[drawSurf->drawCommandIDs[0]].cmd.baseInstance;
+				material->drawCommands[drawSurf->drawCommandIDs[i]].cmd.baseInstance;
 			mat[i + ( depthPrePass ? 1 : 0 )] = material->globalID;
 		}
 
