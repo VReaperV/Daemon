@@ -265,14 +265,19 @@ struct Cluster {
 /*                  sfTypeID|sfTypeID|sfTypeID|sfTypeID
    clusters - uint [________|________|________|________] */
 Cluster UnpackCluster( const in uint clusterID ) {
+    const uint globalInvocationID = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_WorkGroupSize.x * gl_NumWorkGroups.y * gl_WorkGroupSize.y
+                                  + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x
+                                  + gl_GlobalInvocationID.x;
     Cluster cluster;
 
     uvec2 clusterIDs = uintIDToUvec4( clusterID / 4 );
     uint surfaceTypeID = clusters[clusterIDs.x][clusterIDs.y];
 
     cluster.surfaceTypeID = ( surfaceTypeID >> (
-                                                 ( 3 - ( clusterID % 4 ) ) * 8
+                                                 ( clusterID % 4 ) * 8
                                                ) ) & 0x7F;
+    debugSurfaces[globalInvocationID * 5 + 1].zw = uvec2( clusterIDs.x, clusterIDs.y );
+    debugSurfaces[globalInvocationID * 5 + 3].x = surfaceTypeID;
     // cluster.indexOffset = clusterData[clusterID * 3];
     ClusterData data = clusterData[clusterID];
     // cluster.indexOffset = cluster.indexOffset & 0xFFFFFF;
@@ -294,9 +299,9 @@ void ProcessCluster( const in Cluster cluster ) {
         clusterIDs = uintIDToUvec4( cluster.surfaceTypeID + i );
         const uint materialID = clusterSurfaceTypes[clusterIDs.x][clusterIDs.y];
         atomicCounterAddARB( atomicMaterialCounters[( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_MATERIALS + materialID], cluster.triangleCount );
-        /* if( i <= 4) {
-            debugSurfaces[debugID * 5 + 1][i - 1] = materialID;
-        } */
+        if( i <= 4) {
+            debugSurfaces[debugID * 5 + 2][i - 1] = materialID;
+        }
     }
 }
 
@@ -318,24 +323,11 @@ void PackClusters( const in uint globalID ) {
     }
     
     const uint localInvocationCount = min( 64, u_TotalDrawSurfs - globalID );
-    /* const uint localGroupCount = ( u_TotalDrawSurfs - globalID ) % 4 == 0 ? ( u_TotalDrawSurfs - globalID ) / 4
-                                                                         : ( u_TotalDrawSurfs - globalID ) / 4 + 1;
-    for( uint i = 0; i < min( 16, localGroupCount ); i++ ) {
-        const uint clusterData = ( localClusters[i * 4] + ( uint( visibleClusters[i * 4] ) << 7 ) ) << 24
-                               + ( i * 4 + 1 < localInvocationCount ) ?
-                                 ( localClusters[i * 4 + 1] + ( uint( visibleClusters[i * 4 + 1] ) << 7 ) ) << 16 : 0
-                               + ( i * 4 + 1 < localInvocationCount ) ?
-                                 ( localClusters[i * 4 + 2] + ( uint( visibleClusters[i * 4 + 2] ) << 7 ) ) << 8 : 0
-                               + ( i * 4 + 1 < localInvocationCount ) ?
-                                 ( localClusters[i * 4 + 3] + ( uint( visibleClusters[i * 4 + 3] ) << 7 ) ) : 0;
-        clustersVisibility[globalID / 4 + i] = clusterData;
-    } */
 
-    // 
     int shift = 24;
     uint j = 0;
     uint data = 0;
-    while( j < localInvocationCount ) {
+    /* while( j < localInvocationCount ) {
         data += ( localClusters[j] + ( uint( visibleClusters[j] ) << 7 ) ) << shift;
         shift -= 8;
         if( shift < 0 ) {
@@ -344,7 +336,7 @@ void PackClusters( const in uint globalID ) {
             shift = 24;
         }
         j++;
-    }
+    } */
 
     // debugSurfaces[globalID * 5 + u_Frame * 5 + 2].xy = uvec2( u_Frame, count );
     if( count == 0 ) {
@@ -364,34 +356,10 @@ void PackClusters( const in uint globalID ) {
             id++;
         }
     }
-
-    /* uint offset = 0;
-    if( ( culledClusterID & 1 ) == 1 ) {
-        const uint data = culledClusters[culledClusterID / 2 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] & 0xFFFF0000;
-        culledClusters[culledClusterID / 2 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] = data + globalID + firstClusterID;
-        visibleClusters[firstClusterID] = false;
-        count--;
-        offset = 1;
-    }
-
-    uint id = 0;
-    uint clusterData = 0;
-    bool bitShift = true;
-    for( uint i = 0; i < 64 && id < count; i++ ) {
-        if( visibleClusters[i] ) {
-            clusterData += bitShift ? ( globalID + i ) << 16 : globalID + i;
-            if( !bitShift ) {
-                culledClusters[culledClusterID + id / 2 + offset + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] = clusterData;
-                clusterData = 0;
-            }
-            bitShift = !bitShift;
-            id++;
-        }
-    }
-    if( count - id == 1 ) {
-        clusterData += culledClusters[culledClusterID + id / 2 + offset + 1 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] & 0xFFFF;
-        culledClusters[culledClusterID + id / 2 + 1 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] = clusterData;
-    } */
+    debugSurfaces[globalID * 5 + 4] = uvec4( culledClusters[culledClusterID + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW],
+        culledClusters[culledClusterID + 1 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW],
+        culledClusters[culledClusterID + 2 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW],
+        culledClusters[culledClusterID + 3 + ( MAX_VIEWS * u_Frame + u_ViewID ) * MAX_CLUSTERS_NEW] );
 }
 
 void main() {
@@ -427,6 +395,9 @@ void main() {
 
     Cluster cluster = UnpackCluster( globalInvocationID );
     // debugSurfaces[globalInvocationID * 5] = uvec4( globalInvocationID, cluster.triangleCount, cluster.indexOffset, cluster.surfaceTypeID );
+
+    debugSurfaces[globalInvocationID * 5] = uvec4( globalInvocationID, cluster.triangleCount, cluster.indexOffset, cluster.surfaceTypeID );
+    debugSurfaces[globalInvocationID * 5 + 1].xy = uvec2( data.materials[0], data.materials[1] );
 
     localClusters[gl_LocalInvocationIndex] = cluster.surfaceTypeID;
     if( !culled ) {

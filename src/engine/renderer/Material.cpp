@@ -59,7 +59,7 @@ GLBuffer atomicMaterialCountersBuffer( "atomicMaterialCounters", 1, GL_MAP_WRITE
 GLBuffer atomicMaterialCountersBuffer2( "atomicMaterialCounters2", 2, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 GLBuffer clusterCountersBuffer( "clusterCounters", 3, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 GLBuffer clusterWorkgroupCountersBuffer( "clusterWorkgroupCounters", 5, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
-GLBuffer clusterVertexesBuffer( "clusterVertexes", 12, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+GLBuffer clusterVertexesBuffer( "clusterVertexes", 14, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 
 GLSSBO debugSSBO( "debugSurfaces", 13, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 
@@ -1258,14 +1258,6 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		(shaderVertex_t*) clusterVertexesBuffer.MapBufferRange( GL_SHADER_STORAGE_BUFFER, MAX_FRAMES * MAX_FRAME_TRIANGLES * 3 * 8 );
 	clusterVertexesBuffer.UnBindBuffer( GL_SHADER_STORAGE_BUFFER );
 
-	debugSSBO.GenBuffer();
-	debugSSBO.BindBuffer();
-	glBufferData( GL_SHADER_STORAGE_BUFFER, surfaceDescriptorsCount * 20 * sizeof( uint32_t ),
-		nullptr, GL_STATIC_DRAW );
-	uint32_t* debugSurfaces = debugSSBO.MapBufferRange( surfaceDescriptorsCount * 20 );
-	memset( debugSurfaces, 0, surfaceDescriptorsCount * 20 * sizeof( uint32_t ) );
-	debugSSBO.UnmapBuffer();
-
 	//
 
 	VBO_t* lastVBO = nullptr;
@@ -1366,6 +1358,14 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		memcpy( surfaceDescriptors, &surface, descriptorSize * sizeof( uint32_t ) );
 		surfaceDescriptors += descriptorSize;
 	}
+
+	debugSSBO.GenBuffer();
+	debugSSBO.BindBuffer();
+	glBufferData( GL_SHADER_STORAGE_BUFFER, clusterCount * 20 * sizeof( uint32_t ),
+		nullptr, GL_STATIC_DRAW );
+	uint32_t* debugSurfaces = debugSSBO.MapBufferRange( clusterCount * 20 );
+	memset( debugSurfaces, 0, clusterCount * 20 * sizeof( uint32_t ) );
+	debugSSBO.UnmapBuffer();
 
 	Log::Warn( "clusters: %u cluster tris: %u total tris: %u", clusterCount, clusterTriangles, totalTriangles );
 
@@ -1545,12 +1545,16 @@ void MaterialSystem::GenerateDrawSurfClusters( drawSurf_t* drawSurf, const uint 
 		}
 	} else {
 		surfaceTypeID = it->id;
+		surfaceType.id = surfaceTypeID;
 	}
 
 	uint index = 0;
 	glIndex_t* indexes = IBO->savedData;
 	bool firstCluster = true;
 	shaderVertex_t* vertexes = VBO->shaderVertexData;
+	Log::Warn( "cluster: %u %s: %u material: %u surfaceData: %u",
+		clusterCount, drawSurf->shader->name, indexCount, material->globalID, drawCmd.baseInstance );
+	Log::Warn( "surfaceTypeID: %u material0: %u material1: %u", surfaceType.id, surfaceType.materialIDs[0], surfaceType.materialIDs[1] );
 	while ( index < indexCount ) {
 		uint triangleCount = 0;
 		const uint clusterIndexOffset = currentBaseClusterIndex;
@@ -1567,6 +1571,7 @@ void MaterialSystem::GenerateDrawSurfClusters( drawSurf_t* drawSurf, const uint 
 		uint maxIndex = -UINT32_MAX;
 
 		const uint32_t maxTris = ( indexCount - index ) / 3;
+		Log::Warn( "index: %u maxTris: %u", index, maxTris );
 
 		while ( triangleCount < std::min( 256u, maxTris ) ) {
 			for ( uint i = 0; i < 3; i++ ) {
@@ -1632,6 +1637,7 @@ void MaterialSystem::GenerateDrawSurfClusters( drawSurf_t* drawSurf, const uint 
 			currentClusterVertex += vertexCount;
 		}
 		memcpy( &clusterData[currentBaseCluster * ( 8 + maxStages )], &data, ( 8 + maxStages ) * sizeof( uint32_t ) );
+		// Log::Warn( "mat0: %u mat1: %u", data.materials[0], data.materials[1] );
 
 		if ( firstCluster ) {
 			drawSurf->baseCluster = currentBaseCluster;
@@ -2126,12 +2132,17 @@ void MaterialSystem::GenerateWorldMaterials() {
 		totalMaterialCount += pack.materials.size();
 	}
 	Log::Notice( "Generated %u materials from %u surfaces", totalMaterialCount, tr.refdef.numDrawSurfs );
+
+	r_nocull->integer = current_r_nocull;
+	r_drawworld->integer = current_r_drawworld;
+	AddAllWorldSurfaces();
+
 	for ( const MaterialPack& materialPack : materialPacks ) {
 		Log::Notice( "materialPack sort: %i %i", Util::ordinal( materialPack.fromSort ), Util::ordinal( materialPack.toSort ) );
 		for ( const Material& material : materialPack.materials ) {
 			Log::Notice( "id: %u, useSync: %b, sync: %u, program: %i, stateBits: %u, totalDrawSurfCount: %u, shader: %s, vbo: %s, ibo: %s"
 				", staticDrawSurfs: %u, dynamicDrawSurfs: %u, culling: %i",
-				material.id, material.useSync, material.syncMaterial, material.program, material.stateBits, material.totalDrawSurfCount,
+				material.globalID, material.useSync, material.syncMaterial, material.program, material.stateBits, material.totalDrawSurfCount,
 				material.shader->GetName(), material.vbo->name, material.ibo->name, material.currentStaticDrawSurfCount,
 				material.currentDynamicDrawSurfCount, material.cullType );
 			for ( uint32_t i = 0; i < 8; i++ ) {
@@ -2140,10 +2151,6 @@ void MaterialSystem::GenerateWorldMaterials() {
 			}
 		}
 	}
-
-	r_nocull->integer = current_r_nocull;
-	r_drawworld->integer = current_r_drawworld;
-	AddAllWorldSurfaces();
 
 	skipDrawCommands = true;
 	GeneratePortalBoundingSpheres();

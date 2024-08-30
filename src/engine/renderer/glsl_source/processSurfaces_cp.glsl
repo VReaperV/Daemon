@@ -82,7 +82,7 @@ struct sVertex{
     float pad2;
 };
 
-layout(std430, binding = 12) readonly restrict buffer clusterVertexesSSBO {
+layout(std430, binding = 14) readonly restrict buffer clusterVertexesSSBO {
     sVertex clusterVertexes[];
 };
 
@@ -174,7 +174,7 @@ Cluster UnpackCluster( const in uint clusterID ) {
     uint surfaceTypeID = clusters[clusterIDs.x][clusterIDs.y];
 
     cluster.surfaceTypeID = ( surfaceTypeID >> (
-                                                 ( 3 - ( clusterID % 4 ) ) * 8
+                                                 ( clusterID % 4 ) * 8
                                                ) ) & 0x7F;
     // cluster.indexOffset = clusterData[clusterID * 3];
     ClusterData data = clusterData[clusterID];
