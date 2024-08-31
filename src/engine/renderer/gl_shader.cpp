@@ -472,7 +472,8 @@ static std::string GenComputeVersionDeclaration() {
 		{ glConfig2.explicitUniformLocationAvailable, 430, "ARB_explicit_uniform_location" },
 		{ glConfig2.shaderImageLoadStoreAvailable, 420, "ARB_shader_image_load_store" },
 		{ glConfig2.shaderAtomicCountersAvailable, 420, "ARB_shader_atomic_counters" },
-		{ glConfig2.shaderAtomicCounterOpsAvailable, 420, "ARB_shader_atomic_counter_ops" },
+		// ARB_shader_atomic_counter_ops set to -1, because we might get a 4.6 GL context, where the core variables have different names
+		{ glConfig2.shaderAtomicCounterOpsAvailable, -1, "ARB_shader_atomic_counter_ops" },
 		{ glConfig2.bindlessTexturesAvailable, -1, "ARB_bindless_texture" },
 	};
 
