@@ -562,6 +562,9 @@ static std::string GenFragmentHeader() {
 		str += "#define matID in_MatID\n\n";
 	}
 
+	str += "#define TEXTURE_WRAP( uv, modifier ) "
+		"( vec3( ( true ? mod( uv * modifier.xy, modifier.xy ) : clamp( uv * modifier.xy, vec2( 0.0, 0.0 ), modifier.xy ) ), modifier.z ) )\n";
+
 	return str;
 }
 
@@ -1351,8 +1354,10 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 		if ( uniform->IsTexture() ) {
 			materialStruct += "  uvec2 ";
 			materialStruct += uniform->GetName();
+			materialStruct += "_";
 		} else {
 			materialStruct += "  " + uniform->GetType() + " " + uniform->GetName();
+			materialStruct += "_";
 		}
 
 		if ( uniform->GetComponentSize() ) {
@@ -1377,6 +1382,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 
 		materialDefines += " materials[matID].";
 		materialDefines += uniform->GetName();
+		materialDefines += "_";
 		
 		if ( uniform->IsTexture() ) {
 			materialDefines += " )";

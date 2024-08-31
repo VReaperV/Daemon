@@ -66,7 +66,7 @@ uniform float       u_ReliefOffsetBias;
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
 	// alpha channel contains the height map so do not try to reconstruct normal map from it
 #if defined(r_texturePacks)
-	normal = texture2D(u_NormalMap, vec3( texNormal * u_NormalMapModifier.xy, u_NormalMapModifier.z )).rgb;
+	normal = texture2D(u_NormalMap, TEXTURE_WRAP( texNormal, u_NormalMapModifier )).rgb;
 #else
 	normal = texture2D(u_NormalMap, texNormal).rgb;
 #endif
@@ -81,7 +81,7 @@ uniform float       u_ReliefOffsetBias;
 	// crunch -dxn seems to produce such files, since alpha channel is abused such format
 	// is unsuitable to embed height map, then height map must be distributed as loose file
 #if defined(r_texturePacks)
-	normal = texture2D(u_NormalMap, vec3( texNormal * u_NormalMapModifier.xy, u_NormalMapModifier.z )).rga;
+	normal = texture2D(u_NormalMap, TEXTURE_WRAP( texNormal, u_NormalMapModifier )).rga;
 #else
 	normal = texture2D(u_NormalMap, texNormal).rga;
 #endif
@@ -190,15 +190,15 @@ vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMa
 
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
 	#if defined(r_texturePacks)
-		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth )
-												   * u_NormalMapModifier.xy, u_NormalMapModifier.z )).a;
+		float depth = texture2D(u_HeightMap, TEXTURE_WRAP( ( rayStartTexCoords + displacement * currentDepth ),
+															u_NormalMapModifier )).a;
 	#else
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).a;
 	#endif
 #else // !USE_HEIGHTMAP_IN_NORMALMAP
 	#if defined(r_texturePacks)
-		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth )
-												   * u_HeightMapModifier.xy, u_HeightMapModifier.z )).g;
+		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth ),
+												   u_HeightMapModifier )).g;
 	#else
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).g;
 	#endif
@@ -224,15 +224,15 @@ vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMa
 
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
 	#if defined(r_texturePacks)
-		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth )
-												   * u_NormalMapModifier.xy, u_NormalMapModifier.z )).a;
+		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth ),
+												   u_NormalMapModifier.xy )).a;
 	#else
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).a;
 	#endif
 #else // !USE_HEIGHTMAP_IN_NORMALMAP
 	#if defined(r_texturePacks)
-		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth )
-												   * u_HeightMapModifier.xy, u_HeightMapModifier.z )).g;
+		float depth = texture2D(u_HeightMap, vec3( ( rayStartTexCoords + displacement * currentDepth ),
+												   u_HeightMapModifier )).g;
 	#else
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).g;
 	#endif

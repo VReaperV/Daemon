@@ -106,7 +106,7 @@ void main()
 
 	// Compute the diffuse term.
 #if defined(r_texturePacks)
-	vec4 diffuse = texture2D(u_DiffuseMap, vec3( texCoords * u_DiffuseMapModifier.xy, u_DiffuseMapModifier.z ));
+	vec4 diffuse = texture2D(u_DiffuseMap, TEXTURE_WRAP( texCoords, u_DiffuseMapModifier ));
 #else
 	vec4 diffuse = texture2D(u_DiffuseMap, texCoords);
 #endif
@@ -129,7 +129,7 @@ void main()
 
 	// Compute the material term.
 #if defined(r_texturePacks)
-	vec4 material = texture2D(u_MaterialMap, vec3( texCoords * u_MaterialMapModifier.xy, u_MaterialMapModifier.z ));
+	vec4 material = texture2D(u_MaterialMap, TEXTURE_WRAP( texCoords, u_MaterialMapModifier ));
 #else
 	vec4 material = texture2D(u_MaterialMap, texCoords);
 #endif
@@ -146,7 +146,7 @@ void main()
 	#if defined(USE_DELUXE_MAPPING)
 		// Compute light direction in world space from deluxe map.
 		#if defined(r_texturePacks)
-			vec4 deluxe = texture2D(u_DeluxeMap, vec3( var_TexLight * u_DeluxeMapModifier.xy, u_DeluxeMapModifier.z ));
+			vec4 deluxe = texture2D(u_DeluxeMap, TEXTURE_WRAP( var_TexLight, u_DeluxeMapModifier ));
 		#else
 			vec4 deluxe = texture2D(u_DeluxeMap, var_TexLight);
 		#endif
@@ -160,7 +160,7 @@ void main()
 	#if defined(USE_LIGHT_MAPPING)
 		// Compute light color from world space lightmap.
 		#if defined(r_texturePacks)
-			vec3 lightColor = texture2D(u_LightMap, vec3( var_TexLight * u_LightMapModifier.xy, u_LightMapModifier.z )).rgb;
+			vec3 lightColor = texture2D(u_LightMap, TEXTURE_WRAP( var_TexLight, u_LightMapModifier ) ).rgb;
 		#else
 			vec3 lightColor = texture2D(u_LightMap, var_TexLight).rgb;
 		#endif
@@ -238,7 +238,7 @@ void main()
 	#if defined(r_glowMapping)
 		// Blend glow map.
 #if defined(r_texturePacks)
-		vec3 glow = texture2D(u_GlowMap, vec3( texCoords * u_GlowMapModifier.xy, u_GlowMapModifier.z )).rgb;
+		vec3 glow = texture2D(u_GlowMap, TEXTURE_WRAP( texCoords, u_GlowMapModifier )).rgb;
 #else
 		vec3 glow = texture2D(u_GlowMap, texCoords).rgb;
 #endif

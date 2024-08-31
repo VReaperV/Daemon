@@ -43,7 +43,7 @@ void	main()
 	#insert material_fp
 
 #if defined(r_texturePacks)
-	vec4 color = texture2D(u_ColorMap, vec3( var_TexCoords * u_ColorMapModifier.xy, u_ColorMapModifier.z ));
+	vec4 color = texture2D(u_ColorMap, TEXTURE_WRAP( var_TexCoords, u_ColorMapModifier ));
 #else
 	vec4 color = texture2D(u_ColorMap, var_TexCoords);
 #endif

@@ -62,7 +62,7 @@ void	main()
 	st.t = 1.0;
 	
 #if defined(r_texturePacks)
-	vec4 color = texture2D(u_ColorMap, vec3( st * u_ColorMapModifier.xy, u_ColorMapModifier.z ));
+	vec4 color = texture2D(u_ColorMap, TEXTURE_WRAP( st, u_ColorMapModifier ));
 #else
 	vec4 color = texture2D(u_ColorMap, st);
 #endif

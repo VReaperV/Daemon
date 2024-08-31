@@ -48,6 +48,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *  Any texture samplers should be passed to functions from main() or other functions
 */
 
+// #define TEXTURE_WRAP( uv, modifier ) ( vec3( uv * modifier.xy, modifier.z ) )
+
 #if defined(USE_MATERIAL_SYSTEMB)
 
 #if defined(r_texturePacks)

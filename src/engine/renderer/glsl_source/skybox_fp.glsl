@@ -74,7 +74,7 @@ void	main()
 		vec2 st = vec2( acos(incidentRay.x), acos(incidentRay.y) );
 		st = (u_TextureMatrix * vec4(st, 0.0, 1.0)).xy;
 	#if defined(r_texturePacks)
-		color = texture2D( u_CloudMap, vec3( st * u_CloudMapModifier.xy, u_CloudMapModifier.z ) );
+		color = texture2D( u_CloudMap, TEXTURE_WRAP( st, u_CloudMapModifier ) );
 	#else
 		color = texture2D( u_CloudMap, st ).rgba;
 	#endif
