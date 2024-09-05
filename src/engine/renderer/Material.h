@@ -114,9 +114,13 @@ struct Material {
 	bool texturesResident = false;
 	std::vector<Texture*> textures;
 
+	image_t* lightmap = tr.whiteImage;
+	image_t* deluxemap = tr.whiteImage;
+
 	bool operator==( const Material& other ) {
 		return program == other.program && stateBits == other.stateBits && vbo == other.vbo && ibo == other.ibo
-			&& cullType == other.cullType && usePolygonOffset == other.usePolygonOffset;
+			&& cullType == other.cullType && usePolygonOffset == other.usePolygonOffset
+			;// && lightmap == other.lightmap && deluxemap == other.deluxemap;
 	}
 
 	void AddTexture( Texture* texture ) {

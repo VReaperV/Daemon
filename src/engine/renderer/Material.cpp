@@ -1296,7 +1296,7 @@ static void BindShaderLiquid( Material* material ) {
 
 // ProcessMaterial*() are essentially same as BindShader*(), but only set the GL program id to the material,
 // without actually binding it
-static void ProcessMaterialGeneric( Material* material, shaderStage_t* pStage, shader_t* shader ) {
+static void ProcessMaterialGeneric( Material* material, shaderStage_t* pStage, shader_t* shader, drawSurf_t* drawSurf ) {
 	material->shader = gl_genericShaderMaterial;
 
 	material->vertexAnimation = false;
@@ -1304,6 +1304,9 @@ static void ProcessMaterialGeneric( Material* material, shaderStage_t* pStage, s
 	material->tcGen_Lightmap = pStage->tcGen_Lightmap;
 	material->vertexSprite = shader->autoSpriteMode != 0;
 	material->deformIndex = pStage->deformIndex;
+	if( pStage->type == stageType_t::ST_STYLELIGHTMAP ) {
+		material->lightmap = GetLightMap( drawSurf );
+	}
 
 	gl_genericShaderMaterial->SetVertexAnimation( false );
 
@@ -1374,6 +1377,42 @@ static void ProcessMaterialLightMapping( Material* material, shaderStage_t* pSta
 	material->enableNormalMapping = pStage->enableNormalMapping && tr.cubeHashTable != nullptr;
 	material->enablePhysicalMapping = pStage->enablePhysicalMapping;
 	material->deformIndex = pStage->deformIndex;
+
+	// u_Map, u_DeluxeMap
+	image_t* lightmap = tr.whiteImage;
+	image_t* deluxemap = tr.whiteImage;
+
+	switch ( lightMode ) {
+		case lightMode_t::VERTEX:
+			break;
+
+		case lightMode_t::GRID:
+			lightmap = tr.lightGrid1Image;
+			break;
+
+		case lightMode_t::MAP:
+			lightmap = GetLightMap( drawSurf );
+			break;
+
+		default:
+			break;
+	}
+
+	switch ( deluxeMode ) {
+		case deluxeMode_t::MAP:
+			deluxemap = GetDeluxeMap( drawSurf );
+			break;
+
+		case deluxeMode_t::GRID:
+			deluxemap = tr.lightGrid2Image;
+			break;
+
+		default:
+			break;
+	}
+
+	material->lightmap = lightmap;
+	material->deluxemap = deluxemap;
 
 	gl_lightMappingShaderMaterial->SetDeluxeMapping( enableDeluxeMapping );
 
@@ -1506,11 +1545,11 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 	switch ( pStage->type ) {
 		case stageType_t::ST_COLORMAP:
 			// generic2D also uses this, but it's for ui only, so skip that for now
-			ProcessMaterialGeneric( &material, pStage, drawSurf->shader );
+			ProcessMaterialGeneric( &material, pStage, drawSurf->shader, drawSurf );
 			break;
 		case stageType_t::ST_STYLELIGHTMAP:
 		case stageType_t::ST_STYLECOLORMAP:
-			ProcessMaterialGeneric( &material, pStage, drawSurf->shader );
+			ProcessMaterialGeneric( &material, pStage, drawSurf->shader, drawSurf );
 			break;
 		case stageType_t::ST_LIGHTMAP:
 		case stageType_t::ST_DIFFUSEMAP:
