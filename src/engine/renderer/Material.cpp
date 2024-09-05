@@ -620,14 +620,14 @@ void UpdateSurfaceDataFog( uint32_t* materials, Material& material, drawSurf_t* 
 	shader_t* shader = drawSurf->shader;
 	shaderStage_t* pStage = &shader->stages[stage];
 
-	const uint32_t paddedOffset = drawSurf->materialsSSBOOffset[stage] * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
-	bool updated = !drawSurf->initialized[stage] || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
+	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
 	if ( !updated ) {
 		return;
 	}
-	drawSurf->initialized[stage] = true;
+	pStage->bufferInitialized = true;
 
 	const fog_t* fog = material.fog;
 
@@ -737,14 +737,10 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 						tess.materialID = pStage->materialID;
 						tess.materialPackID = pStage->materialPackID;
 
-						tess.multiDrawPrimitives = 0;
-						tess.numIndexes = 0;
-						tess.numVertexes = 0;
-						tess.attribsSet = 0;
-
+						Tess_Begin( Tess_StageIteratorDummy, nullptr, nullptr, false, -1, 0 );
 						rb_surfaceTable[Util::ordinal( *drawSurf->surface )]( drawSurf->surface );
-
 						pStage->colorRenderer( pStage );
+						Tess_Clear();
 
 						drawSurf->drawCommandIDs[stage] = lastCommandID;
 
@@ -972,7 +968,8 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 
 		if ( drawSurf->fogSurface ) {
 			const drawSurf_t* fogDrawSurf = drawSurf->fogSurface;
-			const Material* material = &materialPacks[fogDrawSurf->materialPackIDs[0]].materials[fogDrawSurf->materialIDs[0]];
+			const Material* material = &materialPacks[fogDrawSurf->shader->stages[0].materialPackID]
+				.materials[fogDrawSurf->shader->stages[0].materialID];
 			uint cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + fogDrawSurf->drawCommandIDs[0];
 			// Add 1 because cmd 0 == no-command
 			surface.surfaceCommandIDs[stage + ( depthPrePass ? 1 : 0 )] = cmdID + 1;
@@ -1299,12 +1296,15 @@ void ProcessMaterialNOP( Material*, shaderStage_t*, drawSurf_t* ) {
 
 // ProcessMaterial*() are essentially same as BindShader*(), but only set the GL program id to the material,
 // without actually binding it
-void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSurf_t* ) {
+void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf ) {
 	material->shader = gl_genericShaderMaterial;
 
 	material->tcGenEnvironment = pStage->tcGen_Environment;
 	material->tcGen_Lightmap = pStage->tcGen_Lightmap;
 	material->deformIndex = pStage->deformIndex;
+	if( pStage->type == stageType_t::ST_STYLELIGHTMAP ) {
+		material->lightmap = GetLightMap( drawSurf );
+	}
 
 	gl_genericShaderMaterial->SetTCGenEnvironment( pStage->tcGen_Environment );
 	gl_genericShaderMaterial->SetTCGenLightmap( pStage->tcGen_Lightmap );
@@ -1342,6 +1342,42 @@ void ProcessMaterialLightMapping( Material* material, shaderStage_t* pStage, dra
 	material->enableSpecularMapping = pStage->enableSpecularMapping;
 	material->enablePhysicalMapping = pStage->enablePhysicalMapping;
 	material->deformIndex = pStage->deformIndex;
+
+	// u_Map, u_DeluxeMap
+	image_t* lightmap = tr.whiteImage;
+	image_t* deluxemap = tr.whiteImage;
+
+	switch ( lightMode ) {
+		case lightMode_t::VERTEX:
+			break;
+
+		case lightMode_t::GRID:
+			lightmap = tr.lightGrid1Image;
+			break;
+
+		case lightMode_t::MAP:
+			lightmap = GetLightMap( drawSurf );
+			break;
+
+		default:
+			break;
+	}
+
+	switch ( deluxeMode ) {
+		case deluxeMode_t::MAP:
+			deluxemap = GetDeluxeMap( drawSurf );
+			break;
+
+		case deluxeMode_t::GRID:
+			deluxemap = tr.lightGrid2Image;
+			break;
+
+		default:
+			break;
+	}
+
+	material->lightmap = lightmap;
+	material->deluxemap = deluxemap;
 
 	gl_lightMappingShaderMaterial->SetDeluxeMapping( enableDeluxeMapping );
 
@@ -1468,10 +1504,6 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 
 	ComputeDynamics( pStage );
 
-	if ( pStage->texturesDynamic ) {
-		drawSurf->texturesDynamic[stage] = true;
-	}
-
 	pStage->materialProcessor( &material, pStage, drawSurf );
 
 	std::vector<Material>& materials = materialPacks[materialPack].materials;
@@ -1523,6 +1555,76 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 }
 
 static std::unordered_map<std::string, shaderStage_t*> stages;
+static std::unordered_map<std::string, shaderStage_t*> stages2;
+
+struct TestTex {
+	image_t* textures[MAX_TEXTURE_BUNDLES] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+	image_t* animatedImages[31];
+	int numImages;
+	float animationSpeed;
+
+	int lightmap;
+
+	bool operator==( const TestTex& other ) const {
+		if ( numImages > 1 ) {
+			for ( int i = 0; i < 31; i++ ) {
+				if ( animatedImages[i] != other.animatedImages[i] ) {
+					return false;
+				}
+			}
+
+			if ( animationSpeed != other.animationSpeed ) {
+				return false;
+			}
+		}
+
+		return textures[TB_COLORMAP] == other.textures[TB_COLORMAP] && textures[TB_NORMALMAP] == other.textures[TB_NORMALMAP]
+			&& textures[TB_HEIGHTMAP] == other.textures[TB_HEIGHTMAP] && textures[TB_MATERIALMAP] == other.textures[TB_MATERIALMAP]
+			&& textures[TB_GLOWMAP] == other.textures[TB_GLOWMAP]
+			&& lightmap == other.lightmap;
+	}
+
+	TestTex() {
+	}
+
+	TestTex( const TestTex& other ) {
+		memcpy( textures, other.textures, MAX_TEXTURE_BUNDLES * sizeof( image_t* ) );
+		memcpy( animatedImages, other.animatedImages, 31 * sizeof( image_t* ) );
+		numImages = other.numImages;
+		animationSpeed = other.animationSpeed;
+
+		lightmap = other.lightmap;
+	}
+};
+
+struct TexPair {
+	TestTex tex;
+	int count;
+
+	bool operator==( const TexPair& other ) const {
+		return tex == other.tex;
+	}
+};
+
+template <class T>
+inline void hash_combine( std::size_t& seed, const T& v ) {
+	std::hash<T> hasher;
+	seed ^= hasher( v ) + 0x9e3779b9 + ( seed << 6 ) + ( seed >> 2 );
+}
+
+struct Hasher {
+	std::size_t operator()( TestTex const& tex ) const {
+		std::size_t seed = 0;
+		hash_combine( seed, tex.textures[TB_COLORMAP] );
+		hash_combine( seed, tex.textures[TB_NORMALMAP] );
+		hash_combine( seed, tex.textures[TB_HEIGHTMAP] );
+		hash_combine( seed, tex.textures[TB_MATERIALMAP] );
+		hash_combine( seed, tex.textures[TB_GLOWMAP] );
+		return seed;
+	}
+};
+
+static std::vector<TexPair> texBundles;
 
 /* This will only generate the materials themselves
 *  A material represents a distinct global OpenGL state (e. g. blend function, depth test, depth write etc.)
@@ -1552,6 +1654,10 @@ void MaterialSystem::GenerateWorldMaterials() {
 	totalDrawSurfs = 0;
 
 	uint32_t packIDs[3] = { 0, 0, 0 };
+
+	stages.clear();
+	stages2.clear();
+	texBundles.clear();
 
 	for ( int i = 0; i < tr.refdef.numDrawSurfs; i++ ) {
 		drawSurf = &tr.refdef.drawSurfs[i];
@@ -1589,10 +1695,12 @@ void MaterialSystem::GenerateWorldMaterials() {
 		for ( shaderStage_t* pStage = drawSurf->shader->stages; pStage < drawSurf->shader->lastStage; pStage++ ) {
 			ProcessStage( drawSurf, pStage, shader, packIDs, stage, previousMaterialID );
 			std::string test = drawSurf->shader->name;
-			test += "|" + std::to_string( stage );
+			test += "|" + std::to_string( stage ); // + "|" + std::to_string( GetLightMapNum( drawSurf ) );
 			stages[test] = pStage;
+			test += "|" + std::to_string( GetLightMapNum( drawSurf ) );
+			stages2[test] = pStage;
 		}
-		Log::Warn( drawSurf->shader->name );
+		// Log::Warn( drawSurf->shader->name );
 	}
 
 	GenerateWorldMaterialsBuffer();
@@ -1613,7 +1721,7 @@ void MaterialSystem::GenerateWorldMaterials() {
 		}
 	} */
 	for ( const std::pair<std::string, shaderStage_t*> &pair : stages ) {
-		Log::Warn( "%s %X", pair.first, pair.second );
+		// Log::Warn( "%s %X", pair.first, pair.second );
 	}
 
 	r_nocull->integer = current_r_nocull;
@@ -1623,6 +1731,20 @@ void MaterialSystem::GenerateWorldMaterials() {
 	GeneratePortalBoundingSpheres();
 
 	generatedWorldCommandBuffer = true;
+
+	Log::Warn( "stages: %u stages + lightmap: %u tex: %u", stages.size(), stages2.size(), texBundles.size());
+
+	/* for ( TexPair& tex : texBundles ) {
+		bool c = tex.tex.textures[TB_COLORMAP] != nullptr;
+		bool n = tex.tex.textures[TB_NORMALMAP] != nullptr;
+		bool h = tex.tex.textures[TB_HEIGHTMAP] != nullptr;
+		bool m = tex.tex.textures[TB_MATERIALMAP] != nullptr;
+		bool g = tex.tex.textures[TB_GLOWMAP] != nullptr;
+		Log::Warn( "colormap: %s lightmap: %i normal: %s height: %s material: %s glowmap: %s count: %i",
+			c ? tex.tex.textures[TB_COLORMAP]->name : "none", tex.tex.lightmap,
+			n ? tex.tex.textures[TB_NORMALMAP]->name : "none", h ? tex.tex.textures[TB_HEIGHTMAP]->name : "none",
+			m ? tex.tex.textures[TB_MATERIALMAP]->name : "none", g ? tex.tex.textures[TB_GLOWMAP]->name : "none", tex.count );
+	} */
 }
 
 void MaterialSystem::AddAllWorldSurfaces() {
@@ -1632,6 +1754,8 @@ void MaterialSystem::AddAllWorldSurfaces() {
 }
 
 void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material ) {
+	TestTex test;
+	int bundleNum = 0;
 	for ( const textureBundle_t& bundle : pStage->bundle ) {
 		if ( bundle.isVideoMap ) {
 			material->AddTexture( tr.cinematicImage[bundle.videoMapHandle]->texture );
@@ -1643,10 +1767,34 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 				material->AddTexture( image->texture );
 			}
 		}
+
+		test.textures[bundleNum] = bundle.image[0];
+		bundleNum++;
+	}
+	
+	// Animated images can only be used in the colormap bundle
+	const textureBundle_t& bundle = pStage->bundle[0];
+	test.numImages = bundle.numImages;
+	test.animationSpeed = bundle.imageAnimationSpeed;
+	if ( bundle.numImages > 1 ) {
+		Log::Warn( "found animmap" );
+		for ( int i = 1; i < bundle.numImages; i++ ) {
+			Log::Warn( "%s", bundle.image[i]->name );
+			test.animatedImages[i - 1] = bundle.image[i];
+		}
 	}
 
-	// Add lightmap and deluxemap for this surface to the material as well
+	test.lightmap = GetLightMapNum( drawSurf );
+	TexPair pair{ test, 1 };
+	std::vector<TexPair>::iterator it = std::find( texBundles.begin(), texBundles.end(), pair );
+	if ( it == texBundles.end() ) {
+		texBundles.emplace_back( pair );
+	} else {
+		it->count++;
+	}
 
+
+	// Add lightmap and deluxemap for this surface to the material as well
 	lightMode_t lightMode;
 	deluxeMode_t deluxeMode;
 	SetLightDeluxeMode( drawSurf, pStage->type, lightMode, deluxeMode );
