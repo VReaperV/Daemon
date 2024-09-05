@@ -1051,10 +1051,10 @@ static void ParseFace( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf, in
 		cv->verts[ i ].lightmap[ 0 ] = LittleFloat( verts[ i ].lightmap[ 0 ] );
 		cv->verts[ i ].lightmap[ 1 ] = LittleFloat( verts[ i ].lightmap[ 1 ] );
 
-		if ( hasLightMap ) {
+		/* if ( hasLightMap ) {
 			cv->verts[ i ].lightmap[ 0 ] = cv->verts[ i ].lightmap[ 0 ] * lightmap->atlas[ 0 ] + lightmap->atlas[ 2 ];
 			cv->verts[ i ].lightmap[ 1 ] = cv->verts[ i ].lightmap[ 1 ] * lightmap->atlas[ 1 ] + lightmap->atlas[ 3 ];
-		}
+		} */
 
 		cv->verts[ i ].lightColor = Color::Adapt( verts[ i ].color );
 
@@ -1273,10 +1273,10 @@ static void ParseMesh( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf )
 		points[ i ].lightmap[ 0 ] = LittleFloat( verts[ i ].lightmap[ 0 ] );
 		points[ i ].lightmap[ 1 ] = LittleFloat( verts[ i ].lightmap[ 1 ] );
 
-		if ( hasLightMap ) {
+		/* if ( hasLightMap ) {
 			points[ i ].lightmap[ 0 ] = points[ i ].lightmap[ 0 ] * lightmap->atlas[ 0 ] + lightmap->atlas[ 2 ];
 			points[ i ].lightmap[ 1 ] = points[ i ].lightmap[ 1 ] * lightmap->atlas[ 1 ] + lightmap->atlas[ 3 ];
-		}
+		} */
 
 		points[ i ].lightColor = Color::Adapt( verts[ i ].color );
 
@@ -1407,9 +1407,9 @@ static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, bspSurface_t *surf,
 			cv->verts[ i ].st[ j ] = LittleFloat( verts[ i ].st[ j ] );
 			cv->verts[ i ].lightmap[ j ] = LittleFloat( verts[ i ].lightmap[ j ] );
 
-			if ( hasLightMap ) {
+			/* if ( hasLightMap ) {
 				cv->verts[ i ].lightmap[ j ] = cv->verts[ i ].lightmap[ j ] * lightmap->atlas[ j ] + lightmap->atlas[ j + 2 ];
-			}
+			} */
 
 			components[ i ].stBounds[ 0 ][ j ] = cv->verts[ i ].st[ j ];
 			components[ i ].stBounds[ 1 ][ j ] = cv->verts[ i ].st[ j ];
@@ -3188,6 +3188,8 @@ static void R_CreateWorldVBO()
 	{
 		surface = surfaces[ k ];
 
+		tess.lightmapNum = surface->lightmapNum;
+
 		if ( *surface->data == surfaceType_t::SF_FACE )
 		{
 			srfSurfaceFace_t *srf = ( srfSurfaceFace_t * ) surface->data;
@@ -3309,6 +3311,7 @@ static void R_CreateWorldVBO()
 	tess.verts = nullptr;
 	tess.indexes = nullptr;
 	tess.buildingVBO = false;
+	tess.lightmapNum = 0;
 
 	ri.Hunk_FreeTempMemory( vboIdxs );
 	ri.Hunk_FreeTempMemory( vboVerts );

@@ -984,6 +984,10 @@ static image_t* GetLightMap()
 {
 	if ( static_cast<size_t>( tess.lightmapNum ) < tr.lightmaps.size() )
 	{
+		image_t* lightmap = tr.lightmaps[tess.lightmapNum];
+		if ( lightmap->useTextureAtlas ) {
+			return textureAtlases[lightmap->textureAtlasID].texture;
+		}
 		return tr.lightmaps[ tess.lightmapNum ];
 	}
 	else
@@ -1001,6 +1005,10 @@ static image_t* GetDeluxeMap()
 {
 	if ( static_cast<size_t>( tess.lightmapNum ) < tr.deluxemaps.size() )
 	{
+		image_t* deluxemap = tr.deluxemaps[tess.lightmapNum];
+		if ( deluxemap->useTextureAtlas ) {
+			return textureAtlases[deluxemap->textureAtlasID].texture;
+		}
 		return tr.deluxemaps[ tess.lightmapNum ];
 	}
 	else
@@ -1415,14 +1423,6 @@ void Render_lightMapping( shaderStage_t *pStage )
 		gl_lightMappingShader->SetUniform_LightGrid1Bindless( GL_BindToTMU( BIND_LIGHTMAP, lightmap ) );
 	}
 
-	if ( lightmap->useTextureAtlas ) {
-		gl_lightMappingShader->SetUniform_LightMapAtlas( lightmap->atlas );
-	} else {
-		vec4_t identity;
-		Vector4Set( identity, 1.0, 1.0, 0.0, 0.0 );
-		gl_lightMappingShader->SetUniform_LightMapAtlas( identity );
-	}
-
 	// bind u_DeluxeMap
 	if ( !enableGridDeluxeMapping ) {
 		gl_lightMappingShader->SetUniform_DeluxeMapBindless(
@@ -1430,14 +1430,6 @@ void Render_lightMapping( shaderStage_t *pStage )
 		);
 	} else {
 		gl_lightMappingShader->SetUniform_LightGrid2Bindless( GL_BindToTMU( BIND_DELUXEMAP, deluxemap ) );
-	}
-
-	if ( deluxemap->useTextureAtlas ) {
-		gl_lightMappingShader->SetUniform_DeluxeMapAtlas( deluxemap->atlas );
-	} else {
-		vec4_t identity;
-		Vector4Set( identity, 1.0, 1.0, 0.0, 0.0 );
-		gl_lightMappingShader->SetUniform_DeluxeMapAtlas( identity );
 	}
 
 	// bind u_GlowMap

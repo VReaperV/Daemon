@@ -635,8 +635,6 @@ enum class dynamicLightRenderer_t { LEGACY, TILED };
 		uint16_t textureAtlasY;
 		uint16_t textureAtlasWidth;
 		uint16_t textureAtlasHeight;
-		f16vec2_t scale;
-		f16vec2_t offset;
 		vec4_t atlas;
 
 		image_t *next;

@@ -31,9 +31,6 @@ uniform sampler2D	u_DiffuseMap;
 uniform sampler2D	u_MaterialMap;
 uniform sampler2D	u_GlowMap;
 
-uniform vec4 u_LightMapAtlas;
-uniform vec4 u_DeluxeMapAtlas;
-
 uniform float		u_AlphaThreshold;
 uniform float u_InverseLightFactor;
 uniform vec3		u_ViewOrigin;

@@ -2159,30 +2159,6 @@ public:
 	}
 };
 
-class u_LightMapAtlas :
-	GLUniform4f {
-	public:
-	u_LightMapAtlas( GLShader* shader ) :
-		GLUniform4f( shader, "u_LightMapAtlas" ) {
-	}
-
-	void SetUniform_LightMapAtlas( const vec4_t lightMapAtlas ) {
-		this->SetValue( lightMapAtlas );
-	}
-};
-
-class u_DeluxeMapAtlas :
-	GLUniform4f {
-	public:
-	u_DeluxeMapAtlas( GLShader* shader ) :
-		GLUniform4f( shader, "u_DeluxeMapAtlas" ) {
-	}
-
-	void SetUniform_DeluxeMapAtlas( const vec4_t deluxeMapAtlas ) {
-		this->SetValue( deluxeMapAtlas );
-	}
-};
-
 class u_LightFactor :
 	GLUniform1f
 {
@@ -4035,8 +4011,6 @@ class GLShader_lightMapping :
 	public u_LightTiles,
 	public u_LightTilesInt,
 	public u_LightsTexture,
-	public u_LightMapAtlas,
-	public u_DeluxeMapAtlas,
 	public u_TextureMatrix,
 	public u_SpecularExponent,
 	public u_ColorModulate,
@@ -4087,8 +4061,6 @@ class GLShader_lightMappingMaterial :
 	public u_LightGrid1,
 	public u_LightGrid2,
 	public u_LightTilesInt,
-	public u_LightMapAtlas,
-	public u_DeluxeMapAtlas,
 	public u_TextureMatrix,
 	public u_SpecularExponent,
 	public u_ColorModulate,

@@ -129,16 +129,10 @@ void TextureAtlas::UploadTexture( image_t* image ) {
 
 	GL_Bind( texture );
 
-	image->scale[0] = floatToHalf( (float) image->uploadWidth / width );
-	image->scale[1] = floatToHalf( (float) image->uploadHeight / height );
-
-	image->offset[0] = floatToHalf( (float) image->textureAtlasX / width );
-	image->offset[1] = floatToHalf( (float) image->textureAtlasY / height );
-
-	image->atlas[0] = (float) image->uploadWidth / width;
-	image->atlas[1] = (float) image->uploadHeight / height;
-	image->atlas[2] = (float) ( image->textureAtlasX + borderSize ) / width;
-	image->atlas[3] = (float) ( image->textureAtlasY + borderSize ) / height;
+	image->atlas[0] = (float) image->textureAtlasWidth / width;
+	image->atlas[1] = (float) image->textureAtlasHeight / height;
+	image->atlas[2] = (float) ( image->textureAtlasX ) / width;
+	image->atlas[3] = (float) ( image->textureAtlasY ) / height;
 
 	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + borderSize, image->textureAtlasY + borderSize,
 					 image->textureAtlasWidth - 2 * borderSize, image->textureAtlasHeight - 2 * borderSize,
@@ -256,7 +250,7 @@ void TextureAtlas::AddImageToTextureBin( image_t* image, byte* imageData, const 
 // This will only add bin/bins and assign images to them, but not upload them
 bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy, byte* imageData ) {
 	if ( format != image->format || internalFormat != image->internalFormat
-		 || filter != newFilterProxy || bits != image->bits ) {
+		|| filter != newFilterProxy || bits != image->bits ) {
 		return false;
 	}
 
@@ -287,35 +281,16 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 	uint32_t area1 = ( width + imageWidth ) * ( height > imageHeight ? height : imageHeight );
 	uint32_t area2 = ( height + imageHeight ) * ( width > imageWidth ? width : imageWidth );
 
-	// Extend atlas to the right
-	if ( ( width + imageWidth <= glConfig.maxTextureSize )
-		&& ( ( area1 <= area2 ) || ( height + imageHeight > glConfig.maxTextureSize ) ) ) {
-		// Add a bin above the image we insert if there's space
-		if ( ( height > imageHeight ) && ( height - imageHeight >= 1 + 2 * borderSize ) ) {
-			TextureBin extendBin{ width, imageHeight, imageWidth, height - imageHeight };
-			textureBins.push_back( extendBin );
-		// Add a bin above the current atlas top border if the image we insert exceeds the current atlas height
-		} else if ( ( width > 0 ) && ( height < imageHeight ) && ( imageHeight - height >= 1 + 2 * borderSize ) ) {
-			TextureBin extendBin{ 0, height, width, imageHeight - height };
-			textureBins.push_back( extendBin );
-		}
+	const bool extendUp = ( height + imageHeight <= glConfig.maxTextureSize )
+		&& ( ( area2 < area1 ) || ( width - height >= 512 ) || ( width + imageWidth > glConfig.maxTextureSize ) );
 
-		TextureBin tempBin{ width, 0, imageWidth, imageHeight, image };
-		textureBins.push_back( tempBin );
-		
-		width += imageWidth;
-		height = std::max( height, imageHeight );
-		
-		AddImageToTextureBin( image, imageData, tempBin );
-
-		return true;
-	// Extend atlas downwards
-	} else if ( height + imageHeight <= glConfig.maxTextureSize ) {
+	// Extend atlas upwards
+	if ( extendUp ) {
 		// Add a bin to the right of the current atlas right border if the image we insert exceeds the current atlas width
 		if ( ( width > imageWidth ) && ( width - imageWidth >= 1 + 2 * borderSize ) ) {
 			TextureBin extendBin{ imageWidth, height, width - imageWidth, imageHeight };
 			textureBins.push_back( extendBin );
-		// Add a bin to the right of the image we insert if there's space
+			// Add a bin to the right of the image we insert if there's space
 		} else if ( ( height > 0 ) && ( width < imageWidth ) && ( imageWidth - width >= 1 + 2 * borderSize ) ) {
 			TextureBin extendBin{ width, 0, imageWidth - width, height };
 			textureBins.push_back( extendBin );
@@ -331,7 +306,74 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 		AddImageToTextureBin( image, imageData, tempBin );
 
 		return true;
+	// Extend atlas to the right
+	} else if ( width + imageWidth <= glConfig.maxTextureSize ) {
+		// Add a bin above the image we insert if there's space
+		if ( ( height > imageHeight ) && ( height - imageHeight >= 1 + 2 * borderSize ) ) {
+			TextureBin extendBin{ width, imageHeight, imageWidth, height - imageHeight };
+			textureBins.push_back( extendBin );
+			// Add a bin above the current atlas top border if the image we insert exceeds the current atlas height
+		} else if ( ( width > 0 ) && ( height < imageHeight ) && ( imageHeight - height >= 1 + 2 * borderSize ) ) {
+			TextureBin extendBin{ 0, height, width, imageHeight - height };
+			textureBins.push_back( extendBin );
+		}
+
+		TextureBin tempBin{ width, 0, imageWidth, imageHeight, image };
+		textureBins.push_back( tempBin );
+
+		width += imageWidth;
+		height = std::max( height, imageHeight );
+
+		AddImageToTextureBin( image, imageData, tempBin );
+
+		return true;
 	}
+
+	// Extend atlas to the right
+	/* if ( ( width + imageWidth <= glConfig.maxTextureSize )
+		&& ( ( area1 <= area2 ) || ( height + imageHeight > glConfig.maxTextureSize ) ) ) {
+		// Add a bin above the image we insert if there's space
+		if ( ( height > imageHeight ) && ( height - imageHeight >= 1 + 2 * borderSize ) ) {
+			TextureBin extendBin{ width, imageHeight, imageWidth, height - imageHeight };
+			textureBins.push_back( extendBin );
+			// Add a bin above the current atlas top border if the image we insert exceeds the current atlas height
+		} else if ( ( width > 0 ) && ( height < imageHeight ) && ( imageHeight - height >= 1 + 2 * borderSize ) ) {
+			TextureBin extendBin{ 0, height, width, imageHeight - height };
+			textureBins.push_back( extendBin );
+		}
+
+		TextureBin tempBin{ width, 0, imageWidth, imageHeight, image };
+		textureBins.push_back( tempBin );
+
+		width += imageWidth;
+		height = std::max( height, imageHeight );
+
+		AddImageToTextureBin( image, imageData, tempBin );
+
+		return true;
+		// Extend atlas downwards
+	} else if ( height + imageHeight <= glConfig.maxTextureSize ) {
+		// Add a bin to the right of the current atlas right border if the image we insert exceeds the current atlas width
+		if ( ( width > imageWidth ) && ( width - imageWidth >= 1 + 2 * borderSize ) ) {
+			TextureBin extendBin{ imageWidth, height, width - imageWidth, imageHeight };
+			textureBins.push_back( extendBin );
+			// Add a bin to the right of the image we insert if there's space
+		} else if ( ( height > 0 ) && ( width < imageWidth ) && ( imageWidth - width >= 1 + 2 * borderSize ) ) {
+			TextureBin extendBin{ width, 0, imageWidth - width, height };
+			textureBins.push_back( extendBin );
+			width = imageWidth;
+		}
+
+		TextureBin tempBin{ 0, height, imageWidth, imageHeight, image };
+		textureBins.push_back( tempBin );
+
+		height += imageHeight;
+		width = std::max( width, imageWidth );
+
+		AddImageToTextureBin( image, imageData, tempBin );
+
+		return true;
+	} */
 
 	return false;
 }

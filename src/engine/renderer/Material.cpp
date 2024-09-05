@@ -189,6 +189,10 @@ static void ComputeDynamics( shaderStage_t* pStage ) {
 
 static image_t* GetLightMap( drawSurf_t* drawSurf ) {
 	if ( static_cast<size_t>( drawSurf->lightmapNum() ) < tr.lightmaps.size() ) {
+		image_t* lightmap = tr.lightmaps[drawSurf->lightmapNum()];
+		if ( lightmap->useTextureAtlas ) {
+			return textureAtlases[lightmap->textureAtlasID].texture;
+		}
 		return tr.lightmaps[drawSurf->lightmapNum()];
 	} else {
 		return tr.whiteImage;
@@ -197,6 +201,10 @@ static image_t* GetLightMap( drawSurf_t* drawSurf ) {
 
 static image_t* GetDeluxeMap( drawSurf_t* drawSurf ) {
 	if ( static_cast<size_t>( drawSurf->lightmapNum() ) < tr.deluxemaps.size() ) {
+		image_t* deluxemap = tr.deluxemaps[drawSurf->lightmapNum()];
+		if ( deluxemap->useTextureAtlas ) {
+			return textureAtlases[deluxemap->textureAtlasID].texture;
+		}
 		return tr.deluxemaps[drawSurf->lightmapNum()];
 	} else {
 		return tr.blackImage;
@@ -561,14 +569,6 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_LightMapBindless(
 			GL_BindToTMU( BIND_LIGHTMAP, lightmap )
 		);
-
-		if ( lightmap->useTextureAtlas ) {
-			gl_lightMappingShaderMaterial->SetUniform_LightMapAtlas( lightmap->atlas );
-		} else {
-			vec4_t identity;
-			Vector4Set( identity, 1.0, 1.0, 0.0, 0.0 );
-			gl_lightMappingShaderMaterial->SetUniform_LightMapAtlas( identity );
-		}
 	} else {
 		gl_lightMappingShaderMaterial->SetUniform_LightGrid1Bindless( GL_BindToTMU( BIND_LIGHTMAP, lightmap ) );
 	}
@@ -578,14 +578,6 @@ static void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& materi
 		gl_lightMappingShaderMaterial->SetUniform_DeluxeMapBindless(
 			GL_BindToTMU( BIND_DELUXEMAP, deluxemap )
 		);
-
-		if ( deluxemap->useTextureAtlas ) {
-			gl_lightMappingShaderMaterial->SetUniform_DeluxeMapAtlas( deluxemap->atlas );
-		} else {
-			vec4_t identity;
-			Vector4Set( identity, 1.0, 1.0, 0.0, 0.0 );
-			gl_lightMappingShaderMaterial->SetUniform_DeluxeMapAtlas( identity );
-		}
 	} else {
 		gl_lightMappingShaderMaterial->SetUniform_LightGrid2Bindless( GL_BindToTMU( BIND_DELUXEMAP, deluxemap ) );
 	}
@@ -1477,6 +1469,9 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 
 	material.vbo = glState.currentVBO;
 	material.ibo = glState.currentIBO;
+
+	material.lightmap = GetLightMap( drawSurf );
+	material.deluxemap = GetDeluxeMap( drawSurf );
 
 	ComputeDynamics( pStage );
 

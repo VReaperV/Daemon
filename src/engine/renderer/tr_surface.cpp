@@ -152,6 +152,12 @@ static void Tess_SurfaceVertsAndTris( const srfVert_t *verts, const srfTriangle_
 
 	tess.numIndexes += numIndexes;
 
+	const bool hasLightMap = static_cast<size_t>( tess.lightmapNum ) < tr.lightmaps.size();
+	image_t* lightmap;
+	if ( hasLightMap ) {
+		lightmap = tr.lightmaps[tess.lightmapNum];
+	}
+
 	for ( i = 0; i < numVerts; i++, vert++ )
 	{
 		VectorCopy( vert->xyz, tess.verts[ tess.numVertexes + i ].xyz );
@@ -160,8 +166,17 @@ static void Tess_SurfaceVertsAndTris( const srfVert_t *verts, const srfTriangle_
 		tess.verts[ tess.numVertexes + i ].texCoords[ 0 ] = floatToHalf( vert->st[ 0 ] );
 		tess.verts[ tess.numVertexes + i ].texCoords[ 1 ] = floatToHalf( vert->st[ 1 ] );
 
-		tess.verts[ tess.numVertexes + i ].texCoords[ 2 ] = floatToHalf( vert->lightmap[ 0 ] );
-		tess.verts[ tess.numVertexes + i ].texCoords[ 3 ] = floatToHalf( vert->lightmap[ 1 ] );
+		if ( hasLightMap ) {
+			// tess.verts[tess.numVertexes + i].texCoords[2] = floatToHalf( vert->lightmap[0] * lightmap->atlas[0] + lightmap->atlas[2] );
+			// tess.verts[tess.numVertexes + i].texCoords[3] = floatToHalf( vert->lightmap[1] * lightmap->atlas[1] + lightmap->atlas[3] );
+			tess.verts[tess.numVertexes + i].texCoords[2] = floatToHalf( vert->lightmap[0] );
+			tess.verts[tess.numVertexes + i].texCoords[3] = floatToHalf( vert->lightmap[1] );
+			tess.verts[tess.numVertexes + i].texCoords[2] = floatToHalf( halfToFloat( tess.verts[tess.numVertexes + i].texCoords[2] ) * lightmap->atlas[0] + lightmap->atlas[2] );
+			tess.verts[tess.numVertexes + i].texCoords[3] = floatToHalf( halfToFloat( tess.verts[tess.numVertexes + i].texCoords[3] ) * lightmap->atlas[1] + lightmap->atlas[3] );
+		} else {
+			tess.verts[tess.numVertexes + i].texCoords[2] = floatToHalf( vert->lightmap[0] );
+			tess.verts[tess.numVertexes + i].texCoords[3] = floatToHalf( vert->lightmap[1] );
+		}
 
 		tess.verts[ tess.numVertexes + i ].color = vert->lightColor;
 	}
