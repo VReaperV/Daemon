@@ -1637,6 +1637,51 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 
 static std::unordered_map<std::string, shaderStage_t*> stages;
 
+struct TestTex {
+	image_t* textures[MAX_TEXTURE_BUNDLES] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+
+	bool operator==( const TestTex& other ) const {
+		return textures[TB_COLORMAP] == other.textures[TB_COLORMAP] && textures[TB_NORMALMAP] == other.textures[TB_NORMALMAP]
+			&& textures[TB_HEIGHTMAP] == other.textures[TB_HEIGHTMAP] && textures[TB_MATERIALMAP] == other.textures[TB_MATERIALMAP]
+			&& textures[TB_GLOWMAP] == other.textures[TB_GLOWMAP];
+	}
+
+	TestTex() {
+	}
+
+	TestTex( const TestTex& other ) {
+		memcpy( textures, other.textures, MAX_TEXTURE_BUNDLES * sizeof( image_t* ) );
+	}
+};
+struct TexPair {
+	TestTex tex;
+	int count;
+
+	bool operator==( const TexPair& other ) const {
+		return tex == other.tex;
+	}
+};
+
+template <class T>
+inline void hash_combine( std::size_t& seed, const T& v ) {
+	std::hash<T> hasher;
+	seed ^= hasher( v ) + 0x9e3779b9 + ( seed << 6 ) + ( seed >> 2 );
+}
+
+struct Hasher {
+	std::size_t operator()( TestTex const& tex ) const {
+		std::size_t seed = 0;
+		hash_combine( seed, tex.textures[TB_COLORMAP] );
+		hash_combine( seed, tex.textures[TB_NORMALMAP] );
+		hash_combine( seed, tex.textures[TB_HEIGHTMAP] );
+		hash_combine( seed, tex.textures[TB_MATERIALMAP] );
+		hash_combine( seed, tex.textures[TB_GLOWMAP] );
+		return seed;
+	}
+};
+
+static std::vector<TexPair> texBundles;
+
 /* This will only generate the materials themselves
 *  A material represents a distinct global OpenGL state (e. g. blend function, depth test, depth write etc.)
 *  Materials can have a dependency on other materials to make sure that consecutive stages are rendered in the proper order */
@@ -1736,6 +1781,20 @@ void MaterialSystem::GenerateWorldMaterials() {
 	skipDrawCommands = false;
 
 	generatedWorldCommandBuffer = true;
+
+	Log::Warn( "stages: %u tex: %u", stages.size(), texBundles.size() );
+
+	for ( TexPair& tex : texBundles ) {
+		bool c = tex.tex.textures[TB_COLORMAP] != nullptr;
+		bool n = tex.tex.textures[TB_NORMALMAP] != nullptr;
+		bool h = tex.tex.textures[TB_HEIGHTMAP] != nullptr;
+		bool m = tex.tex.textures[TB_MATERIALMAP] != nullptr;
+		bool g = tex.tex.textures[TB_GLOWMAP] != nullptr;
+		Log::Warn( "colormap: %s normal: %s height: %s material: %s glowmap: %s count: %i",
+			c ? tex.tex.textures[TB_COLORMAP]->name : "none",
+			n ? tex.tex.textures[TB_NORMALMAP]->name : "none", h ? tex.tex.textures[TB_HEIGHTMAP]->name : "none",
+			m ? tex.tex.textures[TB_MATERIALMAP]->name : "none", g ? tex.tex.textures[TB_GLOWMAP]->name : "none", tex.count);
+	}
 }
 
 void MaterialSystem::AddAllWorldSurfaces() {
@@ -1745,6 +1804,8 @@ void MaterialSystem::AddAllWorldSurfaces() {
 }
 
 void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pStage, Material* material ) {
+	TestTex test;
+	int bundleNum = 0;
 	for ( const textureBundle_t& bundle : pStage->bundle ) {
 		if ( bundle.isVideoMap ) {
 			material->AddTexture( tr.cinematicImage[bundle.videoMapHandle]->texture );
@@ -1756,7 +1817,18 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, shaderStage_t* pSta
 				material->AddTexture( image->texture );
 			}
 		}
+
+		test.textures[bundleNum] = bundle.image[0];
+		bundleNum++;
 	}
+	TexPair pair{ test, 1 };
+	std::vector<TexPair>::iterator it = std::find( texBundles.begin(), texBundles.end(), pair );
+	if ( it == texBundles.end() ) {
+		texBundles.emplace_back( pair );
+	} else {
+		it->count++;
+	}
+
 
 	// Add lightmap and deluxemap for this surface to the material as well
 
