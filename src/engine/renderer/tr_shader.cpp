@@ -5372,7 +5372,8 @@ static void SetStagesRenderers()
 		stageRenderer_t colorRenderer;
 
 		// Material renderer (code path for advanced OpenGL techniques like bindless textures).
-		stageSurfaceDataUpdater_t surfaceDataUpdater;
+		stageDataUpdater_t stageDataUpdater;
+		// surfaceDataUpdater_t surfaceDataUpdater;
 		stageShaderBinder_t shaderBinder;
 		stageMaterialProcessor_t materialProcessor;
 
@@ -5501,7 +5502,7 @@ static void SetStagesRenderers()
 
 		stage->colorRenderer = stageRendererOptions.colorRenderer;
 
-		stage->surfaceDataUpdater = stageRendererOptions.surfaceDataUpdater;
+		stage->surfaceDataUpdater = stageRendererOptions.stageDataUpdater;
 		stage->shaderBinder = stageRendererOptions.shaderBinder;
 		stage->materialProcessor = stageRendererOptions.materialProcessor;
 

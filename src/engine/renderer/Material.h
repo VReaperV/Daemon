@@ -181,9 +181,20 @@ struct TextureData {
 					return false;
 				}
 			}
+
+			if ( bundle->numTexMods != otherBundle->numTexMods ) {
+				return false;
+			}
+
+			for ( int j = 0; j < bundle->numTexMods; j++ ) {
+				if ( bundle->texMods[j] != otherBundle->texMods[j] ) {
+					Log::Warn( "f" );
+					return false;
+				}
+			}
 		}
 
-		return lightmap == other.lightmap && deluxemap == other.deluxemap;
+		return true; // lightmap == other.lightmap && deluxemap == other.deluxemap;
 	}
 
 	TextureData() {
@@ -403,6 +414,8 @@ void UpdateSurfaceDataScreen( uint32_t* materials, Material& material, drawSurf_
 void UpdateSurfaceDataHeatHaze( uint32_t* materials, Material& material, drawSurf_t* drawSurf, const uint32_t stage );
 void UpdateSurfaceDataLiquid( uint32_t* materials, Material& material, drawSurf_t* drawSurf, const uint32_t stage );
 void UpdateSurfaceDataFog( uint32_t* materials, Material& material, drawSurf_t* drawSurf, const uint32_t stage );
+
+// void UpdateSurf( uint32)
 
 void BindShaderNONE( Material* );
 void BindShaderNOP( Material* );

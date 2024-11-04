@@ -985,6 +985,19 @@ enum class shaderProfilerRenderSubGroupsMode {
 		expression_t sExp;
 		expression_t tExp;
 		expression_t rExp;
+
+		bool operator==( const texModInfo_t& other ) {
+			return type == other.type && wave.func == other.wave.func && wave.base == other.wave.base && wave.amplitude == other.wave.amplitude
+				&& wave.phase == other.wave.phase && wave.frequency == other.wave.frequency && MatrixCompare( matrix, other.matrix )
+				&& scale[0] == other.scale[0] && scale[1] == other.scale[1] && scroll[0] == other.scroll[0] && scroll[1] == other.scroll[1]
+				&& rotateSpeed == other.rotateSpeed
+				&& sExp.numOps == other.sExp.numOps && tExp.numOps == other.tExp.numOps && rExp.numOps == other.rExp.numOps
+				&& sExp.numOps == 0 && tExp.numOps == 0 && rExp.numOps == 0; // We don't seem to use this at all, so I don't really give a shit
+		}
+
+		bool operator!=( const texModInfo_t& other ) {
+			return !( *this == other );
+		}
 	};
 
 #define MAX_IMAGE_ANIMATIONS 32
@@ -1061,7 +1074,8 @@ enum class shaderProfilerRenderSubGroupsMode {
 	struct drawSurf_t;
 
 	using stageRenderer_t = void(*)(shaderStage_t *);
-	using stageSurfaceDataUpdater_t = void(*)(uint32_t*, Material&, drawSurf_t*, const uint32_t);
+	using stageDataUpdater_t = void(*)(uint32_t*, Material&, drawSurf_t*, const uint32_t);
+	using surfaceDataUpdater_t = void(*)(uint32_t*, Material&, drawSurf_t*, const uint32_t);
 	using stageShaderBinder_t = void(*)(Material*);
 	using stageMaterialProcessor_t = void(*)(Material*, shaderStage_t*, drawSurf_t*);
 
@@ -1079,7 +1093,7 @@ enum class shaderProfilerRenderSubGroupsMode {
 		stageRenderer_t colorRenderer;
 
 		// Material renderer (code path for advanced OpenGL techniques like bindless textures).
-		stageSurfaceDataUpdater_t surfaceDataUpdater;
+		stageDataUpdater_t surfaceDataUpdater;
 		stageShaderBinder_t shaderBinder;
 		stageMaterialProcessor_t materialProcessor;
 

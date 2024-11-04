@@ -1441,6 +1441,8 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	materialStruct += "};\n\n";
 	materialDefines += "\n";
 
+	Log::Warn( "%s:\n%s", shader->_name, materialStruct );
+
 	std::istringstream shaderTextStream( shaderText );
 	std::string shaderMain;
 

@@ -843,7 +843,7 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	uint32_t texID = 0;
 	for ( const TextureData& textureData : texData ) {
 		for ( const textureBundle_t* bundle : textureData.texBundles ) {
-			if ( bundle->image[0] ) {
+			if ( bundle && bundle->image[0] ) {
 				textureBundles[texID] = bundle->image[0]->texture->bindlessTextureHandle;
 			}
 			texID++;
@@ -971,14 +971,11 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			const Material* material = &materialPacks[pStage->materialPackID].materials[pStage->materialID];
 			uint32_t cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + drawSurf->drawCommandIDs[stage];
 			// Add 1 because cmd 0 == no-command
-			// cmdID++;
-			// const uint32_t cmd = cmdID | ( drawSurf->texDataIDs[stage] << 16 );
 			surface.surfaceCommandIDs[stage + ( depthPrePass ? 1 : 0 )] = cmdID + 1;
 
 			SurfaceCommand surfaceCommand;
 			surfaceCommand.enabled = 0;
 			surfaceCommand.drawCommand = material->drawCommands[drawSurf->drawCommandIDs[stage]].cmd;
-			Log::Warn( "%s: tex: %u, material: %u", drawSurf->shader->name, drawSurf->texDataIDs[stage], surfaceCommand.drawCommand.baseInstance );
 			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataIDs[stage] << 16;
 			surfaceCommands[cmdID] = surfaceCommand;
 
@@ -1463,6 +1460,8 @@ void ProcessMaterialFog( Material* material, shaderStage_t* pStage, drawSurf_t* 
 	material->program = gl_fogQuake3ShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
+std::vector<shaderStage_t*> testStages;
+
 void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage,
 	uint32_t& previousMaterialID ) {
 	Material material;
@@ -1587,6 +1586,7 @@ void MaterialSystem::GenerateWorldMaterials() {
 
 	uint32_t packIDs[3] = { 0, 0, 0 };
 
+	testStages.clear();
 	for ( int i = 0; i < tr.refdef.numDrawSurfs; i++ ) {
 		drawSurf = &tr.refdef.drawSurfs[i];
 		if ( drawSurf->entity != &tr.worldEntity ) {
@@ -1622,6 +1622,9 @@ void MaterialSystem::GenerateWorldMaterials() {
 		uint32_t previousMaterialID = 0;
 		for ( shaderStage_t* pStage = drawSurf->shader->stages; pStage < drawSurf->shader->lastStage; pStage++ ) {
 			ProcessStage( drawSurf, pStage, shader, packIDs, stage, previousMaterialID );
+			if ( std::find( testStages.begin(), testStages.end(), pStage ) == testStages.end() ) {
+				testStages.emplace_back( pStage );
+			}
 		}
 	}
 
@@ -1632,6 +1635,24 @@ void MaterialSystem::GenerateWorldMaterials() {
 		totalCount += pack.materials.size();
 	}
 	Log::Notice( "Generated %u materials from %u surfaces", totalCount, tr.refdef.numDrawSurfs );
+	Log::Warn( "Stages: %u TextureData: %u", testStages.size(), texData.size() );
+	int testCount = 0;
+	for ( uint32_t i = 0; i < testStages.size(); i++ ) {
+		for ( uint32_t j = i + 1; j < testStages.size(); j++ ) {
+			if ( testStages[i]->type == testStages[j]->type && testStages[i]->dpMaterial == testStages[j]->dpMaterial
+				&& testStages[i]->rgbGen == testStages[j]->rgbGen && testStages[i]->alphaGen == testStages[j]->alphaGen
+				&& testStages[i]->tcGen_Environment == testStages[j]->tcGen_Environment && testStages[i]->tcGen_Lightmap == testStages[j]->tcGen_Lightmap
+				&& testStages[i]->constantColor.Red() == testStages[j]->constantColor.Red()
+				&& testStages[i]->constantColor.Green() == testStages[j]->constantColor.Green()
+				&& testStages[i]->constantColor.Blue() == testStages[j]->constantColor.Blue()
+				&& testStages[i]->constantColor.Alpha() == testStages[j]->constantColor.Alpha()
+				&& testStages[i]->stateBits == testStages[j]->stateBits && testStages[i]->deformIndex == testStages[j]->deformIndex ) {
+				testCount++;
+				testStages.erase( std::remove( testStages.begin(), testStages.end(), testStages[j] ), testStages.end() );
+			}
+		}
+	}
+	Log::Warn( "%i %u", testCount, testStages.size() );
 	/* for ( const MaterialPack& materialPack : materialPacks ) {
 		Log::Notice( "materialPack sort: %i %i", Util::ordinal( materialPack.fromSort ), Util::ordinal( materialPack.toSort ) );
 		for ( const Material& material : materialPack.materials ) {
