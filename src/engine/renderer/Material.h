@@ -72,9 +72,11 @@ struct Material {
 	uint32_t materialsSSBOOffset = 0;
 	uint32_t staticMaterialsSSBOOffset = 0;
 	uint32_t dynamicMaterialsSSBOOffset = 0;
+
 	uint32_t totalDrawSurfCount = 0;
-	uint32_t totalStaticDrawSurfCount = 0;
-	uint32_t totalDynamicDrawSurfCount = 0;
+	uint32_t totalStaticStageCount = 0;
+	uint32_t totalDynamicStageCount = 0;
+
 	uint32_t currentDrawSurfCount = 0;
 	uint32_t currentStaticDrawSurfCount = 0;
 	uint32_t currentDynamicDrawSurfCount = 0;
@@ -145,12 +147,23 @@ struct Material {
 
 struct TextureData {
 	const textureBundle_t* texBundles[MAX_TEXTURE_BUNDLES] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+	// For ST_STYLELIGHTMAP stages
+	image_t* texBundlesOverride[MAX_TEXTURE_BUNDLES] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 
 	image_t* lightmap;
 	image_t* deluxemap;
 
 	bool operator==( const TextureData& other ) const {
 		for ( int i = 0; i < MAX_TEXTURE_BUNDLES; i++ ) {
+			if ( texBundlesOverride[i] != texBundlesOverride[i] ) {
+				return false;
+			}
+
+			// Skip texBundles check for ST_STYLELIGHTMAP
+			if ( texBundlesOverride[i] ) {
+				continue;
+			}
+
 			const textureBundle_t* bundle = texBundles[i];
 			const textureBundle_t* otherBundle = other.texBundles[i];
 
@@ -178,6 +191,7 @@ struct TextureData {
 
 	TextureData( const TextureData& other ) {
 		memcpy( texBundles, other.texBundles, MAX_TEXTURE_BUNDLES * sizeof( textureBundle_t* ) );
+		memcpy( texBundlesOverride, other.texBundlesOverride, MAX_TEXTURE_BUNDLES * sizeof( image_t* ) );
 		lightmap = other.lightmap;
 		deluxemap = other.deluxemap;
 	}
@@ -403,7 +417,7 @@ void BindShaderFog( Material* material );
 
 void ProcessMaterialNONE( Material*, shaderStage_t*, drawSurf_t* );
 void ProcessMaterialNOP( Material*, shaderStage_t*, drawSurf_t* );
-void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf );
+void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ );
 void ProcessMaterialLightMapping( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf );
 void ProcessMaterialReflection( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ );
 void ProcessMaterialSkybox( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ );

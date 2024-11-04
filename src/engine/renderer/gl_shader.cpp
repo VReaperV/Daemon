@@ -1357,8 +1357,8 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	std::string newShaderText;
 	std::string materialStruct = "\nstruct Material {\n";
 	std::string materialBlock = "layout(std430, binding = 0) readonly buffer materialsSSBO {\n"
-									 "  Material materials[];\n"
-									 "};\n\n";
+	                            "  Material materials[];\n"
+	                            "};\n\n";
 	std::string texDataBlock = "struct TexData {\n"
 	                           "	uvec2 u_DiffuseMap;\n"
 	                           "	uvec2 u_NormalMap;\n"
@@ -1367,7 +1367,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	                           "	uvec2 u_GlowMap;\n"
 	                           "	uvec2 u_LightMap;\n"
 	                           "	uvec2 u_DeluxeMap;\n"
-	                           "};\n"
+	                           "};\n\n"
 	                           "layout(std430, binding = 6) readonly buffer texDataSSBO {\n"
 	                           "  TexData texData[];\n"
 	                           "};\n\n";

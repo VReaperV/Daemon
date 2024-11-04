@@ -667,7 +667,7 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 
 			offset += padding;
 			material.staticMaterialsSSBOOffset = offset;
-			offset += paddedSize * material.totalStaticDrawSurfCount;
+			offset += paddedSize * material.totalStaticStageCount;
 		}
 	}
 
@@ -690,7 +690,7 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 			}
 
 			material.dynamicMaterialsSSBOOffset = offset;
-			offset += paddedSize * material.totalDynamicDrawSurfCount;
+			offset += paddedSize * material.totalDynamicStageCount;
 		}
 	}
 
@@ -752,8 +752,6 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 					/* For dynamic stages we'll change their offset, because we're only gonna be mapping a range of the material buffer
 					So store the initial offset for rendering commands */
 					pStage->staticMaterialsSSBOOffset = pStage->materialsSSBOOffset;
-					Log::Warn( "%s|%u: %u", drawSurf->shader->name, stage, pStage->materialsSSBOOffset );
-					Log::Warn( "%s %u", material.shader->GetName(), material.shader->GetPaddedSize() );
 
 					if ( pStage->dynamic ) {
 						hasDynamicStages = true;
@@ -1323,7 +1321,7 @@ void ProcessMaterialNOP( Material*, shaderStage_t*, drawSurf_t* ) {
 
 // ProcessMaterial*() are essentially same as BindShader*(), but only set the GL program id to the material,
 // without actually binding it
-void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf ) {
+void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSurf_t* ) {
 	material->shader = gl_genericShaderMaterial;
 
 	material->tcGenEnvironment = pStage->tcGen_Environment;
@@ -1471,11 +1469,6 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 
 	if ( pStage->initialized ) {
 		materialPacks[pStage->materialPackID].materials[pStage->materialID].totalDrawSurfCount++;
-		/* if ( pStage->dynamic ) {
-			materialPacks[pStage->materialPackID].materials[pStage->materialID].totalDynamicDrawSurfCount++;
-		} else {
-			materialPacks[pStage->materialPackID].materials[pStage->materialID].totalStaticDrawSurfCount++;
-		} */
 		materialPacks[pStage->materialPackID].materials[pStage->materialID].drawSurfs.emplace_back( drawSurf );
 
 		stage++;
@@ -1547,9 +1540,9 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 	pStage->initialized = true;
 	materials[previousMaterialID].totalDrawSurfCount++;
 	if ( pStage->dynamic ) {
-		materials[previousMaterialID].totalDynamicDrawSurfCount++;
+		materials[previousMaterialID].totalDynamicStageCount++;
 	} else {
-		materials[previousMaterialID].totalStaticDrawSurfCount++;
+		materials[previousMaterialID].totalStaticStageCount++;
 	}
 
 	if ( std::find( materials[previousMaterialID].drawSurfs.begin(), materials[previousMaterialID].drawSurfs.end(), drawSurf )
@@ -1700,6 +1693,10 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, const uint32_t stag
 
 	textureData.lightmap = lightmap;
 	textureData.deluxemap = deluxemap;
+
+	if ( pStage->type == stageType_t::ST_STYLELIGHTMAP ) {
+		textureData.texBundlesOverride[TB_COLORMAP] = lightmap;
+	}
 
 	std::vector<TextureData>::iterator it = std::find( texData.begin(), texData.end(), textureData );
 	if ( it == texData.end() ) {

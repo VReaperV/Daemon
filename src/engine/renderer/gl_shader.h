@@ -2162,7 +2162,8 @@ class u_ColorMap :
 	GLUniformSampler2D {
 	public:
 	u_ColorMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_ColorMap" ) {
+		// While u_ColorMap is used for some screen-space shaders, it's never global in material system shaders
+		GLUniformSampler2D( shader, "u_ColorMap", false, true ) {
 	}
 
 	void SetUniform_ColorMapBindless( GLuint64 bindlessHandle ) {
