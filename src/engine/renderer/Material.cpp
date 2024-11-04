@@ -318,7 +318,7 @@ void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& material, dra
 	}
 
 	// bind u_DiffuseMap
-	gl_lightMappingShaderMaterial->SetUniform_DiffuseMapBindless(
+	gl_lightMappingShaderMaterial->SetUniform_ColorMapBindless(
 		GL_BindToTMU( BIND_DIFFUSEMAP, pStage->bundle[TB_DIFFUSEMAP].image[0] )
 	);
 

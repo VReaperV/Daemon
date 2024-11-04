@@ -36,7 +36,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #  define SWIZ2 ar
 #endif
 
-uniform sampler2D	u_DiffuseMap;
+uniform sampler2D u_ColorMap;
 uniform sampler2D	u_MaterialMap;
 uniform sampler2D	u_AttenuationMapXY;
 uniform sampler2D	u_AttenuationMapZ;
@@ -971,7 +971,7 @@ void	main()
 	float NL = clamp(dot(normal, lightDir), 0.0, 1.0);
 
 	// compute the diffuse term
-	vec4 diffuse = texture2D(u_DiffuseMap, texCoords);
+	vec4 diffuse = texture2D(u_ColorMap, texCoords);
 	if( abs(diffuse.a + u_AlphaThreshold) <= 1.0 )
 	{
 		discard;

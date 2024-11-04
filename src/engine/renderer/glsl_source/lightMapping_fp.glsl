@@ -27,7 +27,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define LIGHTMAPPING_GLSL
 
-uniform sampler2D	u_DiffuseMap;
+uniform sampler2D u_ColorMap;
 uniform sampler2D	u_MaterialMap;
 uniform sampler2D	u_GlowMap;
 
@@ -95,7 +95,7 @@ void main()
 	#endif
 
 	// Compute the diffuse term.
-	vec4 diffuse = texture2D(u_DiffuseMap, texCoords);
+	vec4 diffuse = texture2D(u_ColorMap, texCoords);
 
 	// Apply vertex blend operation like: alphaGen vertex.
 	diffuse *= var_Color;

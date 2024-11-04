@@ -2223,22 +2223,6 @@ class u_DepthMap :
 	}
 };
 
-class u_DiffuseMap :
-	GLUniformSampler2D {
-	public:
-	u_DiffuseMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_DiffuseMap", false, true ) {
-	}
-
-	void SetUniform_DiffuseMapBindless( GLuint64 bindlessHandle ) {
-		this->SetValueBindless( bindlessHandle );
-	}
-
-	GLint GetUniformLocation_DiffuseMap() {
-		return this->GetLocation();
-	}
-};
-
 class u_HeightMap :
 	GLUniformSampler2D {
 	public:
@@ -4006,7 +3990,7 @@ class GLShader_genericMaterial :
 
 class GLShader_lightMapping :
 	public GLShader,
-	public u_DiffuseMap,
+	public u_ColorMap,
 	public u_NormalMap,
 	public u_HeightMap,
 	public u_MaterialMap,
@@ -4058,7 +4042,7 @@ public:
 
 class GLShader_lightMappingMaterial :
 	public GLShader,
-	public u_DiffuseMap,
+	public u_ColorMap,
 	public u_NormalMap,
 	public u_HeightMap,
 	public u_MaterialMap,
@@ -4107,7 +4091,7 @@ class GLShader_lightMappingMaterial :
 
 class GLShader_forwardLighting_omniXYZ :
 	public GLShader,
-	public u_DiffuseMap,
+	public u_ColorMap,
 	public u_NormalMap,
 	public u_MaterialMap,
 	public u_AttenuationMapXY,
@@ -4150,7 +4134,7 @@ public:
 
 class GLShader_forwardLighting_projXYZ :
 	public GLShader,
-	public u_DiffuseMap,
+	public u_ColorMap,
 	public u_NormalMap,
 	public u_MaterialMap,
 	public u_AttenuationMapXY,
@@ -4195,7 +4179,7 @@ public:
 
 class GLShader_forwardLighting_directionalSun :
 	public GLShader,
-	public u_DiffuseMap,
+	public u_ColorMap,
 	public u_NormalMap,
 	public u_MaterialMap,
 	public u_ShadowMap0,

@@ -1360,7 +1360,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	                            "  Material materials[];\n"
 	                            "};\n\n";
 	std::string texDataBlock = "struct TexData {\n"
-	                           "	uvec2 u_DiffuseMap;\n"
+	                           "	uvec2 u_ColorMap;\n"
 	                           "	uvec2 u_NormalMap;\n"
 	                           "	uvec2 u_HeightMap;\n"
 	                           "	uvec2 u_MaterialMap;\n"
@@ -2278,7 +2278,7 @@ void GLShader_genericMaterial::SetShaderProgramUniforms( shaderProgram_t* shader
 GLShader_lightMapping::GLShader_lightMapping( GLShaderManager *manager ) :
 	GLShader( "lightMapping",
 	ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager ),
-	u_DiffuseMap( this ),
+	u_ColorMap( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
 	u_MaterialMap( this ),
@@ -2347,7 +2347,7 @@ void GLShader_lightMapping::SetShaderProgramUniforms( shaderProgram_t *shaderPro
 GLShader_lightMappingMaterial::GLShader_lightMappingMaterial( GLShaderManager* manager ) :
 	GLShader( "lightMappingMaterial", "lightMapping", true,
 		ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager ),
-	u_DiffuseMap( this ),
+	u_ColorMap( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
 	u_MaterialMap( this ),
@@ -2409,7 +2409,7 @@ void GLShader_lightMappingMaterial::SetShaderProgramUniforms( shaderProgram_t* s
 
 GLShader_forwardLighting_omniXYZ::GLShader_forwardLighting_omniXYZ( GLShaderManager *manager ):
 	GLShader("forwardLighting_omniXYZ", "forwardLighting", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager),
-	u_DiffuseMap( this ),
+	u_ColorMap( this ),
 	u_NormalMap( this ),
 	u_MaterialMap( this ),
 	u_AttenuationMapXY( this ),
@@ -2462,7 +2462,7 @@ void GLShader_forwardLighting_omniXYZ::SetShaderProgramUniforms( shaderProgram_t
 
 GLShader_forwardLighting_projXYZ::GLShader_forwardLighting_projXYZ( GLShaderManager *manager ):
 	GLShader("forwardLighting_projXYZ", "forwardLighting", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager),
-	u_DiffuseMap( this ),
+	u_ColorMap( this ),
 	u_NormalMap( this ),
 	u_MaterialMap( this ),
 	u_AttenuationMapXY( this ),
@@ -2521,7 +2521,7 @@ void GLShader_forwardLighting_projXYZ::SetShaderProgramUniforms( shaderProgram_t
 
 GLShader_forwardLighting_directionalSun::GLShader_forwardLighting_directionalSun( GLShaderManager *manager ):
 	GLShader("forwardLighting_directionalSun", "forwardLighting", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager),
-	u_DiffuseMap( this ),
+	u_ColorMap( this ),
 	u_NormalMap( this ),
 	u_MaterialMap( this ),
 	u_ShadowMap0( this ),

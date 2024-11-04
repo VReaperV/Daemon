@@ -63,7 +63,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#endif // !GENERIC_GLSL
 
 	#if defined(LIGHTMAPPING_GLSL)
-		sampler2D u_DiffuseMap = sampler2D( u_DiffuseMap_initial );
+		sampler2D u_ColorMap = sampler2D( u_ColorMap_initial );
 		sampler2D u_MaterialMap = sampler2D( u_MaterialMap_initial );
 		sampler2D u_GlowMap = sampler2D( u_GlowMap_initial );
 		sampler2D u_LightMap = sampler2D( u_LightMap_initial );

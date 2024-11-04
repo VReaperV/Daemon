@@ -1126,7 +1126,7 @@ void Render_lightMapping( shaderStage_t *pStage )
 	}
 
 	// bind u_DiffuseMap
-	gl_lightMappingShader->SetUniform_DiffuseMapBindless(
+	gl_lightMappingShader->SetUniform_ColorMapBindless(
 		GL_BindToTMU( BIND_DIFFUSEMAP, pStage->bundle[TB_DIFFUSEMAP].image[0] )
 	);
 
@@ -1454,7 +1454,7 @@ static void Render_forwardLighting_DBS_omni( shaderStage_t *pStage,
 	GL_CheckErrors();
 
 	// bind u_DiffuseMap
-	gl_forwardLightingShader_omniXYZ->SetUniform_DiffuseMapBindless(
+	gl_forwardLightingShader_omniXYZ->SetUniform_ColorMapBindless(
 		GL_BindToTMU( 0, pStage->bundle[TB_DIFFUSEMAP].image[0] )
 	);
 
@@ -1630,7 +1630,7 @@ static void Render_forwardLighting_DBS_proj( shaderStage_t *pStage,
 	GL_CheckErrors();
 
 	// bind u_DiffuseMap
-	gl_forwardLightingShader_projXYZ->SetUniform_DiffuseMapBindless(
+	gl_forwardLightingShader_projXYZ->SetUniform_ColorMapBindless(
 		GL_BindToTMU( 0, pStage->bundle[TB_DIFFUSEMAP].image[0] )
 	);
 
@@ -1810,7 +1810,7 @@ static void Render_forwardLighting_DBS_directional( shaderStage_t *pStage, trRef
 	GL_CheckErrors();
 
 	// bind u_DiffuseMap
-	gl_forwardLightingShader_directionalSun->SetUniform_DiffuseMapBindless(
+	gl_forwardLightingShader_directionalSun->SetUniform_ColorMapBindless(
 		GL_BindToTMU( 0, pStage->bundle[TB_DIFFUSEMAP].image[0] )
 	);
 
