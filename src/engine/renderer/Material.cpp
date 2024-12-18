@@ -205,7 +205,7 @@ void UpdateSurfaceDataNOP( uint32_t*, Material&, shaderStage_t* ) {
 void UpdateSurfaceDataGeneric3D( uint32_t* materials, Material& material, shaderStage_t* pStage ) {
 	shader_t* shader = pStage->shader;
 
-	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = ( pStage->materialsSSBOOffset + pStage->currentOffset ) * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
 	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
@@ -255,7 +255,7 @@ void UpdateSurfaceDataGeneric3D( uint32_t* materials, Material& material, shader
 void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& material, shaderStage_t* pStage ) {
 	shader_t* shader = pStage->shader;
 
-	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = ( pStage->materialsSSBOOffset + pStage->currentOffset ) * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
 	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
@@ -385,7 +385,7 @@ void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& material, sha
 void UpdateSurfaceDataReflection( uint32_t* materials, Material& material, shaderStage_t* pStage ) {
 	shader_t* shader = pStage->shader;
 
-	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = ( pStage->materialsSSBOOffset + pStage->currentOffset ) * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
 	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
@@ -445,7 +445,7 @@ void UpdateSurfaceDataReflection( uint32_t* materials, Material& material, shade
 void UpdateSurfaceDataSkybox( uint32_t* materials, Material& material, shaderStage_t* pStage ) {
 	shader_t* shader = pStage->shader;
 
-	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = ( pStage->materialsSSBOOffset + pStage->currentOffset ) * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
 	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
@@ -470,7 +470,7 @@ void UpdateSurfaceDataSkybox( uint32_t* materials, Material& material, shaderSta
 void UpdateSurfaceDataScreen( uint32_t* materials, Material& material, shaderStage_t* pStage ) {
 	shader_t* shader = pStage->shader;
 
-	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = ( pStage->materialsSSBOOffset + pStage->currentOffset ) * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
 	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
@@ -492,7 +492,7 @@ void UpdateSurfaceDataScreen( uint32_t* materials, Material& material, shaderSta
 void UpdateSurfaceDataHeatHaze( uint32_t* materials, Material& material, shaderStage_t* pStage ) {
 	shader_t* shader = pStage->shader;
 
-	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = ( pStage->materialsSSBOOffset + pStage->currentOffset ) * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
 	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
@@ -525,7 +525,7 @@ void UpdateSurfaceDataHeatHaze( uint32_t* materials, Material& material, shaderS
 void UpdateSurfaceDataLiquid( uint32_t* materials, Material& material, shaderStage_t* pStage ) {
 	shader_t* shader = pStage->shader;
 
-	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = ( pStage->materialsSSBOOffset + pStage->currentOffset ) * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
 	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
@@ -596,7 +596,7 @@ void UpdateSurfaceDataLiquid( uint32_t* materials, Material& material, shaderSta
 void UpdateSurfaceDataFog( uint32_t* materials, Material& material, shaderStage_t* pStage ) {
 	shader_t* shader = pStage->shader;
 
-	const uint32_t paddedOffset = pStage->materialsSSBOOffset * material.shader->GetPaddedSize();
+	const uint32_t paddedOffset = ( pStage->materialsSSBOOffset + pStage->currentOffset ) * material.shader->GetPaddedSize();
 	materials += paddedOffset;
 
 	bool updated = !pStage->bufferInitialized || pStage->colorDynamic || pStage->texMatricesDynamic || pStage->dynamic;
@@ -649,12 +649,43 @@ void UpdateSurfaceDataFog( uint32_t* materials, Material& material, shaderStage_
 void MaterialSystem::GenerateWorldMaterialsBuffer() {
 	Log::Debug( "Generating materials buffer" );
 
-	uint32_t offset = 0;
-
 	materialsSSBO.BindBuffer();
 
+	std::sort( materialStages.begin(), materialStages.end(),
+		[&]( const shaderStage_t* lhs, const shaderStage_t* rhs ) {
+			if ( !lhs->dynamic && rhs->dynamic ) {
+				return true;
+			}
+
+			if ( !rhs->dynamic && lhs->dynamic ) {
+				return false;
+			}
+
+			return materialPacks[lhs->materialPackID].materials[lhs->materialID].shader->GetPaddedSize()
+				< materialPacks[rhs->materialPackID].materials[rhs->materialID].shader->GetPaddedSize();
+		} );
+
+	uint32_t offset = 0;
+	bool dynamicDrawSurfOffsetSet = false;
+
+	for ( shaderStage_t* pStage : materialStages ) {
+		const uint32_t paddedSize = materialPacks[pStage->materialPackID].materials[pStage->materialID].shader->GetPaddedSize();
+		const uint32_t padding = ( offset % paddedSize == 0 ) ? 0 : paddedSize - ( offset % paddedSize );
+
+		offset += padding;
+
+		// Make sure padding is taken into account for dynamicDrawSurfsOffset
+		if ( !dynamicDrawSurfOffsetSet && pStage->dynamic ) {
+			dynamicDrawSurfsOffset = offset;
+			dynamicDrawSurfOffsetSet = true;
+		}
+
+		pStage->materialsSSBOOffset = offset / paddedSize;
+		offset += paddedSize * pStage->variantOffset;
+	}
+
 	// Compute data size for static surfaces
-	for ( MaterialPack& pack : materialPacks ) {
+	/* for ( MaterialPack& pack : materialPacks ) {
 		for ( Material& material : pack.materials ) {
 			// Any new material in the buffer must start on an offset that is an integer multiple of
 			// the padded size of the material struct
@@ -688,7 +719,7 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 			material.dynamicMaterialsSSBOOffset = offset;
 			offset += paddedSize * material.totalDynamicStageCount;
 		}
-	}
+	} */
 
 	dynamicDrawSurfsSize = offset - dynamicDrawSurfsOffset;
 
@@ -696,6 +727,35 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 	glBufferData( GL_SHADER_STORAGE_BUFFER, offset * sizeof( uint32_t ), nullptr, GL_DYNAMIC_DRAW );
 	uint32_t* materialsData = materialsSSBO.MapBufferRange( offset );
 	memset( materialsData, 0, offset * sizeof( uint32_t ) );
+
+	/* for ( shaderStage_t* pStage : materialStages ) {
+		uint32_t SSBOOffset = 0;
+		uint32_t drawSurfCount = 0;
+		if ( pStage->dynamic ) {
+			SSBOOffset = material.dynamicMaterialsSSBOOffset;
+			drawSurfCount = material.currentDynamicDrawSurfCount;
+			material.currentDynamicDrawSurfCount++;
+		} else {
+			SSBOOffset = material.staticMaterialsSSBOOffset;
+			drawSurfCount = material.currentStaticDrawSurfCount;
+			material.currentStaticDrawSurfCount++;
+		}
+
+		pStage->materialsSSBOOffset = ( SSBOOffset + drawSurfCount * material.shader->GetPaddedSize() ) /
+			material.shader->GetPaddedSize();
+
+		/* For dynamic stages we'll change their offset, because we're only gonna be mapping a range of the material buffer
+		So store the initial offset for rendering commands */
+		/* pStage->staticMaterialsSSBOOffset = pStage->materialsSSBOOffset;
+
+		pStage->surfaceDataUpdater( materialsData, material, pStage );
+
+		if ( pStage->dynamic ) {
+			pStage->materialsSSBOOffset = ( SSBOOffset - dynamicDrawSurfsOffset + drawSurfCount *
+				material.shader->GetPaddedSize() ) / material.shader->GetPaddedSize();
+			dynamicStages.emplace_back( pStage );
+		}
+	} */
 
 	for ( uint32_t materialPackID = 0; materialPackID < 3; materialPackID++ ) {
 		for ( Material& material : materialPacks[materialPackID].materials ) {
@@ -711,7 +771,7 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 					if ( pStage->bufferInitialized ) {
 						tess.currentDrawSurf = drawSurf;
 
-						tess.currentSSBOOffset = pStage->staticMaterialsSSBOOffset;
+						tess.currentSSBOOffset = pStage->materialsSSBOOffset; // pStage->staticMaterialsSSBOOffset;
 						tess.materialID = pStage->materialID;
 						tess.materialPackID = pStage->materialPackID;
 
@@ -738,14 +798,24 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 						material.currentStaticDrawSurfCount++;
 					}
 
-					pStage->materialsSSBOOffset = ( SSBOOffset + drawSurfCount * material.shader->GetPaddedSize() ) /
-						material.shader->GetPaddedSize();
+					/* pStage->materialsSSBOOffset = ( SSBOOffset + drawSurfCount * material.shader->GetPaddedSize() ) /
+						material.shader->GetPaddedSize(); */
 
 					/* For dynamic stages we'll change their offset, because we're only gonna be mapping a range of the material buffer
 					So store the initial offset for rendering commands */
 					pStage->staticMaterialsSSBOOffset = pStage->materialsSSBOOffset;
 
-					pStage->surfaceDataUpdater( materialsData, material, pStage );
+					uint32_t variants = 0;
+					for ( uint32_t i = 0; i < Util::ordinal( ShaderStageVariant::ALL ) && variants < pStage->variantOffset; i++ ) {
+						if ( pStage->variantOffsets[i] != -1 ) {
+							pStage->mayUseVertexOverbright = i & Util::ordinal( ShaderStageVariant::VERTEX_OVERBRIGHT );
+							pStage->vertexLit = i & Util::ordinal( ShaderStageVariant::VERTEX_LIT );
+							pStage->fullbright = i & Util::ordinal( ShaderStageVariant::FULLBRIGHT );
+							pStage->currentOffset = pStage->variantOffsets[i];
+							pStage->surfaceDataUpdater( materialsData, material, pStage );
+							variants++;
+						}
+					}
 
 					tess.currentDrawSurf = drawSurf;
 
@@ -760,7 +830,7 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 
 					drawSurf->drawCommandIDs[stage] = lastCommandID;
 
-					if ( pStage->dynamic ) {
+					if ( pStage->dynamic && false ) {
 						pStage->materialsSSBOOffset = ( SSBOOffset - dynamicDrawSurfsOffset + drawSurfCount *
 							material.shader->GetPaddedSize() ) / material.shader->GetPaddedSize();
 						dynamicStages.emplace_back( pStage );
@@ -973,6 +1043,7 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			SurfaceCommand surfaceCommand;
 			surfaceCommand.enabled = 0;
 			surfaceCommand.drawCommand = material->drawCommands[depthDrawSurf->drawCommandIDs[0]].cmd;
+			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataIDs[0] << 12;
 			surfaceCommands[cmdID] = surfaceCommand;
 		}
 
@@ -986,7 +1057,7 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			SurfaceCommand surfaceCommand;
 			surfaceCommand.enabled = 0;
 			surfaceCommand.drawCommand = material->drawCommands[drawSurf->drawCommandIDs[stage]].cmd;
-			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataIDs[stage] << 12;
+			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataIDs[0] << 12;
 			surfaceCommand.drawCommand.baseInstance |= ( HasLightMap( drawSurf ) ? GetLightMapNum( drawSurf ) : 255 ) << 24;
 			surfaceCommands[cmdID] = surfaceCommand;
 

@@ -1228,6 +1228,7 @@ enum class shaderProfilerRenderSubGroupsMode {
 
 		int variantOffsets[Util::ordinal( ShaderStageVariant::ALL )];
 		uint32_t variantOffset = 0;
+		uint32_t currentOffset = 0;
 
 		bool mayUseVertexOverbright = false;
 		bool vertexLit = false;
