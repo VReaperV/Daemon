@@ -243,6 +243,8 @@ extern PortalView portalStack[MAX_VIEWS];
 #define INDIRECT_COMMAND_SIZE 5
 #define SURFACE_COMMAND_SIZE 4
 #define SURFACE_COMMAND_BATCH_SIZE 2
+#define TEX_BUNDLE_SIZE 28
+#define LIGHTMAP_SIZE 4
 #define PORTAL_SURFACE_SIZE 8
 
 #define MAX_FRAMES 2
@@ -322,6 +324,7 @@ class MaterialSystem {
 	};
 
 	std::vector<TextureData> texData;
+	std::vector<TextureData> dynamicTexData;
 
 	bool frameStart = false;
 
@@ -380,6 +383,7 @@ class MaterialSystem {
 	std::vector<shaderStage_t*> dynamicStages;
 
 	// std::vector<drawSurf_t> dynamicDrawSurfs;
+	uint32_t totalStageSize;
 	uint32_t dynamicDrawSurfsOffset = 0;
 	uint32_t dynamicDrawSurfsSize = 0;
 

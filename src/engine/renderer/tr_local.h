@@ -1211,9 +1211,11 @@ enum class shaderProfilerRenderSubGroupsMode {
 
 		bool useMaterialSystem = false;
 		shader_t* shader;
+		shaderStage_t* materialRemappedStage = nullptr;
 
 		uint staticMaterialsSSBOOffset = 0;
 		uint materialsSSBOOffset = 0;
+		uint32_t dynamicMaterialsOffset = 0;
 
 		bool initialized = false;
 		bool bufferInitialized = false;
