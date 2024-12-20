@@ -771,7 +771,7 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 					if ( pStage->bufferInitialized ) {
 						tess.currentDrawSurf = drawSurf;
 
-						tess.currentSSBOOffset = pStage->materialsSSBOOffset; // pStage->staticMaterialsSSBOOffset;
+						tess.currentSSBOOffset = pStage->materialsSSBOOffset + pStage->variantOffsets[drawSurf->shaderVariant[stage]]; // pStage->staticMaterialsSSBOOffset;
 						tess.materialID = pStage->materialID;
 						tess.materialPackID = pStage->materialPackID;
 
@@ -819,7 +819,7 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 
 					tess.currentDrawSurf = drawSurf;
 
-					tess.currentSSBOOffset = pStage->materialsSSBOOffset;
+					tess.currentSSBOOffset = pStage->materialsSSBOOffset + pStage->variantOffsets[drawSurf->shaderVariant[stage]];
 					tess.materialID = pStage->materialID;
 					tess.materialPackID = pStage->materialPackID;
 
@@ -885,18 +885,20 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	uint32_t* surfaceDescriptors = surfaceDescriptorsSSBO.MapBufferRange( surfaceDescriptorsCount * descriptorSize );
 
 	texDataSSBO.BindBuffer();
-	texDataSSBO.BufferStorage( texData.size() * 5 * 2, 1, nullptr );
+	texDataSSBO.BufferStorage( texData.size() * 28, 1, nullptr );
 	texDataSSBO.MapAll();
-	uint64_t* textureBundles = ( uint64_t* ) texDataSSBO.GetData();
-	memset( textureBundles, 0, texData.size() * 5 * 2 * sizeof( uint32_t ) );
+	TexBundle* textureBundles = ( TexBundle* ) texDataSSBO.GetData();
+	memset( textureBundles, 0, texData.size() * 28 * sizeof( uint32_t ) );
 
 	for ( const TextureData& textureData : texData ) {
-		for ( const textureBundle_t* bundle : textureData.texBundles ) {
+		for ( int i = 0; i < MAX_TEXTURE_BUNDLES; i++ ) {
+			const textureBundle_t* bundle = textureData.texBundles[i];
 			if ( bundle && bundle->image[0] ) {
-				*textureBundles = bundle->image[0]->texture->bindlessTextureHandle;
+				textureBundles->textures[i] = bundle->image[0]->texture->bindlessTextureHandle;
 			}
-			textureBundles++;
 		}
+		RB_CalcTexMatrix( textureData.texBundles[0], textureBundles->textureMatrix );
+		textureBundles++;
 	}
 	texDataSSBO.FlushAll();
 	texDataSSBO.UnmapBuffer();
@@ -1057,7 +1059,7 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			SurfaceCommand surfaceCommand;
 			surfaceCommand.enabled = 0;
 			surfaceCommand.drawCommand = material->drawCommands[drawSurf->drawCommandIDs[stage]].cmd;
-			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataIDs[0] << 12;
+			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataIDs[stage] << 12;
 			surfaceCommand.drawCommand.baseInstance |= ( HasLightMap( drawSurf ) ? GetLightMapNum( drawSurf ) : 255 ) << 24;
 			surfaceCommands[cmdID] = surfaceCommand;
 

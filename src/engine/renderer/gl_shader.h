@@ -2728,7 +2728,7 @@ class u_TextureMatrix :
 {
 public:
 	u_TextureMatrix( GLShader *shader ) :
-		GLUniformMatrix4f( shader, "u_TextureMatrix" )
+		GLUniformMatrix4f( shader, "u_TextureMatrix", true )
 	{
 	}
 

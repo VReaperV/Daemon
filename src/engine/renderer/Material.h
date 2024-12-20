@@ -145,6 +145,12 @@ struct Material {
 	}
 };
 
+struct TexBundle {
+	matrix_t textureMatrix;
+	GLuint64 textures[MAX_TEXTURE_BUNDLES];
+	GLuint64 padding;
+};
+
 struct TextureData {
 	const textureBundle_t* texBundles[MAX_TEXTURE_BUNDLES] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 	// For ST_STYLELIGHTMAP stages

@@ -1360,15 +1360,18 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	                            "	Material materials[];\n"
 	                            "};\n\n";
 	std::string texDataBlock = "struct TexData {\n"
+	                           "	mat4 u_TextureMatrix;\n"
 	                           "	uvec2 u_DiffuseMap;\n"
 	                           "	uvec2 u_NormalMap;\n"
 	                           "	uvec2 u_HeightMap;\n"
 	                           "	uvec2 u_MaterialMap;\n"
 	                           "	uvec2 u_GlowMap;\n"
+	                           "	uvec2 padding;\n"
 	                           "};\n\n"
 	                           "layout(std430, binding = 6) readonly buffer texDataSSBO {\n"
 	                           "	TexData texData[];\n"
 	                           "};\n\n"
+		                       "#define u_TextureMatrix texData[( baseInstance >> 12 ) & 0xFFF].u_TextureMatrix\n"
 		                       "#define u_DiffuseMap_initial uvec2( texData[( baseInstance >> 12 ) & 0xFFF].u_DiffuseMap )\n"
 		                       "#define u_NormalMap_initial uvec2( texData[( baseInstance >> 12 ) & 0xFFF].u_NormalMap )\n"
 		                       "#define u_HeightMap_initial uvec2( texData[( baseInstance >> 12 ) & 0xFFF].u_HeightMap )\n"
@@ -1446,7 +1449,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 
 	// Array of structs is aligned to the largest member of the struct
 	for ( uint i = 0; i < shader->padding; i++ ) {
-		materialStruct += "  int material_padding" + std::to_string( i );
+		materialStruct += "	int material_padding" + std::to_string( i );
 		materialStruct += ";\n";
 	}
 
@@ -1467,7 +1470,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 		bool skip = false;
 		if ( line.find( "uniform" ) < line.find( "//" ) && line.find( ";" ) != std::string::npos ) {
 			for ( GLUniform* uniform : shader->_uniforms ) {
-				if ( !uniform->IsGlobal() && ( line.find( uniform->GetName() ) != std::string::npos ) ) {
+				if ( ( !uniform->IsGlobal() || !Q_stricmp( uniform->GetName(), "u_TextureMatrix" ) ) && ( line.find(uniform->GetName() ) != std::string::npos ) ) {
 					skip = true;
 					break;
 				}
