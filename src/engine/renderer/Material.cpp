@@ -848,7 +848,16 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	TexBundle* textureBundles = ( TexBundle* ) texDataSSBO.GetData();
 	memset( textureBundles, 0, texData.size() * TEX_BUNDLE_SIZE * sizeof( uint32_t ) );
 
-	for ( const TextureData& textureData : texData ) {
+	std::sort( texData.begin(), texData.end(), []( const TextureData& lhs, const TextureData& rhs ) {
+		const bool lhsDynamic = lhs.texBundles[0]->numImages > 1 || lhs.texBundles[0]->numTexMods > 0;
+		const bool rhsDynamic = rhs.texBundles[0]->numImages > 1 || rhs.texBundles[0]->numTexMods > 0;
+		return !lhsDynamic && rhsDynamic;
+	} );
+
+	uint32_t texID = 0;
+	for ( TextureData& textureData : texData ) {
+		textureData.id = texID;
+
 		for ( int i = 0; i < MAX_TEXTURE_BUNDLES; i++ ) {
 			const textureBundle_t* bundle = textureData.texBundles[i];
 			if ( bundle && bundle->image[0] ) {
@@ -859,7 +868,16 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		// While reflection, liquid and heatHaze shaders use the matrix from TB_NORMALMAP bundle, it's never actually parsed
 		RB_CalcTexMatrix( textureData.texBundles[0], textureBundles->textureMatrix );
 		textureBundles++;
+		texID++;
+
+		if ( textureData.texBundles[0]->numImages <= 1 && textureData.texBundles[0]->numTexMods == 0 ) {
+			dynamicTexDataOffset++;
+		}
 	}
+
+	dynamicTexDataSize = texData.size() - dynamicTexDataOffset;
+	dynamicTexDataOffset *= TEX_BUNDLE_SIZE;
+	dynamicTexDataSize *= TEX_BUNDLE_SIZE;
 
 	texDataSSBO.FlushAll();
 	texDataSSBO.UnmapBuffer();
@@ -1014,7 +1032,7 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			surfaceCommand.enabled = 0;
 			surfaceCommand.drawCommand = material->drawCommands[depthDrawSurf->drawCommandIDs[0]].cmd;
 			// We still need the textures for alpha-tested depth pre-pass surface commands
-			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataIDs[0] << 12;
+			surfaceCommand.drawCommand.baseInstance |= drawSurf->texData[0]->id << 12;
 			surfaceCommands[cmdID] = surfaceCommand;
 		}
 
@@ -1028,7 +1046,7 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			SurfaceCommand surfaceCommand;
 			surfaceCommand.enabled = 0;
 			surfaceCommand.drawCommand = material->drawCommands[drawSurf->drawCommandIDs[stage]].cmd;
-			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataIDs[stage] << 12;
+			surfaceCommand.drawCommand.baseInstance |= drawSurf->texData[stage]->id << 12;
 			surfaceCommand.drawCommand.baseInstance |= ( HasLightMap( drawSurf ) ? GetLightMapNum( drawSurf ) : 255 ) << 24;
 			surfaceCommands[cmdID] = surfaceCommand;
 
@@ -1859,10 +1877,10 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, const uint32_t stag
 
 	std::vector<TextureData>::iterator it = std::find( texData.begin(), texData.end(), textureData );
 	if ( it == texData.end() ) {
-		drawSurf->texDataIDs[stage] = texData.size();
 		texData.emplace_back( textureData );
+		drawSurf->texData[stage] = &texData.back();
 	} else {
-		drawSurf->texDataIDs[stage] = it - texData.begin();
+		drawSurf->texData[stage] = &( *it );
 	}
 
 	if ( glConfig2.realtimeLighting ) {
@@ -1902,8 +1920,8 @@ void MaterialSystem::UpdateDynamicSurfaces() {
 	materialsSSBO.UnmapBuffer();
 
 	texDataSSBO.BindBuffer();
-	TexBundle* textureBundles = ( TexBundle* ) texDataSSBO.GetData();
-	memset( textureBundles, 0, texData.size() * TEX_BUNDLE_SIZE * sizeof( uint32_t ) );
+	TexBundle* textureBundles = ( TexBundle* ) texDataSSBO.MapBufferRange( dynamicTexDataOffset, dynamicTexDataSize );
+	memset( textureBundles, 0, dynamicTexDataSize * sizeof( uint32_t ) );
 
 	for ( const TextureData& textureData : texData ) {
 		for ( int i = 0; i < MAX_TEXTURE_BUNDLES; i++ ) {
@@ -1918,7 +1936,6 @@ void MaterialSystem::UpdateDynamicSurfaces() {
 		textureBundles++;
 	}
 
-	texDataSSBO.FlushAll();
 	texDataSSBO.UnmapBuffer();
 }
 

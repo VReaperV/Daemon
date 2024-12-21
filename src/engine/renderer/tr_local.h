@@ -1667,6 +1667,7 @@ enum class shaderProfilerRenderSubGroupsMode {
 
 	static_assert( SORT_SHADER_MASK >= MAX_SHADERS - 1, "not enough qshader bits" );
 
+	struct TextureData;
 	struct drawSurf_t
 	{
 		trRefEntity_t *entity;
@@ -1678,7 +1679,8 @@ enum class shaderProfilerRenderSubGroupsMode {
 		int portalNum = -1;
 
 		uint32_t drawCommandIDs[MAX_SHADER_STAGES];
-		uint32_t texDataIDs[MAX_SHADER_STAGES];
+		// uint32_t texDataIDs[MAX_SHADER_STAGES];
+		TextureData* texData[MAX_SHADER_STAGES];
 		uint32_t shaderVariant[MAX_SHADER_STAGES];
 
 		drawSurf_t* depthSurface;

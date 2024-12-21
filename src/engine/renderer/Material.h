@@ -152,6 +152,7 @@ struct TexBundle {
 };
 
 struct TextureData {
+	uint32_t id;
 	const textureBundle_t* texBundles[MAX_TEXTURE_BUNDLES] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 	// For ST_STYLELIGHTMAP stages
 	image_t* texBundlesOverride[MAX_TEXTURE_BUNDLES] = { nullptr, nullptr, nullptr, nullptr, nullptr };
@@ -203,6 +204,7 @@ struct TextureData {
 	}
 
 	TextureData( const TextureData& other ) {
+		id = other.id;
 		memcpy( texBundles, other.texBundles, MAX_TEXTURE_BUNDLES * sizeof( textureBundle_t* ) );
 		memcpy( texBundlesOverride, other.texBundlesOverride, MAX_TEXTURE_BUNDLES * sizeof( image_t* ) );
 	}
@@ -324,7 +326,6 @@ class MaterialSystem {
 	};
 
 	std::vector<TextureData> texData;
-	std::vector<TextureData> dynamicTexData;
 
 	bool frameStart = false;
 
@@ -386,6 +387,8 @@ class MaterialSystem {
 	uint32_t totalStageSize;
 	uint32_t dynamicDrawSurfsOffset = 0;
 	uint32_t dynamicDrawSurfsSize = 0;
+	uint32_t dynamicTexDataOffset = 0;
+	uint32_t dynamicTexDataSize = 0;
 
 	Frame frames[MAX_FRAMES];
 	uint32_t currentFrame = 0;
