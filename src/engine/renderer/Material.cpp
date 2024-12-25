@@ -2053,6 +2053,10 @@ void MaterialSystem::RenderMaterials( const shaderSort_t fromSort, const shaderS
 		return;
 	}
 
+	if ( r_materialSystemSkip.Get() ) {
+		return;
+	}
+
 	if ( frameStart ) {
 		renderedMaterials.clear();
 		UpdateDynamicSurfaces();
