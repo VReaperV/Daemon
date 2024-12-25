@@ -1582,6 +1582,11 @@ enum class shaderProfilerRenderSubGroupsMode {
 	static const uint64_t SORT_LIGHTMAP_SHIFT = SORT_ENTITYNUM_BITS + SORT_ENTITYNUM_SHIFT;
 	static const uint64_t SORT_SHADER_SHIFT = SORT_LIGHTMAP_BITS + SORT_LIGHTMAP_SHIFT;
 
+	static const uint64_t SORT_ENTITYNUM_SHIFT2 = SORT_FOGNUM_BITS;
+	static const uint64_t SORT_LIGHTMAP_SHIFT2 = SORT_ENTITYNUM_BITS + SORT_ENTITYNUM_SHIFT2;
+	static const uint64_t SORT_SHADER_SHIFT2 = SORT_LIGHTMAP_BITS + SORT_LIGHTMAP_SHIFT2;
+	static const uint64_t SORT_INDEX_SHIFT2 = SORT_INDEX_BITS + SORT_SHADER_SHIFT2;
+
 #define MASKBITS( b ) ( 1 << (b) ) - 1
 	static const uint32_t SORT_INDEX_MASK = MASKBITS( SORT_INDEX_BITS );
 	static const uint32_t SORT_FOGNUM_MASK = MASKBITS( SORT_FOGNUM_BITS );
@@ -1642,11 +1647,19 @@ enum class shaderProfilerRenderSubGroupsMode {
 		inline void setSort( int shaderNum, int lightmapNum, int entityNum, int fogNum, int index ) {
 			entityNum = entityNum + 1; //world entity is -1
 			lightmapNum = lightmapNum + 1; //no lightmap is -1
-			sort = uint64_t( index & SORT_INDEX_MASK ) |
-				( uint64_t( fogNum & SORT_FOGNUM_MASK ) << SORT_FOGNUM_SHIFT ) |
-				( uint64_t( entityNum & SORT_ENTITYNUM_MASK ) << SORT_ENTITYNUM_SHIFT ) |
-				( uint64_t( lightmapNum & SORT_LIGHTMAP_MASK ) << SORT_LIGHTMAP_SHIFT ) |
-				( uint64_t( shaderNum & SORT_SHADER_MASK ) << SORT_SHADER_SHIFT );
+			if ( shader->sort <= Util::ordinal( shaderSort_t::SS_OPAQUE ) ) {
+				sort = uint64_t( index & SORT_INDEX_MASK ) |
+					( uint64_t( fogNum & SORT_FOGNUM_MASK ) << SORT_FOGNUM_SHIFT ) |
+					( uint64_t( entityNum & SORT_ENTITYNUM_MASK ) << SORT_ENTITYNUM_SHIFT ) |
+					( uint64_t( lightmapNum & SORT_LIGHTMAP_MASK ) << SORT_LIGHTMAP_SHIFT ) |
+					( uint64_t( shaderNum & SORT_SHADER_MASK ) << SORT_SHADER_SHIFT );
+			} else {
+				sort = uint64_t( fogNum & SORT_FOGNUM_MASK ) |
+					( uint64_t( entityNum & SORT_ENTITYNUM_MASK ) << SORT_ENTITYNUM_SHIFT2 ) |
+					( uint64_t( lightmapNum & SORT_LIGHTMAP_MASK ) << SORT_LIGHTMAP_SHIFT2 ) |
+					( uint64_t( shaderNum & SORT_SHADER_MASK ) << SORT_SHADER_SHIFT2 ) |
+					( uint64_t( index & SORT_INDEX_MASK ) << SORT_INDEX_SHIFT2 );
+			}
 		}
 	};
 
