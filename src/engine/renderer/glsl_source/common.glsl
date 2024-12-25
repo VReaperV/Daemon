@@ -43,6 +43,26 @@ array must be in the form of uvec4 array[] */
 #define UINT_FROM_UVEC4_ARRAY( array, id ) ( array[id / 4][id % 4] )
 #define UVEC2_FROM_UVEC4_ARRAY( array, id ) ( id % 2 == 0 ? array[id / 2].xy : array[id / 2].zw )
 
+/* Bit 0: color add
+Bit 1: color negate
+Bit 2: lightFactor add
+Bit 3: alpha add
+Bit 4: alpha negate */
+
+float colorModArray[3] = float[3] ( 0.0f, 1.0f, -1.0f );
+
+vec4 ColorModulateToColor( in uint colorMod ) {
+	vec4 colorModulate = vec4( colorModArray[colorMod & 3] );
+	colorModulate.a = ( colorModArray[( colorMod & 24 ) >> 3] );
+	return colorModulate;
+}
+
+vec4 ColorModulateToColor( in uint colorMod, const in float lightFactor ) {
+	vec4 colorModulate = vec4( colorModArray[colorMod & 3] + ( colorMod & 4 ) * lightFactor );
+	colorModulate.a = ( colorModArray[( colorMod & 24 ) >> 3] );
+	return colorModulate;
+}
+
 #define BITPACK_SIZE 32
 
 #define BitStreamLoad1a( array, offset, startBits, carryover, out ) (\

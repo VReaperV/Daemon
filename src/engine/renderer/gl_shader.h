@@ -2197,6 +2197,19 @@ public:
 	}
 };
 
+// HACK: Light factor is set as a global uniform here so that genericMaterial struct can fit into 8 bytes
+class u_ColorModulateLightFactor :
+	GLUniform1f {
+	public:
+	u_ColorModulateLightFactor( GLShader* shader ) :
+		GLUniform1f( shader, "u_ColorModulateLightFactor", true ) {
+	}
+
+	void SetUniform_ColorModulateLightFactor( const float lightFactor ) {
+		this->SetValue( lightFactor / 4.0f ); // Multiplied by 4 in the shader to save on instructions
+	}
+};
+
 class u_ColorMap :
 	GLUniformSampler2D {
 	public:
@@ -3724,6 +3737,77 @@ public:
 	}
 };
 
+enum class ColorModulate {
+	COLOR_ADD = BIT( 0 ),
+	COLOR_NEGATE = BIT( 1 ),
+	COLOR_LIGHTFACTOR = BIT( 2 ),
+	ALPHA_ADD = BIT( 3 ),
+	ALPHA_NEGATE = BIT( 4 )
+};
+
+class u_ColorModulateColorGen :
+	GLUniform1ui {
+	public:
+	u_ColorModulateColorGen( GLShader* shader ) :
+		GLUniform1ui( shader, "u_ColorModulateColorGen" ) {
+	}
+
+	void SetUniform_ColorModulateColorGen( colorGen_t colorGen, alphaGen_t alphaGen, bool vertexOverbright = false ) {
+		uint32_t colorModulate = 0;
+		bool needAttrib = false;
+
+		if ( r_logFile->integer ) {
+			GLimp_LogComment(
+				va( "--- u_ColorModulate::SetUniform_ColorModulateColorGen( program = %s, colorGen = %s, alphaGen = %s ) ---\n",
+					_shader->GetName().c_str(), Util::enum_str( colorGen ), Util::enum_str( alphaGen ) )
+			);
+		}
+
+		switch ( colorGen ) {
+			case colorGen_t::CGEN_VERTEX:
+				needAttrib = true;
+				if ( vertexOverbright ) {
+					// vertexOverbright is only needed for non-lightmapped cases. When there is a
+					// lightmap, this is done by multiplying with the overbright-scaled white image
+					colorModulate |= Util::ordinal( ColorModulate::COLOR_LIGHTFACTOR );
+				} else {
+					colorModulate |= Util::ordinal( ColorModulate::COLOR_ADD );
+				}
+				break;
+
+			case colorGen_t::CGEN_ONE_MINUS_VERTEX:
+				needAttrib = true;
+				colorModulate |= Util::ordinal( ColorModulate::COLOR_ADD ) | Util::ordinal( ColorModulate::COLOR_NEGATE );
+				break;
+
+			default:
+				break;
+		}
+
+		switch ( alphaGen ) {
+			case alphaGen_t::AGEN_VERTEX:
+				needAttrib = true;
+				colorModulate |= Util::ordinal( ColorModulate::ALPHA_ADD );
+				break;
+
+			case alphaGen_t::AGEN_ONE_MINUS_VERTEX:
+				needAttrib = true;
+				colorModulate |= Util::ordinal( ColorModulate::ALPHA_ADD ) | Util::ordinal( ColorModulate::ALPHA_NEGATE );
+				break;
+
+			default:
+				break;
+		}
+
+		if ( needAttrib ) {
+			_shader->AddVertexAttribBit( ATTR_COLOR );
+		} else {
+			_shader->DelVertexAttribBit( ATTR_COLOR );
+		}
+		this->SetValue( colorModulate );
+	}
+};
+
 class u_FogDistanceVector :
 	GLUniform4f
 {
@@ -3986,7 +4070,8 @@ class GLShader_generic2D :
 	public u_AlphaThreshold,
 	public u_ModelMatrix,
 	public u_ModelViewProjectionMatrix,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
+	public u_ColorModulateLightFactor,
 	public u_Color,
 	public u_DepthScale,
 	public GLDeformStage
@@ -4007,7 +4092,8 @@ class GLShader_generic :
 	public u_AlphaThreshold,
 	public u_ModelMatrix,
 	public u_ModelViewProjectionMatrix,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
+	public u_ColorModulateLightFactor,
 	public u_Color,
 	public u_Bones,
 	public u_VertexInterpolation,
@@ -4036,7 +4122,8 @@ class GLShader_genericMaterial :
 	public u_AlphaThreshold,
 	public u_ModelMatrix,
 	public u_ModelViewProjectionMatrix,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
+	public u_ColorModulateLightFactor,
 	public u_Color,
 	public u_DepthScale,
 	public u_ShowTris,
@@ -4068,7 +4155,7 @@ class GLShader_lightMapping :
 	public u_LightTiles,
 	public u_TextureMatrix,
 	public u_SpecularExponent,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
 	public u_Color,
 	public u_AlphaThreshold,
 	public u_ViewOrigin,
@@ -4120,7 +4207,7 @@ class GLShader_lightMappingMaterial :
 	public u_LightTiles,
 	public u_TextureMatrix,
 	public u_SpecularExponent,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
 	public u_Color,
 	public u_AlphaThreshold,
 	public u_ViewOrigin,
@@ -4167,7 +4254,7 @@ class GLShader_forwardLighting_omniXYZ :
 	public u_TextureMatrix,
 	public u_SpecularExponent,
 	public u_AlphaThreshold,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
 	public u_Color,
 	public u_ViewOrigin,
 	public u_LightOrigin,
@@ -4210,7 +4297,7 @@ class GLShader_forwardLighting_projXYZ :
 	public u_TextureMatrix,
 	public u_SpecularExponent,
 	public u_AlphaThreshold,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
 	public u_Color,
 	public u_ViewOrigin,
 	public u_LightOrigin,
@@ -4260,7 +4347,7 @@ class GLShader_forwardLighting_directionalSun :
 	public u_TextureMatrix,
 	public u_SpecularExponent,
 	public u_AlphaThreshold,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
 	public u_Color,
 	public u_ViewOrigin,
 	public u_LightDir,
@@ -4461,7 +4548,7 @@ class GLShader_heatHaze :
 	public u_ModelViewProjectionMatrix,
 	public u_ModelViewMatrixTranspose,
 	public u_ProjectionMatrixTranspose,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
 	public u_Color,
 	public u_Bones,
 	public u_NormalScale,
@@ -4489,7 +4576,7 @@ class GLShader_heatHazeMaterial :
 	public u_ModelViewProjectionMatrix,
 	public u_ModelViewMatrixTranspose,
 	public u_ProjectionMatrixTranspose,
-	public u_ColorModulate,
+	public u_ColorModulateColorGen,
 	public u_Color,
 	public u_NormalScale,
 	public GLDeformStage

@@ -164,7 +164,8 @@ void UpdateSurfaceDataGeneric3D( uint32_t* materials, Material& material, shader
 	alphaGen_t alphaGen = SetAlphaGen( pStage );
 
 	bool mayUseVertexOverbright = pStage->mayUseVertexOverbright;
-	gl_genericShaderMaterial->SetUniform_ColorModulate( rgbGen, alphaGen, mayUseVertexOverbright );
+	gl_genericShaderMaterial->SetUniform_ColorModulateColorGen( rgbGen, alphaGen, mayUseVertexOverbright );
+	gl_genericShaderMaterial->SetUniform_ColorModulateLightFactor( tr.mapLightFactor );
 
 	Tess_ComputeColor( pStage );
 	gl_genericShaderMaterial->SetUniform_Color( tess.svars.color );
@@ -209,7 +210,7 @@ void UpdateSurfaceDataLightMapping( uint32_t* materials, Material& material, sha
 		pStage->fullbright ? 1.0f : tr.mapLightFactor );
 
 	// u_ColorModulate
-	gl_lightMappingShaderMaterial->SetUniform_ColorModulate( rgbGen, alphaGen );
+	gl_lightMappingShaderMaterial->SetUniform_ColorModulateColorGen( rgbGen, alphaGen );
 
 	// u_Color
 	gl_lightMappingShaderMaterial->SetUniform_Color( tess.svars.color );
