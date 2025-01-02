@@ -3203,6 +3203,18 @@ public:
 	}
 };
 
+class u_ColorGlobal :
+	GLUniform1ui {
+	public:
+	u_ColorGlobal( GLShader* shader ) :
+		GLUniform1ui( shader, "u_ColorGlobal", true ) {
+	}
+
+	void SetUniform_ColorGlobal( const Color::Color& color ) {
+		this->SetValue( packUnorm4x8( color.ToArray() ) );
+	}
+};
+
 class u_Frame :
 	GLUniform1ui {
 	public:
@@ -4419,7 +4431,7 @@ class GLShader_fogQuake3 :
 	public u_FogMap,
 	public u_ModelMatrix,
 	public u_ModelViewProjectionMatrix,
-	public u_Color,
+	public u_ColorGlobal,
 	public u_Bones,
 	public u_VertexInterpolation,
 	public u_FogDistanceVector,
@@ -4439,7 +4451,7 @@ class GLShader_fogQuake3Material :
 	public u_FogMap,
 	public u_ModelMatrix,
 	public u_ModelViewProjectionMatrix,
-	public u_Color,
+	public u_ColorGlobal,
 	public u_FogDistanceVector,
 	public u_FogDepthVector,
 	public u_FogEyeT,
