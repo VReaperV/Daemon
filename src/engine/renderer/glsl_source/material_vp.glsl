@@ -41,4 +41,41 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 		in_baseInstance = baseInstance;
 	#endif // !HAVE_ARB_shader_draw_parameters
 
+    #if defined(GENERIC_GLSL)
+		uint u_ColorModulateColorGen = materials[baseInstance & 0xFFF].u_ColorModulateColorGen;
+		uint u_Color = materials[baseInstance & 0xFFF].u_Color;
+		
+		#if defined(USE_DEPTH_FADE)
+			float u_DepthScale = materials[baseInstance & 0xFFF].u_DepthScale;
+		#endif
+	#endif // !GENERIC_GLSL
+
+	#if defined(LIGHTMAPPING_GLSL)
+		uint u_ColorModulateColorGen = materials[baseInstance & 0xFFF].u_ColorModulateColorGen;
+		uint u_Color = materials[baseInstance & 0xFFF].u_Color;
+	#endif // !LIGHTMAPPING_GLSL
+
+	#if defined(HEATHAZE_GLSL)
+		float u_DeformMagnitude = materials[baseInstance & 0xFFF].u_DeformMagnitude;
+	#endif // !HEATHAZE_GLSL
+
+	/* #if defined(RELIEFMAPPING_GLSL)
+		#if defined(r_normalMapping) || defined(USE_HEIGHTMAP_IN_NORMALMAP)
+			sampler2D u_NormalMap = sampler2D( u_NormalMap_initial );
+		#endif // r_normalMapping || USE_HEIGHTMAP_IN_NORMALMAP
+
+		#if defined(USE_RELIEF_MAPPING)
+			#if !defined(USE_HEIGHTMAP_IN_NORMALMAP)
+				sampler2D u_HeightMap = sampler2D( u_HeightMap_initial );
+			#else
+				sampler2D u_HeightMap = sampler2D( u_NormalMap_initial );
+			#endif // !USE_HEIGHTMAP_IN_NORMALMAP
+		#endif // USE_RELIEF_MAPPING
+	#endif // !RELIEFMAPPING_GLSL */
+
+	#if defined(SKYBOX_GLSL)
+		samplerCube u_ColorMapCube = samplerCube( u_DiffuseMap_initial );
+		sampler2D u_CloudMap = sampler2D( u_NormalMap_initial );
+	#endif // !SKYBOX_GLSL
+
 #endif // !USE_MATERIAL_SYSTEM

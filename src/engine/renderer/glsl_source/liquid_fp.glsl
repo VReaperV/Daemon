@@ -74,7 +74,7 @@ void	main()
 #if defined(USE_RELIEF_MAPPING)
 
 	// compute texcoords offset from heightmap
-	vec2 texOffset = ReliefTexOffset(texNormal, viewDir, tangentToWorldMatrix, u_HeightMap);
+	vec2 texOffset = ReliefTexOffset(texNormal, u_ReliefDepthScale, u_ReliefOffsetBias, viewDir, tangentToWorldMatrix, u_HeightMap);
 
 	texScreen += texOffset;
 	texNormal += texOffset;
@@ -82,7 +82,7 @@ void	main()
 
 	// compute normal in world space from normalmap
 	#if defined(r_normalMapping)
-		vec3 normal = NormalInWorldSpace(texNormal, tangentToWorldMatrix, u_NormalMap);
+		vec3 normal = NormalInWorldSpace(texNormal, u_NormalScale, tangentToWorldMatrix, u_NormalMap);
 	#else // !r_normalMapping
 		vec3 normal = NormalInWorldSpace(texNormal, tangentToWorldMatrix);
 	#endif // !r_normalMapping
@@ -132,7 +132,7 @@ void	main()
 	// compute light color from light grid
 	vec3 ambientColor, lightColor;
 	#if defined(USE_GRID_LIGHTING) || defined(USE_GRID_DELUXE_MAPPING)
-		ReadLightGrid(texture3D(u_LightGrid1, lightGridPos), ambientColor, lightColor);
+		ReadLightGrid(texture3D(u_LightGrid1, lightGridPos), u_LightFactor, ambientColor, lightColor);
 	#else // !( defined(USE_GRID_LIGHTING) && defined(USE_GRID_DELUXE_MAPPING) )
 		ambientColor = vec3( 0.0, 0.0, 0.0 );
 		lightColor = vec3( 0.0, 0.0, 0.0 );
@@ -146,7 +146,7 @@ void	main()
 
 	// compute the specular term
 	#if defined(USE_DELUXE_MAPPING) || defined(USE_GRID_DELUXE_MAPPING)
-		computeDeluxeLight(lightDir, normal, viewDir, lightColor, diffuse, reflectColor, color);
+		computeDeluxeLight(lightDir, normal, viewDir, lightColor, diffuse, u_SpecularExponent, reflectColor, color);
 	#else // !USE_DELUXE_MAPPING && !USE_GRID_DELUXE_MAPPING
 		computeLight(lightColor, diffuse, color);
 	#endif // !USE_DELUXE_MAPPING && !USE_GRID_DELUXE_MAPPING

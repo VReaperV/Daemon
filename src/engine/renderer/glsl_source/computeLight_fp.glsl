@@ -52,7 +52,7 @@ vec4 EnvironmentalSpecularFactor( vec3 viewDir, vec3 normal )
 // lighting helper functions
 
 #if defined(USE_GRID_LIGHTING) || defined(USE_GRID_DELUXE_MAPPING)
-	void ReadLightGrid( in vec4 texel, out vec3 ambientColor, out vec3 lightColor ) {
+	void ReadLightGrid( in vec4 texel, in float u_LightFactor, out vec3 ambientColor, out vec3 lightColor ) {
 		float ambientScale = 2.0 * texel.a;
 		float directedScale = 2.0 - ambientScale;
 		ambientColor = ambientScale * texel.rgb;
@@ -63,10 +63,10 @@ vec4 EnvironmentalSpecularFactor( vec3 viewDir, vec3 normal )
 #endif
 
 #if defined(USE_DELUXE_MAPPING) || defined(USE_GRID_DELUXE_MAPPING) || defined(r_realtimeLighting)
+	uniform vec2 u_SpecularExponent;
 	#if !defined(USE_PHYSICAL_MAPPING) && defined(r_specularMapping)
-		uniform vec2 u_SpecularExponent;
 
-		vec3 computeSpecularity( vec3 lightColor, vec4 materialColor, float NdotH ) {
+		vec3 computeSpecularity( vec3 lightColor, vec4 materialColor, float NdotH, vec2 u_SpecularExponent ) {
 			return lightColor * materialColor.rgb * pow(NdotH, u_SpecularExponent.x * materialColor.a + u_SpecularExponent.y) * r_SpecularScale;
 		}
 	#endif
@@ -74,7 +74,7 @@ vec4 EnvironmentalSpecularFactor( vec3 viewDir, vec3 normal )
 
 #if defined(USE_DELUXE_MAPPING) || defined(USE_GRID_DELUXE_MAPPING) || (defined(r_realtimeLighting) && r_realtimeLightingRenderer == 1)
 void computeDeluxeLight( vec3 lightDir, vec3 normal, vec3 viewDir, vec3 lightColor,
-	vec4 diffuseColor, vec4 materialColor,
+	vec4 diffuseColor, vec4 materialColor, vec2 u_SpecularExponent,
 	inout vec4 color )
 {
 	vec3 H = normalize( lightDir + viewDir );
@@ -132,7 +132,7 @@ void computeDeluxeLight( vec3 lightDir, vec3 normal, vec3 viewDir, vec3 lightCol
 	#else // !USE_PHYSICAL_MAPPING
 		color.rgb += lightColor.rgb * NdotL * diffuseColor.rgb;
 		#if defined(r_specularMapping)
-			color.rgb += computeSpecularity(lightColor.rgb, materialColor, NdotH);
+			color.rgb += computeSpecularity(lightColor.rgb, materialColor, NdotH, u_SpecularExponent);
 		#endif // r_specularMapping
 	#endif // !USE_PHYSICAL_MAPPING
 }
@@ -164,7 +164,7 @@ layout(std140) uniform u_Lights {
 uniform int u_numLights;
 
 void computeDynamicLight( uint idx, vec3 P, vec3 normal, vec3 viewDir, vec4 diffuse,
-	vec4 material, inout vec4 color )
+	vec4 material, vec2 u_SpecularExponent, inout vec4 color )
 {
 	Light light = GetLight( idx );
 	vec3 L;
@@ -198,7 +198,7 @@ void computeDynamicLight( uint idx, vec3 P, vec3 normal, vec3 viewDir, vec4 diff
 
 	computeDeluxeLight(
 		L, normal, viewDir, attenuation * attenuation * light.color,
-		diffuse, material, color );
+		diffuse, material, u_SpecularExponent, color );
 }
 
 const int lightsPerLayer = 16;
@@ -218,7 +218,7 @@ uint nextIdx( in uint count, in idxs_t idxs ) {
 	return ( idxs[count / 4] >> ( 8 * ( count % 4 ) ) ) & 0xFFu;
 }
 
-void computeDynamicLights( vec3 P, vec3 normal, vec3 viewDir, vec4 diffuse, vec4 material,
+void computeDynamicLights( vec3 P, vec3 normal, vec3 viewDir, vec4 diffuse, vec4 material, vec2 u_SpecularExponent,
 	inout vec4 color, in usampler3D u_LightTiles )
 {
 	if( u_numLights == 0 ) {
