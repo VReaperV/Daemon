@@ -1469,7 +1469,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 			continue;
 		}
 
-		materialDefines += "#define ";
+		materialDefines += "// #define ";
 		materialDefines += uniform->GetName();
 
 		if ( uniform->IsTexture() ) { // Driver bug: AMD compiler crashes when using the SSBO value directly

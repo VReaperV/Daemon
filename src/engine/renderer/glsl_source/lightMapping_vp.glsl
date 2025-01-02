@@ -28,6 +28,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #insert vertexAnimation_vp
 #insert shaderProfiler_vp
 
+#define LIGHTMAPPING_GLSL
+
 #if !defined(USE_BSP_SURFACE)
 	#define USE_MODEL_SURFACE
 #endif

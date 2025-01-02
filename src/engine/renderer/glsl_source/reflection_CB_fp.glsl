@@ -50,14 +50,14 @@ void	main()
 
 #if defined(USE_RELIEF_MAPPING)
 	// compute texcoords offset from heightmap
-	vec2 texOffset = ReliefTexOffset(texNormal, viewDir, tangentToWorldMatrix, u_HeightMap);
+	vec2 texOffset = ReliefTexOffset(texNormal, u_ReliefDepthScale, u_ReliefOffsetBias, viewDir, tangentToWorldMatrix, u_HeightMap);
 
 	texNormal += texOffset;
 #endif // USE_RELIEF_MAPPING
 
 	// compute normal in tangent space from normal map
 	#if defined(r_normalMapping)
-		vec3 normal = NormalInWorldSpace(texNormal, tangentToWorldMatrix, u_NormalMap);
+		vec3 normal = NormalInWorldSpace(texNormal, u_NormalScale, tangentToWorldMatrix, u_NormalMap);
 	#else // !r_normalMapping
 		vec3 normal = NormalInWorldSpace(texNormal, tangentToWorldMatrix);
 	#endif // !r_normalMapping

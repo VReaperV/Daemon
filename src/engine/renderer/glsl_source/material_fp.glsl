@@ -56,10 +56,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 			samplerCube u_EnvironmentMap0 = samplerCube( u_EnvironmentMap0_initial );
 			samplerCube u_EnvironmentMap1 = samplerCube( u_EnvironmentMap1_initial );
 		#endif // !USE_REFLECTIVE_SPECULAR */
+		
+		#if defined(USE_DELUXE_MAPPING) || defined(USE_GRID_DELUXE_MAPPING) || defined(r_realtimeLighting)
+			vec2 u_SpecularExponent = materials[baseInstance & 0xFFF].u_SpecularExponent;
+		#endif
 	#endif // !COMPUTELIGHT_GLSL
 
 	#if defined(GENERIC_GLSL)
 		sampler2D u_ColorMap = sampler2D( u_DiffuseMap_initial );
+
+		float u_AlphaThreshold = materials[baseInstance & 0xFFF].u_AlphaThreshold;
 	#endif // !GENERIC_GLSL
 
 	#if defined(LIGHTMAPPING_GLSL)
@@ -68,7 +74,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 		sampler2D u_GlowMap = sampler2D( u_GlowMap_initial );
 		sampler2D u_LightMap = sampler2D( u_LightMap_initial );
 		sampler2D u_DeluxeMap = sampler2D( u_DeluxeMap_initial );
+		
+		float u_AlphaThreshold = materials[baseInstance & 0xFFF].u_AlphaThreshold;
+		uint u_ColorModulateColorGen = materials[baseInstance & 0xFFF].u_ColorModulateColorGen;
 	#endif // !LIGHTMAPPING_GLSL
+
+	#if defined(LIQUID_GLSL)
+		float u_FogDensity = materials[baseInstance & 0xFFF].u_FogDensity;
+		vec3 u_FogColor = materials[baseInstance & 0xFFF].u_FogColor;
+		float u_RefractionIndex = materials[baseInstance & 0xFFF].u_RefractionIndex;
+		float u_FresnelPower = materials[baseInstance & 0xFFF].u_FresnelPower;
+		float u_FresnelScale = materials[baseInstance & 0xFFF].u_FresnelScale;
+		float u_FresnelBias = materials[baseInstance & 0xFFF].u_FresnelBias;
+		
+		uint u_ColorModulateColorGen = materials[baseInstance & 0xFFF].u_ColorModulateColorGen;
+	#endif // !LIQUID_GLSL
 
 	#if defined(REFLECTION_CB_GLSL)
 		samplerCube u_ColorMapCube = samplerCube( u_DiffuseMap_initial );
@@ -76,21 +96,33 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 	#if defined(RELIEFMAPPING_GLSL)
 		#if defined(r_normalMapping) || defined(USE_HEIGHTMAP_IN_NORMALMAP)
-		sampler2D u_NormalMap = sampler2D( u_NormalMap_initial );
+			sampler2D u_NormalMap = sampler2D( u_NormalMap_initial );
 		#endif // r_normalMapping || USE_HEIGHTMAP_IN_NORMALMAP
 
 		#if defined(USE_RELIEF_MAPPING)
 			#if !defined(USE_HEIGHTMAP_IN_NORMALMAP)
-					sampler2D u_HeightMap = sampler2D( u_HeightMap_initial );
-				#else
-					sampler2D u_HeightMap = sampler2D( u_NormalMap_initial );
-				#endif // !USE_HEIGHTMAP_IN_NORMALMAP
-			#endif // USE_RELIEF_MAPPING
-		#endif // !RELIEFMAPPING_GLSL
+				sampler2D u_HeightMap = sampler2D( u_HeightMap_initial );
+			#else
+				sampler2D u_HeightMap = sampler2D( u_NormalMap_initial );
+			#endif // !USE_HEIGHTMAP_IN_NORMALMAP
+		#endif // USE_RELIEF_MAPPING
+
+		#if defined(r_normalMapping)
+			vec3 u_NormalScale = materials[baseInstance & 0xFFF].u_NormalScale;
+		#endif // !r_normalMapping
+
+		#if defined(USE_RELIEF_MAPPING)
+			float u_ReliefDepthScale = materials[baseInstance & 0xFFF].u_ReliefDepthScale;
+			float u_ReliefOffsetBias = materials[baseInstance & 0xFFF].u_ReliefOffsetBias;
+		#endif // USE_RELIEF_MAPPING
+	#endif // !RELIEFMAPPING_GLSL
 
 	#if defined(SKYBOX_GLSL)
 		samplerCube u_ColorMapCube = samplerCube( u_DiffuseMap_initial );
 		sampler2D u_CloudMap = sampler2D( u_NormalMap_initial );
+
+		float u_AlphaThreshold = materials[baseInstance & 0xFFF].u_AlphaThreshold;
+		float u_CloudHeight = materials[baseInstance & 0xFFF].u_CloudHeight;
 	#endif // !SKYBOX_GLSL
 
 	#else // !HAVE_ARB_bindless_texture

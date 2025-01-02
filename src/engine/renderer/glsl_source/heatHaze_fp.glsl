@@ -45,7 +45,7 @@ void	main()
 
 	// compute normal in tangent space from normalmap
 	#if defined(r_normalMapping)
-		vec3 normal = NormalInTangentSpace(var_TexCoords, u_NormalMap);
+		vec3 normal = NormalInTangentSpace(var_TexCoords, u_NormalScale, u_NormalMap);
 	#else // !r_normalMapping
 		vec3 normal = NormalInTangentSpace(var_TexCoords);
 	#endif // !r_normalMapping

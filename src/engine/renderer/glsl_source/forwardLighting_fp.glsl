@@ -953,9 +953,9 @@ void	main()
 #if defined(USE_RELIEF_MAPPING)
 	// compute texcoords offset from heightmap
 	#if defined(USE_HEIGHTMAP_IN_NORMALMAP)
-		vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_NormalMap);
+		vec2 texOffset = ReliefTexOffset(texCoords, u_ReliefDepthScale, u_ReliefOffsetBias, viewDir, tangentToWorldMatrix, u_NormalMap);
 	#else
-		vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_HeightMap);
+		vec2 texOffset = ReliefTexOffset(texCoords, u_ReliefDepthScale, u_ReliefOffsetBias, viewDir, tangentToWorldMatrix, u_HeightMap);
 	#endif
 
 	texCoords += texOffset;
@@ -965,7 +965,7 @@ void	main()
 	vec3 H = normalize(lightDir + viewDir);
 
 	// compute normal in world space from normal map
-	vec3 normal = NormalInWorldSpace(texCoords, tangentToWorldMatrix, u_NormalMap);
+	vec3 normal = NormalInWorldSpace(texCoords, u_NormalScale, tangentToWorldMatrix, u_NormalMap);
 
 	// compute the light term
 	float NL = clamp(dot(normal, lightDir), 0.0, 1.0);
@@ -984,7 +984,7 @@ void	main()
 	// compute the specular term
 	vec4 materialColor = texture2D(u_MaterialMap, texCoords);
 	float NdotH = clamp(dot(normal, H), 0.0, 1.0);
-	vec3 specular = computeSpecularity(u_LightColor, materialColor, NdotH);
+	vec3 specular = computeSpecularity(u_LightColor, materialColor, NdotH, u_SpecularExponent);
 #endif // r_specularMapping
 #endif // !USE_PHYSICAL_MAPPING
 
