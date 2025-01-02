@@ -818,11 +818,6 @@ void Render_generic3D( shaderStage_t *pStage )
 {
 	GLimp_LogComment( "--- Render_generic3D ---\n" );
 
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		Tess_DrawElements();
-		return;
-	}
-
 	GL_State( pStage->stateBits );
 
 	bool hasDepthFade = pStage->hasDepthFade;
@@ -945,11 +940,6 @@ void Render_generic( shaderStage_t *pStage )
 void Render_lightMapping( shaderStage_t *pStage )
 {
 	GLimp_LogComment( "--- Render_lightMapping ---\n" );
-
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		Tess_DrawElements();
-		return;
-	}
 
 	lightMode_t lightMode;
 	deluxeMode_t deluxeMode;
@@ -1234,10 +1224,6 @@ static void Render_shadowFill( shaderStage_t *pStage )
 	uint32_t      stateBits;
 
 	GLimp_LogComment( "--- Render_shadowFill ---\n" );
-
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		return;
-	}
 
 	// remove blend modes
 	stateBits = pStage->stateBits;
@@ -1869,11 +1855,6 @@ void Render_reflection_CB( shaderStage_t *pStage )
 {
 	GLimp_LogComment( "--- Render_reflection_CB ---\n" );
 
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		Tess_DrawElements();
-		return;
-	}
-
 	GL_State( pStage->stateBits );
 
 	// choose right shader program ----------------------------------
@@ -1965,11 +1946,6 @@ void Render_skybox( shaderStage_t *pStage )
 {
 	GLimp_LogComment( "--- Render_skybox ---\n" );
 
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		Tess_DrawElements();
-		return;
-	}
-
 	GL_State( pStage->stateBits );
 
 	gl_skyboxShader->BindProgram( pStage->deformIndex );
@@ -1994,11 +1970,6 @@ void Render_skybox( shaderStage_t *pStage )
 void Render_screen( shaderStage_t *pStage )
 {
 	GLimp_LogComment( "--- Render_screen ---\n" );
-
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		Tess_DrawElements();
-		return;
-	}
 
 	GL_State( pStage->stateBits );
 
@@ -2054,11 +2025,6 @@ void Render_heatHaze( shaderStage_t *pStage )
 	float         deformMagnitude;
 
 	GLimp_LogComment( "--- Render_heatHaze ---\n" );
-
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		Tess_DrawElements();
-		return;
-	}
 
 	// remove alpha test
 	stateBits = pStage->stateBits;
@@ -2147,11 +2113,6 @@ void Render_liquid( shaderStage_t *pStage )
 	vec3_t        fogColor;
 
 	GLimp_LogComment( "--- Render_liquid ---\n" );
-
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		Tess_DrawElements();
-		return;
-	}
 
 	// Tr3B: don't allow blend effects
 	GL_State( pStage->stateBits & ~( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS | GLS_DEPTHMASK_TRUE ) );
@@ -2247,11 +2208,6 @@ void Render_liquid( shaderStage_t *pStage )
 
 void Render_fog( shaderStage_t* pStage )
 {
-	if ( materialSystem.generatingWorldCommandBuffer ) {
-		Tess_DrawElements();
-		return;
-	}
-
 	if ( r_noFog->integer || !r_wolfFog->integer || ( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
 		return;
