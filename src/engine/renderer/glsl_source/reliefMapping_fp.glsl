@@ -41,7 +41,7 @@ uniform float       u_ReliefOffsetBias;
 
 // compute normal in tangent space
 #if defined(r_normalMapping)
-vec3 NormalInTangentSpace(vec2 texNormal, in sampler2D u_NormalMap)
+vec3 NormalInTangentSpace(vec2 texNormal, in vec3 u_NormalScale, in sampler2D u_NormalMap)
 #else // !r_normalMapping
 vec3 NormalInTangentSpace(vec2 texNormal)
 #endif // !r_normalMapping
@@ -109,10 +109,10 @@ vec3 NormalInTangentSpace(vec2 texNormal)
 
 // compute normal in worldspace from normalmap
 #if defined(r_normalMapping)
-vec3 NormalInWorldSpace(vec2 texNormal, mat3 tangentToWorldMatrix, in sampler2D u_NormalMap)
+vec3 NormalInWorldSpace(vec2 texNormal, in vec3 u_NormalScale, mat3 tangentToWorldMatrix, in sampler2D u_NormalMap)
 {
 	// compute normal in tangent space from normalmap
-	vec3 normal = NormalInTangentSpace(texNormal, u_NormalMap);
+	vec3 normal = NormalInTangentSpace(texNormal, u_NormalScale, u_NormalMap);
 	// transform normal into world space
 	return normalize(tangentToWorldMatrix * normal);
 }
@@ -131,7 +131,8 @@ vec3 NormalInWorldSpace(vec2 texNormal, mat3 tangentToWorldMatrix)
 // most of the code doing somewhat the same is likely to be named
 // RayIntersectDisplaceMap in other id tech3-based engines
 // so please keep the comment above to enable cross-tree look-up
-vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMatrix, in sampler2D u_HeightMap)
+vec2 ReliefTexOffset(vec2 rayStartTexCoords, in float u_ReliefDepthScale, in float u_ReliefOffsetBias,
+	vec3 viewDir, mat3 tangentToWorldMatrix, in sampler2D u_HeightMap)
 {
 	// compute view direction in tangent space
 	vec3 tangentViewDir = normalize(viewDir * tangentToWorldMatrix);

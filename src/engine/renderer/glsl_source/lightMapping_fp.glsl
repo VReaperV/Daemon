@@ -87,9 +87,11 @@ void main()
 	#if defined(USE_RELIEF_MAPPING)
 		// Compute texcoords offset from heightmap.
 		#if defined(USE_HEIGHTMAP_IN_NORMALMAP)
-			vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_NormalMap);
+			vec2 texOffset = ReliefTexOffset(texCoords, u_ReliefDepthScale, u_ReliefOffsetBias,
+			viewDir, tangentToWorldMatrix, u_NormalMap);
 		#else
-			vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_HeightMap);
+			vec2 texOffset = ReliefTexOffset(texCoords, u_ReliefDepthScale, u_ReliefOffsetBias,
+			viewDir, tangentToWorldMatrix, u_HeightMap);
 		#endif
 
 		texCoords += texOffset;
@@ -109,7 +111,7 @@ void main()
 
 	// Compute normal in world space from normalmap.
 	#if defined(r_normalMapping)
-		vec3 normal = NormalInWorldSpace(texCoords, tangentToWorldMatrix, u_NormalMap);
+		vec3 normal = NormalInWorldSpace(texCoords, u_NormalScale, tangentToWorldMatrix, u_NormalMap);
 	#else // !r_normalMapping
 		vec3 normal = NormalInWorldSpace(texCoords, tangentToWorldMatrix);
 	#endif // !r_normalMapping
@@ -153,7 +155,7 @@ void main()
 	#else
 		// Compute light color from lightgrid.
 		vec3 ambientColor, lightColor;
-		ReadLightGrid(texture3D(u_LightGrid1, lightGridPos), ambientColor, lightColor);
+		ReadLightGrid(texture3D(u_LightGrid1, lightGridPos), u_LightFactor, ambientColor, lightColor);
 
 		color.rgb = ambientColor * r_AmbientScale * diffuse.rgb;
 	#endif
@@ -188,9 +190,9 @@ void main()
 	#if defined(USE_DELUXE_MAPPING) || defined(USE_GRID_DELUXE_MAPPING)
 		#if defined(USE_REFLECTIVE_SPECULAR)
 			vec4 modifiedSpecular = material * EnvironmentalSpecularFactor(viewDir, normal);
-			computeDeluxeLight(lightDir, normal, viewDir, lightColor, diffuse, modifiedSpecular, color);
+			computeDeluxeLight(lightDir, normal, viewDir, lightColor, diffuse, modifiedSpecular, u_SpecularExponent, color);
 		#else // !USE_REFLECTIVE_SPECULAR
-			computeDeluxeLight(lightDir, normal, viewDir, lightColor, diffuse, material, color);
+			computeDeluxeLight(lightDir, normal, viewDir, lightColor, diffuse, material, u_SpecularExponent, color);
 		#endif // !USE_REFLECTIVE_SPECULAR
 	#else
 		computeLight(lightColor, diffuse, color);
@@ -198,7 +200,7 @@ void main()
 
 	// Blend dynamic lights.
 	#if defined(r_realtimeLighting) && r_realtimeLightingRenderer == 1
-		computeDynamicLights(var_Position, normal, viewDir, diffuse, material, color, u_LightTiles);
+		computeDynamicLights(var_Position, normal, viewDir, diffuse, material, u_SpecularExponent, color, u_LightTiles);
 	#endif
 
 	// Add Rim Lighting to highlight the edges on model entities.
