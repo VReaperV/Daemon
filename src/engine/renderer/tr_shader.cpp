@@ -5284,16 +5284,6 @@ static void FinishStages()
 			stage->enablePhysicalMapping = false;
 		}
 
-		// FIXME: Workaround for textures having both an alpha mask (like gratings) with an height map,
-		// The engine does not displace the depth test map yet so we disable relief mapping to prevent garbage
-		// to appears between the displaced diffuse map and the non-displaced alpha mask.
-		// See https://github.com/DaemonEngine/Daemon/issues/334
-		if ( stage->enableReliefMapping && stage->stateBits & ~GLS_DEPTHMASK_TRUE )
-		{
-			Log::Debug( "Workaround: disabling relief mapping for stage %d in shader '%s' because of alpha mask", s, shader.name );
-			stage->enableReliefMapping = false;
-		}
-
 		// Finally disable useless heightMapInNormalMap if both normal and relief mapping are disabled.
 		// see https://github.com/DaemonEngine/Daemon/issues/376
 		stage->hasHeightMapInNormalMap = stage->hasHeightMapInNormalMap

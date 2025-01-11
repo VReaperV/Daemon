@@ -23,6 +23,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 /* lightMapping_fp.glsl */
 
 #insert common
+
+#define RELIEF_ALPHA_TEST
+
 #insert computeLight_fp
 #insert reliefMapping_fp
 
@@ -89,9 +92,9 @@ void main()
 	#if defined(USE_RELIEF_MAPPING)
 		// Compute texcoords offset from heightmap.
 		#if defined(USE_HEIGHTMAP_IN_NORMALMAP)
-			vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_NormalMap);
+			vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_NormalMap, u_DiffuseMap, u_AlphaThreshold);
 		#else
-			vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_HeightMap);
+			vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_HeightMap, u_DiffuseMap, u_AlphaThreshold);
 		#endif
 
 		texCoords += texOffset;

@@ -131,7 +131,12 @@ vec3 NormalInWorldSpace(vec2 texNormal, mat3 tangentToWorldMatrix)
 // most of the code doing somewhat the same is likely to be named
 // RayIntersectDisplaceMap in other id tech3-based engines
 // so please keep the comment above to enable cross-tree look-up
+#if defined(RELIEF_ALPHA_TEST)
+vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMatrix, in sampler2D u_HeightMap,
+	in sampler2D u_DiffuseMap, const in float u_AlphaThresh)
+#else // !RELIEF_ALPHA_TEST
 vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMatrix, in sampler2D u_HeightMap)
+#endif // !RELIEF_ALPHA_TEST
 {
 	// compute view direction in tangent space
 	vec3 tangentViewDir = normalize(viewDir * tangentToWorldMatrix);
@@ -156,6 +161,13 @@ vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMa
 	// search front to back for first point inside object
 	for(int i = 0; i < linearSearchSteps - 1; ++i)
 	{
+		#if defined(RELIEF_ALPHA_TEST)
+			if( u_AlphaThresh < 1.5f
+			&& abs( texture2D( u_DiffuseMap, rayStartTexCoords + displacement * currentDepth ).a + u_AlphaThresh ) <= 1.0 ) {
+				continue;
+			}
+		#endif // !RELIEF_ALPHA_TEST
+
 		currentDepth += currentSize;
 
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
@@ -181,6 +193,13 @@ vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMa
 	// recurse around first point (depth) for closest match
 	for(int i = 0; i < binarySearchSteps; ++i)
 	{
+		#if defined(RELIEF_ALPHA_TEST)
+			if( u_AlphaThresh < 1.5f
+			&& abs( texture2D( u_DiffuseMap, rayStartTexCoords + displacement * currentDepth ).a + u_AlphaThresh ) <= 1.0 ) {
+				continue;
+			}
+		#endif // !RELIEF_ALPHA_TEST
+		
 		currentSize *= 0.5;
 
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
