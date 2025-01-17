@@ -727,26 +727,6 @@ static void R_InitLightUBO()
 	}
 }
 
-static void R_InitMaterialBuffers() {
-	if( glConfig2.usingMaterialSystem ) {
-		materialsUBO.GenBuffer();
-		texDataBuffer.GenBuffer();
-		lightmapDataUBO.GenBuffer();
-
-		surfaceDescriptorsSSBO.GenBuffer();
-		surfaceCommandsSSBO.GenBuffer();
-		culledCommandsBuffer.GenBuffer();
-		surfaceBatchesUBO.GenBuffer();
-		atomicCommandCountersBuffer.GenBuffer();
-		
-		portalSurfacesSSBO.GenBuffer();
-
-		if ( r_materialDebug.Get() ) {
-			debugSSBO.GenBuffer();
-		}
-	}
-}
-
 /*
 ============
 R_InitVBOs
@@ -790,7 +770,9 @@ void R_InitVBOs()
 
 	R_InitLightUBO();
 
-	R_InitMaterialBuffers();
+	if ( glConfig2.usingMaterialSystem ) {
+		materialSystem.InitGLBuffers();
+	}
 
 	GL_CheckErrors();
 }
@@ -861,21 +843,7 @@ void R_ShutdownVBOs()
 	}
 
 	if ( glConfig2.usingMaterialSystem ) {
-		materialsUBO.DelBuffer();
-		texDataBuffer.DelBuffer();
-		lightmapDataUBO.DelBuffer();
-
-		surfaceDescriptorsSSBO.DelBuffer();
-		surfaceCommandsSSBO.DelBuffer();
-		culledCommandsBuffer.DelBuffer();
-		surfaceBatchesUBO.DelBuffer();
-		atomicCommandCountersBuffer.DelBuffer();
-
-		portalSurfacesSSBO.DelBuffer();
-
-		if ( r_materialDebug.Get() ) {
-			debugSSBO.DelBuffer();
-		}
+		materialSystem.FreeGLBuffers();
 	}
 
 	tess.verts = tess.vertsBuffer = nullptr;

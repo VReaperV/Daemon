@@ -341,6 +341,9 @@ class MaterialSystem {
 
 	void GenerateDepthImages( const int width, const int height, imageParams_t imageParms );
 
+	void InitGLBuffers();
+	void FreeGLBuffers();
+
 	void AddStageTextures( drawSurf_t* drawSurf, const uint32_t stage, Material* material );
 	void AddStage( drawSurf_t* drawSurf, shaderStage_t* pStage, uint32_t stage );
 	void ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage,
