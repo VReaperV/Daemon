@@ -53,7 +53,7 @@ void Tess_EndBegin()
 {
 	Tess_End();
 	Tess_Begin( tess.stageIteratorFunc, tess.surfaceShader, tess.lightShader, tess.skipTangents,
-	            tess.lightmapNum, tess.fogNum, tess.bspSurface );
+	            tess.lightmapNum, tess.fogNum, tess.bspSurface, tess.geometryCache );
 }
 
 /*
@@ -65,14 +65,17 @@ For a multidraw-using static VBO surface, it performs an analogous function to T
 with the assumption that only one multidraw primitive will be used.
 ==============
 */
-static void Tess_CheckVBOAndIBO( VBO_t *vbo, IBO_t *ibo )
+static void Tess_CheckVBOAndIBO( VBO_t *vbo, IBO_t *ibo, const bool geometryCache )
 {
-	if ( glState.currentVBO != vbo || glState.currentIBO != ibo || tess.multiDrawPrimitives >= MAX_MULTIDRAW_PRIMITIVES )
+	if ( glState.currentVBO != vbo || glState.currentIBO != ibo || tess.multiDrawPrimitives >= MAX_MULTIDRAW_PRIMITIVES
+		|| geometryCache == ( glState.currentVAO == nullptr ) )
 	{
 		Tess_EndBegin();
 
-		R_BindVBO( vbo );
-		R_BindIBO( ibo );
+		if ( !geometryCache ) {
+			R_BindVBO( vbo );
+			R_BindIBO( ibo );
+		}
 	}
 }
 
@@ -90,7 +93,7 @@ void Tess_CheckOverflow( int verts, int indexes )
 	// FIXME: need to check if a vbo is bound, otherwise we fail on startup
 	if ( glState.currentVBO != nullptr && glState.currentIBO != nullptr )
 	{
-		Tess_CheckVBOAndIBO( tess.vbo, tess.ibo );
+		Tess_CheckVBOAndIBO( tess.vbo, tess.ibo, false );
 	}
 
 	if ( tess.numVertexes + verts < SHADER_MAX_VERTEXES && tess.numIndexes + indexes < SHADER_MAX_INDEXES )
@@ -165,14 +168,14 @@ static void Tess_SurfaceVertsAndTris( const srfVert_t *verts, const srfTriangle_
 	tess.numVertexes += numVerts;
 }
 
-static bool Tess_SurfaceVBO( VBO_t *vbo, IBO_t *ibo, int numIndexes, int firstIndex )
+static bool Tess_SurfaceVBO( VBO_t *vbo, IBO_t *ibo, int numIndexes, int firstIndex, bool geometryCache = false )
 {
 	if ( !vbo || !ibo )
 	{
 		return false;
 	}
 
-	Tess_CheckVBOAndIBO( vbo, ibo );
+	Tess_CheckVBOAndIBO( vbo, ibo, geometryCache );
 
 	//lazy merge multidraws together
 	bool mergeBack = false;
@@ -1367,7 +1370,7 @@ static void Tess_SurfaceFlare( srfFlare_t *surf )
 	GLimp_LogComment( "--- Tess_SurfaceFlare ---\n" );
 
 	// FIXME: this doesn't actually use the buffers?
-	Tess_CheckVBOAndIBO( tess.vbo, tess.ibo );
+	Tess_CheckVBOAndIBO( tess.vbo, tess.ibo, false );
 
 	VectorMA( surf->origin, 2.0F, surf->normal, origin );
 	VectorSubtract( origin, backEnd.viewParms.orientation.origin, dir );

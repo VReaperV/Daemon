@@ -2228,6 +2228,10 @@ void GLShader::DispatchComputeIndirect( const GLintptr indirectBuffer ) {
 
 void GLShader::SetRequiredVertexPointers()
 {
+	if ( tess.geometryCache ) {
+		return;
+	}
+
 	uint32_t macroVertexAttribs = 0;
 
 	for ( const auto& macro : _compileMacros )

@@ -1871,10 +1871,12 @@ int R_AddDrawSurf( surfaceType_t *surface, shader_t *shader, int lightmapNum, in
 	if ( tr.currentEntity == &tr.worldEntity )
 	{
 		entityNum = -1;
+		drawSurf->geometryCache = true;
 	}
 	else
 	{
 		entityNum = tr.currentEntity - tr.refdef.entities;
+		drawSurf->geometryCache = false;
 	}
 
 	if (shader->sort > Util::ordinal(shaderSort_t::SS_OPAQUE))

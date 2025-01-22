@@ -41,6 +41,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class GeometryCache {
 	public:
+
+	GLVAO VAO = GLVAO( 0 );
 	void Bind();
 
 	void InitGLBuffers();
@@ -57,8 +59,6 @@ class GeometryCache {
 	private:
 	uint32_t mapVerticesNumber;
 	uint32_t mapIndicesNumber;
-
-	GLVAO VAO = GLVAO( 0 );
 
 	GLBuffer inputVBO = GLBuffer( "geometryCacheInputVBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_VBO ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 	GLBuffer VBO = GLBuffer( "geometryCacheVBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_VBO ), GL_MAP_WRITE_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );

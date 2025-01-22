@@ -1665,6 +1665,7 @@ enum class shaderProfilerRenderSubGroupsMode {
 		bool          bspSurface;
 		int fog;
 		int portalNum = -1;
+		bool geometryCache;
 
 
 		uint32_t materialPackIDs[MAX_SHADER_STAGES];
@@ -1812,6 +1813,8 @@ enum class shaderProfilerRenderSubGroupsMode {
 		// BSP VBO offset
 		int firstIndex;
 
+		bool geometryCache;
+
 		// static render data
 		VBO_t *vbo; // points to bsp model VBO
 		IBO_t *ibo;
@@ -1831,6 +1834,8 @@ enum class shaderProfilerRenderSubGroupsMode {
 		// BSP VBO offset
 		int firstIndex;
 
+		bool geometryCache;
+
 		// static render data
 		VBO_t *vbo; // points to bsp model VBO
 		IBO_t *ibo;
@@ -1849,6 +1854,8 @@ enum class shaderProfilerRenderSubGroupsMode {
 		// BSP VBO offset
 		int firstIndex;
 
+		bool geometryCache;
+
 		// static render data
 		VBO_t *vbo; // points to bsp model VBO
 		IBO_t *ibo;
@@ -1865,6 +1872,8 @@ enum class shaderProfilerRenderSubGroupsMode {
 		int firstIndex;
 		int numIndexes;
 		int numVerts;
+
+		bool geometryCache;
 
 		// static render data
 		VBO_t *vbo;
@@ -2422,6 +2431,7 @@ enum class shaderProfilerRenderSubGroupsMode {
 
 #define MAX_GLSTACK     5
 
+	class GLVAO;
 // the renderer front end should never modify glState_t
 	struct glstate_t
 	{
@@ -2460,6 +2470,7 @@ enum class shaderProfilerRenderSubGroupsMode {
 		FBO_t           *currentFBO;
 		VBO_t           *currentVBO;
 		IBO_t           *currentIBO;
+		GLVAO* currentVAO = nullptr;
 		image_t         *colorgradeSlots[ REF_COLORGRADE_SLOTS ];
 	};
 
@@ -3467,6 +3478,7 @@ inline bool checkGLErrors()
 		int16_t     lightmapNum;
 		int16_t     fogNum;
 		bool        bspSurface;
+		bool geometryCache;
 
 		// Signals that ATTR_QTANGENT will not be needed, so functions that generate vertexes
 		// may skip writing out shaderVertex_t::qtangents
@@ -3526,7 +3538,7 @@ inline bool checkGLErrors()
 	                 bool skipTangents,
 	                 int lightmapNum,
 	                 int fogNum,
-	                 bool bspSurface = false );
+	                 bool bspSurface = false, bool geometryCache = false );
 
 // *INDENT-ON*
 	void Tess_Clear();

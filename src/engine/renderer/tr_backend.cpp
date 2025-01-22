@@ -889,6 +889,8 @@ static void RB_RenderDrawSurfaces( shaderSort_t fromSort, shaderSort_t toSort,
 	oldLightmapNum = -1;
 	oldFogNum = -1;
 	oldDepthRange = false;
+	bool geometryCache = false;
+	bool oldGeometryCache = false;
 	depthRange = false;
 	backEnd.currentLight = nullptr;
 
@@ -910,6 +912,7 @@ static void RB_RenderDrawSurfaces( shaderSort_t fromSort, shaderSort_t toSort,
 		lightmapNum = drawSurf->lightmapNum();
 		fogNum = drawSurf->fog;
 		bspSurface = drawSurf->bspSurface;
+		geometryCache = drawSurf->geometryCache && glConfig2.usingGeometryCache;
 
 		if( entity == &tr.worldEntity ) {
 			if( !( drawSurfFilter & DRAWSURFACES_WORLD ) )
@@ -932,14 +935,15 @@ static void RB_RenderDrawSurfaces( shaderSort_t fromSort, shaderSort_t toSort,
 		// change the tess parameters if needed
 		// an "entityMergable" shader is a shader that can have surfaces from separate
 		// entities merged into a single batch, like smoke and blood puff sprites
-		if ( shader != oldShader || lightmapNum != oldLightmapNum || fogNum != oldFogNum || ( entity != oldEntity && !shader->entityMergable ) )
+		if ( shader != oldShader || lightmapNum != oldLightmapNum || fogNum != oldFogNum || ( entity != oldEntity && !shader->entityMergable )
+			|| geometryCache != oldGeometryCache )
 		{
 			if ( oldShader != nullptr )
 			{
 				Tess_End();
 			}
 
-			Tess_Begin( Tess_StageIteratorColor, shader, nullptr, false, lightmapNum, fogNum, bspSurface );
+			Tess_Begin( Tess_StageIteratorColor, shader, nullptr, false, lightmapNum, fogNum, bspSurface, geometryCache );
 
 			oldShader = shader;
 			oldLightmapNum = lightmapNum;

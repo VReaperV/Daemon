@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "gl_shader.h"
 #include "Material.h"
 #include "ShadeCommon.h"
+#include "GeometryCache.h"
 
 /*
 =================================================================================
@@ -536,7 +537,7 @@ void Tess_DrawElements()
 	{
 		if ( tess.multiDrawPrimitives )
 		{
-			if ( !materialSystem.generatingWorldCommandBuffer ) {
+			if ( !materialSystem.generatingWorldCommandBuffer && !tess.geometryCache ) {
 				glMultiDrawElements( GL_TRIANGLES, tess.multiDrawCounts, GL_INDEX_TYPE, ( const GLvoid** ) tess.multiDrawIndexes, tess.multiDrawPrimitives );
 			}
 
@@ -545,6 +546,16 @@ void Tess_DrawElements()
 
 			backEnd.pc.c_vboVertexes += tess.numVertexes;
 
+			if ( tess.geometryCache ) {
+				if ( !glState.currentVAO ) {
+					geometryCache.Bind();
+					glState.currentVAO = &geometryCache.VAO;
+				}
+			} else if ( glState.currentVAO ) {
+				glBindVertexArray( backEnd.currentVAO );
+				glState.currentVAO = nullptr;
+			}
+
 			for ( i = 0; i < tess.multiDrawPrimitives; i++ )
 			{
 				backEnd.pc.c_multiVboIndexes += tess.multiDrawCounts[ i ];
@@ -552,7 +563,13 @@ void Tess_DrawElements()
 				if ( materialSystem.generatingWorldCommandBuffer ) {
 					materialSystem.AddDrawCommand( tess.materialID, tess.materialPackID, tess.currentSSBOOffset,
 						( GLuint ) tess.multiDrawCounts[i], tess.multiDrawOffsets[i] );
+				} else if( tess.geometryCache ) {
+					glDrawElementsInstancedBaseVertexBaseInstance( GL_TRIANGLES, ( GLuint ) tess.multiDrawCounts[i], GL_INDEX_TYPE,
+						tess.multiDrawIndexes[i], 1, 0, 0 );
 				}
+			}
+
+			if( tess.geometryCache ) {
 			}
 		}
 		else
@@ -561,6 +578,16 @@ void Tess_DrawElements()
 
 			if( glState.currentIBO == tess.ibo ) {
 				base = tess.indexBase * sizeof( glIndex_t );
+			}
+
+			if ( tess.geometryCache ) {
+				if ( !glState.currentVAO ) {
+					geometryCache.Bind();
+					glState.currentVAO = &geometryCache.VAO;
+				}
+			} else if ( glState.currentVAO ) {
+				glBindVertexArray( backEnd.currentVAO );
+				glState.currentVAO = nullptr;
 			}
 
 			if ( materialSystem.generatingWorldCommandBuffer ) {
@@ -580,6 +607,16 @@ void Tess_DrawElements()
 	}
 	else
 	{
+
+		if ( tess.geometryCache ) {
+			if ( !glState.currentVAO ) {
+				geometryCache.Bind();
+				glState.currentVAO = &geometryCache.VAO;
+			}
+		} else if ( glState.currentVAO ) {
+			glBindVertexArray( backEnd.currentVAO );
+			glState.currentVAO = nullptr;
+		}
 		if ( materialSystem.generatingWorldCommandBuffer ) {
 			materialSystem.AddDrawCommand( tess.materialID, tess.materialPackID, tess.currentSSBOOffset, tess.numIndexes, tess.indexBase );
 		} else {
@@ -730,7 +767,7 @@ void Tess_Begin( void ( *stageIteratorFunc )(),
                  bool skipTangents,
                  int lightmapNum,
                  int fogNum,
-                 bool bspSurface )
+                 bool bspSurface, bool geometryCache )
 {
 	if ( tess.numIndexes || tess.numVertexes || tess.multiDrawPrimitives )
 	{
@@ -751,6 +788,7 @@ void Tess_Begin( void ( *stageIteratorFunc )(),
 	tess.lightmapNum = lightmapNum;
 	tess.fogNum = fogNum;
 	tess.bspSurface = bspSurface;
+	tess.geometryCache = geometryCache;
 
 	// materials are optional (some debug drawing code doesn't use them)
 	if ( tess.surfaceShader )
@@ -2884,6 +2922,8 @@ void Tess_Clear()
 {
 	tess.vboVertexSkinning = false;
 	tess.vboVertexAnimation = false;
+
+	tess.geometryCache = false;
 
 	// clear shader so we can tell we don't have any unclosed surfaces
 	tess.multiDrawPrimitives = 0;
