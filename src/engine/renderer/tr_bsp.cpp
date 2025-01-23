@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 #include "framework/CommandSystem.h"
 #include "GeometryCache.h"
+#include "GeometryOptimiser.h"
 
 /*
 ========================================================
@@ -2989,7 +2990,7 @@ static void R_CreateWorldVBO()
 	}
 
 	// mark matching surfaces
-	for ( i = 0; i < s_worldData.numnodes - s_worldData.numDecisionNodes; i++ )
+	/* for ( i = 0; i < s_worldData.numnodes - s_worldData.numDecisionNodes; i++ )
 	{
 		bspNode_t *leaf = s_worldData.nodes + s_worldData.numDecisionNodes + i;
 
@@ -3094,7 +3095,9 @@ static void R_CreateWorldVBO()
 		}
 	}
 
-	qsort( surfaces, numSurfaces, sizeof( *surfaces ), LeafSurfaceCompare );
+	qsort( surfaces, numSurfaces, sizeof( *surfaces ), LeafSurfaceCompare ); */
+
+	OptimiseMapGeometry( &s_worldData, numSurfaces, surfaces, nullptr );
 
 	Log::Debug("...calculating world VBO ( %i verts %i tris )", numVerts, numTriangles );
 
