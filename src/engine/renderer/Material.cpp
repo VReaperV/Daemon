@@ -1380,6 +1380,9 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 	pStage->materialProcessor( &material, pStage, drawSurf );
 	pStage->paddedSize = material.shader->GetPaddedSize();
 
+	material.refStage = pStage;
+	material.refDrawSurf = *drawSurf;
+
 	std::vector<Material>& materials = materialPacks[materialPack].materials;
 	std::vector<Material>::iterator currentSearchIt = materials.begin();
 	std::vector<Material>::iterator materialIt;
@@ -1525,6 +1528,15 @@ void MaterialSystem::AddAllWorldSurfaces() {
 	GenerateWorldCommandBuffer();
 
 	generatingWorldCommandBuffer = false;
+}
+
+void MaterialSystem::GLSLRestart() {
+	for ( MaterialPack& materialPack : materialPacks ) {
+		for ( Material& material : materialPack.materials ) {
+			// We only really need to reset material.shader here
+			material.refStage->materialProcessor( &material, material.refStage, &material.refDrawSurf );
+		}
+	}
 }
 
 void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, const uint32_t stage, Material* material ) {
