@@ -97,6 +97,19 @@ void main()
 			vec2 texOffset = ReliefTexOffset(texCoords, viewDir, tangentToWorldMatrix, u_HeightMap, u_DiffuseMap, u_AlphaThreshold);
 		#endif
 
+		#if defined(RELIEF_ALPHA_TEST)
+			vec4 diffuseInitial = texture2D(u_DiffuseMap, texCoords);
+
+			// Apply vertex blend operation like: alphaGen vertex.
+			diffuseInitial *= var_Color;
+
+			if(abs(diffuseInitial.a + u_AlphaThreshold) <= 1.0)
+			{
+				discard;
+				return;
+			}
+		#endif // !RELIEF_ALPHA_TEST
+
 		texCoords += texOffset;
 	#endif
 
@@ -106,11 +119,13 @@ void main()
 	// Apply vertex blend operation like: alphaGen vertex.
 	diffuse *= var_Color;
 
-	if(abs(diffuse.a + u_AlphaThreshold) <= 1.0)
-	{
-		discard;
-		return;
-	}
+	#if !defined(RELIEF_ALPHA_TEST)
+		if(abs(diffuse.a + u_AlphaThreshold) <= 1.0)
+		{
+			discard;
+			return;
+		}
+	#endif // !RELIEF_ALPHA_TEST
 
 	// Compute normal in world space from normalmap.
 	#if defined(r_normalMapping)

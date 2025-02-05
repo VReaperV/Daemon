@@ -161,14 +161,14 @@ vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMa
 	// search front to back for first point inside object
 	for(int i = 0; i < linearSearchSteps - 1; ++i)
 	{
+		currentDepth += currentSize;
+
 		#if defined(RELIEF_ALPHA_TEST)
 			if( u_AlphaThresh < 1.5f
 			&& abs( texture2D( u_DiffuseMap, rayStartTexCoords + displacement * currentDepth ).a + u_AlphaThresh ) <= 1.0 ) {
 				continue;
 			}
 		#endif // !RELIEF_ALPHA_TEST
-
-		currentDepth += currentSize;
 
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).a;
@@ -193,14 +193,14 @@ vec2 ReliefTexOffset(vec2 rayStartTexCoords, vec3 viewDir, mat3 tangentToWorldMa
 	// recurse around first point (depth) for closest match
 	for(int i = 0; i < binarySearchSteps; ++i)
 	{
+		currentSize *= 0.5;
+		
 		#if defined(RELIEF_ALPHA_TEST)
 			if( u_AlphaThresh < 1.5f
 			&& abs( texture2D( u_DiffuseMap, rayStartTexCoords + displacement * currentDepth ).a + u_AlphaThresh ) <= 1.0 ) {
 				continue;
 			}
 		#endif // !RELIEF_ALPHA_TEST
-		
-		currentSize *= 0.5;
 
 #if defined(USE_HEIGHTMAP_IN_NORMALMAP)
 		float depth = texture2D(u_HeightMap, rayStartTexCoords + displacement * currentDepth).a;
