@@ -194,6 +194,99 @@ void GLSL_InitWorldShaders() {
 	}
 }
 
+// template<int size>
+struct ShaderRequirements {
+	GLShader* shader;
+	std::vector<const bool*> requirements;
+	bool ( *extraRequirements )();
+	GLShader* ( *create )();
+};
+
+realtimeLightingRenderer_t GetRealtimeLightingEnum() {
+	return realtimeLightingRenderer_t( r_realtimeLightingRenderer.Get() );
+}
+
+static inline bool RealtimeLightingIsLegacy() {
+	return realtimeLightingRenderer_t( r_realtimeLightingRenderer.Get() ) == realtimeLightingRenderer_t::LEGACY;
+}
+
+static inline bool RealtimeLightingIsTiled() {
+	return realtimeLightingRenderer_t( r_realtimeLightingRenderer.Get() ) == realtimeLightingRenderer_t::TILED;
+}
+
+const bool always = true;
+ShaderRequirements coreRendererShaders[] = {
+	// single texture rendering
+	{ gl_genericShader,      {}, nullptr, []() { return static_cast<GLShader*>( new GLShader_generic( &gl_shaderManager ) ); } },
+	// standard light mapping
+	{ gl_lightMappingShader, {}, nullptr },
+	/* Dynamic shadowing code also needs this shader.
+			This code is not well known, so there may be a bug,
+			but commit a09f03bc8e775d83ac5e057593eff4e88cdea7eb mentions this:
+
+			> Use conventional shadow mapping code for inverse lights.
+			> This re-enables shadows for players in the tiled renderer.
+			> -- @gimhael
+
+			See also https://github.com/DaemonEngine/Daemon/pull/606#pullrequestreview-912402293 */
+	// projective lighting ( Doom3 style )
+	{ gl_forwardLightingShader_projXYZ,       { &glConfig2.realtimeLighting },
+		[]() { return RealtimeLightingIsLegacy() || RealtimeLightingIsTiled(); } },
+	// omni-directional specular bump mapping ( Doom3 style )
+	{ gl_forwardLightingShader_omniXYZ,       { &glConfig2.realtimeLighting },
+		[]() { return RealtimeLightingIsLegacy(); } },
+	// directional sun lighting ( Doom3 style )
+	{ gl_forwardLightingShader_directionalSun, { &glConfig2.realtimeLighting },
+		[]() { return RealtimeLightingIsLegacy(); } },
+	{ gl_depthtile1Shader,     { &glConfig2.realtimeLighting }, nullptr },
+	{ gl_depthtile2Shader,     { &glConfig2.realtimeLighting }, nullptr },
+	{ gl_lighttileShader,      { &glConfig2.realtimeLighting }, nullptr },
+	{ gl_reflectionShader,     { &glConfig2.reflectionMappingAvailable }, nullptr },
+	// skybox drawing for abitrary polygons
+	{ gl_skyboxShader,         {}, []() { return r_drawSky.Get(); } },
+	// Fog GLSL is always loaded and built because disabling fog is cheat
+	// Q3A volumetric fog
+	{ gl_fogQuake3Shader,      {}, nullptr },
+	// global fog post process effect
+	{ gl_fogGlobalShader,      {}, nullptr },
+	{ gl_heatHazeShader,       {}, []() { return !!r_heatHaze->integer; } },
+	{ gl_screenShader,         { &glConfig2.bloom }, nullptr },
+	{ gl_contrastShader,       { &glConfig2.bloom }, nullptr },
+	{ gl_portalShader,         {}, nullptr },
+	{ gl_cameraEffectsShader,  {}, nullptr },
+	{ gl_blurShader,           { &glConfig2.bloom, &glConfig2.shadowMapping }, nullptr },
+	{ gl_shadowFillShader,     { &glConfig2.shadowMapping }, nullptr },
+	{ gl_debugShadowMapShader, { &glConfig2.shadowMapping }, nullptr },
+	{ gl_liquidShader,         {}, []() { return !!r_liquidMapping->integer; } },
+	{ gl_motionblurShader,     { &glConfig2.motionBlur }, nullptr },
+	{ gl_ssaoShader,           {}, []() {
+		if ( r_ssao->integer ) {
+			if ( glConfig2.textureGatherAvailable ) {
+				return true;
+			}
+
+			Log::Warn( "SSAO not used because GL_ARB_texture_gather is not available" );
+			return false;
+		}
+	} },
+	{ gl_fxaaShader,           {}, []() { return !!r_FXAA->integer; } }
+};
+
+ShaderRequirements materialRendererShaders[] = {
+	// Material system shaders that are always loaded if material system is available
+	{ gl_clearSurfacesShader,        {}, nullptr },
+	{ gl_processSurfacesShader,      {}, nullptr },
+	{ gl_depthReductionShader,       {}, nullptr },
+	{ gl_genericShaderMaterial,      {}, nullptr },
+	{ gl_lightMappingShaderMaterial, {}, nullptr },
+	{ gl_reflectionShaderMaterial,   { &glConfig2.reflectionMappingAvailable }, nullptr },
+	{ gl_skyboxShaderMaterial,       {}, []() { return r_drawSky.Get(); } },
+	{ gl_fogQuake3ShaderMaterial,    {}, nullptr },
+	{ gl_heatHazeShaderMaterial,     {}, []() { return !!r_heatHaze->integer; } },
+	{ gl_screenShaderMaterial,       { &glConfig2.bloom }, nullptr },
+	{ gl_liquidShaderMaterial,       {}, []() { return !!r_liquidMapping->integer; } },
+};
+
 static void GLSL_InitGPUShadersOrError()
 {
 	// make sure the render thread is stopped
@@ -209,182 +302,33 @@ static void GLSL_InitGPUShadersOrError()
 
 	gl_shaderManager.GenerateBuiltinHeaders();
 
-	// single texture rendering
-	gl_shaderManager.load( gl_genericShader );
+	for ( ShaderRequirements& requirement : coreRendererShaders ) {
+		if ( std::find_if( requirement.requirements.begin(), requirement.requirements.end(),
+			[]( const bool* req ) {
+				return !*req;
+			} ) == requirement.requirements.end()
+			&& ( !requirement.extraRequirements || requirement.extraRequirements() )
+		) {
+			gl_shaderManager.load( static_cast<decltype( requirement.shader )> requirement.shader );
+		}
+	}
 
-	// standard light mapping
-	gl_shaderManager.load( gl_lightMappingShader );
-
-	// Material system shaders that are always loaded if material system is available
-	if ( glConfig2.usingMaterialSystem )
-	{
-		gl_shaderManager.load( gl_genericShaderMaterial );
-		gl_shaderManager.load( gl_lightMappingShaderMaterial );
-
-		gl_shaderManager.load( gl_clearSurfacesShader );
-		gl_shaderManager.load( gl_processSurfacesShader );
-		gl_shaderManager.load( gl_depthReductionShader );
+	if ( glConfig2.usingMaterialSystem ) {
+		for ( ShaderRequirements& requirement : materialRendererShaders ) {
+			if ( std::find_if( requirement.requirements.begin(), requirement.requirements.end(),
+				[]( const bool* req ) {
+					return !*req;
+				} ) == requirement.requirements.end()
+					&& ( !requirement.extraRequirements || requirement.extraRequirements() )
+					) {
+				gl_shaderManager.load( requirement.shader );
+			}
+		}
 	}
 
 	if ( tr.world ) // this only happens with /glsl_restart
 	{
 		GLSL_InitWorldShaders();
-	}
-
-	if ( glConfig2.realtimeLighting )
-	{
-		realtimeLightingRenderer_t realtimeLightingRenderer = realtimeLightingRenderer_t( r_realtimeLightingRenderer.Get() );
-
-		switch( realtimeLightingRenderer )
-		{
-		case realtimeLightingRenderer_t::LEGACY:
-			// projective lighting ( Doom3 style )
-			gl_shaderManager.load( gl_forwardLightingShader_projXYZ );
-
-			// omni-directional specular bump mapping ( Doom3 style )
-			gl_shaderManager.load( gl_forwardLightingShader_omniXYZ );
-
-			// directional sun lighting ( Doom3 style )
-			gl_shaderManager.load( gl_forwardLightingShader_directionalSun );
-			break;
-		case realtimeLightingRenderer_t::TILED:
-			gl_shaderManager.load( gl_depthtile1Shader );
-			gl_shaderManager.load( gl_depthtile2Shader );
-			gl_shaderManager.load( gl_lighttileShader );
-			DAEMON_FALLTHROUGH;
-		default:
-			/* Dynamic shadowing code also needs this shader.
-			This code is not well known, so there may be a bug,
-			but commit a09f03bc8e775d83ac5e057593eff4e88cdea7eb mentions this:
-
-			> Use conventional shadow mapping code for inverse lights.
-			> This re-enables shadows for players in the tiled renderer.
-			> -- @gimhael
-
-			See also https://github.com/DaemonEngine/Daemon/pull/606#pullrequestreview-912402293 */
-			if ( glConfig2.shadowMapping )
-			{
-				// projective lighting ( Doom3 style )
-				gl_shaderManager.load( gl_forwardLightingShader_projXYZ );
-			}
-		}
-	}
-
-	if ( glConfig2.reflectionMappingAvailable )
-	{
-		// bumped cubemap reflection for abitrary polygons ( EMBM )
-		gl_shaderManager.load( gl_reflectionShader );
-
-		if ( glConfig2.usingMaterialSystem )
-		{
-			gl_shaderManager.load( gl_reflectionShaderMaterial );
-		}
-	}
-
-	if ( r_drawSky.Get() )
-	{
-		// skybox drawing for abitrary polygons
-		gl_shaderManager.load( gl_skyboxShader );
-
-		if ( glConfig2.usingMaterialSystem )
-		{
-			gl_shaderManager.load( gl_skyboxShaderMaterial );
-		}
-	}
-
-	// Fog GLSL is always loaded and built because disabling fog is cheat.
-	{
-		// Q3A volumetric fog
-		gl_shaderManager.load( gl_fogQuake3Shader );
-
-		if ( glConfig2.usingMaterialSystem )
-		{
-			gl_shaderManager.load( gl_fogQuake3ShaderMaterial );
-		}
-
-		// global fog post process effect
-		gl_shaderManager.load( gl_fogGlobalShader );
-	}
-
-	if ( r_heatHaze->integer )
-	{
-		// heatHaze post process effect
-		gl_shaderManager.load( gl_heatHazeShader );
-
-		if ( glConfig2.usingMaterialSystem )
-		{
-			gl_shaderManager.load( gl_heatHazeShaderMaterial );
-		}
-	}
-
-	if ( glConfig2.bloom )
-	{
-		// screen post process effect
-		gl_shaderManager.load( gl_screenShader );
-
-		if ( glConfig2.usingMaterialSystem )
-		{
-			gl_shaderManager.load( gl_screenShaderMaterial );
-		}
-
-		// LDR bright pass filter
-		gl_shaderManager.load( gl_contrastShader );
-	}
-
-	if ( !r_noportals->integer || r_liquidMapping->integer )
-	{
-		// portal process effect
-		gl_shaderManager.load( gl_portalShader );
-	}
-
-	// camera post process effect
-	gl_shaderManager.load( gl_cameraEffectsShader );
-
-	if ( glConfig2.bloom || glConfig2.shadowMapping )
-	{
-		// gaussian blur
-		gl_shaderManager.load( gl_blurShader );
-	}
-
-	if ( glConfig2.shadowMapping )
-	{
-		// shadowmap distance compression
-		gl_shaderManager.load( gl_shadowFillShader );
-
-		// debug utils
-		gl_shaderManager.load( gl_debugShadowMapShader );
-	}
-
-	if ( r_liquidMapping->integer != 0 )
-	{
-		gl_shaderManager.load( gl_liquidShader );
-
-		if ( glConfig2.usingMaterialSystem )
-		{
-			gl_shaderManager.load( gl_liquidShaderMaterial );
-		}
-	}
-
-	if ( glConfig2.motionBlur )
-	{
-		gl_shaderManager.load( gl_motionblurShader );
-	}
-
-	if ( r_ssao->integer )
-	{
-		if ( glConfig2.textureGatherAvailable )
-		{
-			gl_shaderManager.load( gl_ssaoShader );
-		}
-		else
-		{
-			Log::Warn("SSAO not used because GL_ARB_texture_gather is not available.");
-		}
-	}
-
-	if ( r_FXAA->integer != 0 )
-	{
-		gl_shaderManager.load( gl_fxaaShader );
 	}
 
 	if ( r_lazyShaders.Get() == 0 )
@@ -468,42 +412,21 @@ void GLSL_ShutdownGPUShaders()
 
 	gl_shaderManager.freeAll();
 
-	gl_genericShader = nullptr;
-	gl_genericShaderMaterial = nullptr;
-	gl_cullShader = nullptr;
-	gl_depthReductionShader = nullptr;
-	gl_clearSurfacesShader = nullptr;
-	gl_processSurfacesShader = nullptr;
-	gl_lightMappingShader = nullptr;
-	gl_lightMappingShaderMaterial = nullptr;
-	gl_forwardLightingShader_omniXYZ = nullptr;
-	gl_forwardLightingShader_projXYZ = nullptr;
-	gl_forwardLightingShader_directionalSun = nullptr;
-	gl_shadowFillShader = nullptr;
-	gl_reflectionShader = nullptr;
-	gl_reflectionShaderMaterial = nullptr;
-	gl_skyboxShader = nullptr;
-	gl_skyboxShaderMaterial = nullptr;
-	gl_fogQuake3Shader = nullptr;
-	gl_fogQuake3ShaderMaterial = nullptr;
-	gl_fogGlobalShader = nullptr;
-	gl_heatHazeShader = nullptr;
-	gl_heatHazeShaderMaterial = nullptr;
-	gl_screenShader = nullptr;
-	gl_screenShaderMaterial = nullptr;
-	gl_portalShader = nullptr;
-	gl_contrastShader = nullptr;
-	gl_cameraEffectsShader = nullptr;
-	gl_blurShader = nullptr;
-	gl_debugShadowMapShader = nullptr;
-	gl_liquidShader = nullptr;
-	gl_liquidShaderMaterial = nullptr;
-	gl_motionblurShader = nullptr;
-	gl_ssaoShader = nullptr;
-	gl_depthtile1Shader = nullptr;
-	gl_depthtile2Shader = nullptr;
-	gl_lighttileShader = nullptr;
-	gl_fxaaShader = nullptr;
+	for ( ShaderRequirements& requirement : coreRendererShaders ) {
+		if ( requirement.shader ) {
+			delete requirement.shader;
+			requirement.shader = nullptr;
+		}
+	}
+
+	if ( glConfig2.usingMaterialSystem ) {
+		for ( ShaderRequirements& requirement : materialRendererShaders ) {
+			if ( requirement.shader ) {
+				delete requirement.shader;
+				requirement.shader = nullptr;
+			}
+		}
+	}
 
 	GL_BindNullProgram();
 }
