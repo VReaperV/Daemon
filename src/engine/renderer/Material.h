@@ -266,6 +266,8 @@ struct BoundingSphere {
 
 struct SurfaceDescriptor {
 	BoundingSphere boundingSphere;
+	uint32_t firstIndex;
+	uint32_t count;
 	uint32_t surfaceCommandIDs[MAX_SURFACE_COMMANDS] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 };
 
@@ -291,6 +293,8 @@ enum class BufferBind {
 	PORTAL_SURFACES = 5,
 	GEOMETRY_CACHE_INPUT_VBO = 6,
 	GEOMETRY_CACHE_VBO = 7,
+	GEOMETRY_CACHE_INPUT_IBO = 8,
+	GEOMETRY_CACHE_IBO = 9,
 	DEBUG = 10,
 	UNUSED = INT32_MAX
 };

@@ -48,6 +48,7 @@ void GeometryCache::Bind() {
 void GeometryCache::InitGLBuffers() {
 	inputVBO.GenBuffer();
 	VBO.GenBuffer();
+	inputIBO.GenBuffer();
 	IBO.GenBuffer();
 
 	VAO.GenVAO();
@@ -56,14 +57,17 @@ void GeometryCache::InitGLBuffers() {
 void GeometryCache::FreeGLBuffers() {
 	inputVBO.DelBuffer();
 	VBO.DelBuffer();
+	inputIBO.DelBuffer();
 	IBO.DelBuffer();
 
 	VAO.DelVAO();
 }
 
 void GeometryCache::AllocBuffers() {
+	inputVBO.BufferData( mapVerticesNumber * 8, nullptr, GL_STATIC_DRAW );
 	VBO.BufferData( mapVerticesNumber * 8, nullptr, GL_STATIC_DRAW );
 
+	inputIBO.BufferData( mapIndicesNumber, nullptr, GL_STATIC_DRAW );
 	IBO.BufferData( mapIndicesNumber, nullptr, GL_STATIC_DRAW );
 }
 
@@ -90,12 +94,25 @@ void GeometryCache::AddMapGeometry( const uint32_t verticesNumber, const uint32_
 
 		R_CopyVertexAttribute( attr, *spec, mapVerticesNumber, ( byte* ) VBOVerts );
 	}
+
+	inputVBO.BufferStorage( mapVerticesNumber * 8, 1, nullptr );
+	inputVBO.MapAll();
+	uint32_t* inputVBOVerts = inputVBO.GetData();
+	memcpy( inputVBOVerts, VBOVerts, mapVerticesNumber * 8 * sizeof( uint32_t ) );
+	inputVBO.UnmapBuffer();
+
 	VBO.UnmapBuffer();
+
+	inputIBO.BufferStorage( mapIndicesNumber, 1, nullptr );
+	inputIBO.MapAll();
+	uint32_t* inputIBOIndices = inputIBO.GetData();
+	memcpy( inputIBOIndices, indices, mapIndicesNumber * sizeof( uint32_t ) );
+	inputIBO.UnmapBuffer();
 
 	IBO.BufferStorage( mapIndicesNumber, 1, nullptr );
 	IBO.MapAll();
 	uint32_t* IBOIndices = IBO.GetData();
-	memcpy( IBOIndices, indices, mapIndicesNumber * sizeof( uint32_t ) );
+	memset( IBOIndices, 0, mapIndicesNumber * sizeof( uint32_t ) );
 	IBO.UnmapBuffer();
 
 	glBindVertexArray( backEnd.currentVAO );
