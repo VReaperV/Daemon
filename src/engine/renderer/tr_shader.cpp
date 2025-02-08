@@ -5969,7 +5969,7 @@ static shader_t *FinishShader()
 				uint8_t maxStages = ret->lastStage - ret->stages;
 
 				// Add 1 for potential fog stages
-				maxStages = PAD( maxStages + 1, 4 ); // Aligned to 4 components
+				maxStages = PAD( maxStages + 3, 4 ); // Aligned to 4 components
 				materialSystem.maxStages = std::max( maxStages, materialSystem.maxStages );
 			}
 
@@ -6028,7 +6028,7 @@ static shader_t *FinishShader()
 
 		// Add 1 for potential depth stages
 		// Add 1 for potential fog stages
-		maxStages = PAD( maxStages + 2, 4 ); // Aligned to 4 components
+		maxStages = PAD( maxStages + 4, 4 ); // Aligned to 4 components
 		materialSystem.maxStages = std::max( maxStages, materialSystem.maxStages );
 	}
 

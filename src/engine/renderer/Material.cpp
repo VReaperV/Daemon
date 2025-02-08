@@ -742,6 +742,9 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 			surfaceCommand.drawCommand.baseInstance |= ( HasLightMap( drawSurf ) ? GetLightMapNum( drawSurf ) : 255 ) << LIGHTMAP_BITS;
 			surfaceCommands[cmdID] = surfaceCommand;
 
+			surface.firstIndex = surfaceCommand.drawCommand.firstIndex;
+			surface.count = surfaceCommand.drawCommand.count;
+
 			stage++;
 		}
 
@@ -1670,6 +1673,10 @@ void MaterialSystem::CullSurfaces() {
 	surfaceBatchesUBO.BindBufferBase();
 	atomicCommandCountersBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
 
+	geometryCache.inputVBO.BindBufferBase();
+	geometryCache.inputIBO.BindBufferBase();
+	geometryCache.IBO.BindBufferBase();
+
 	if ( totalPortals > 0 ) {
 		portalSurfacesSSBO.BindBufferBase();
 	}
@@ -1755,6 +1762,10 @@ void MaterialSystem::CullSurfaces() {
 	culledCommandsBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER );
 	surfaceBatchesUBO.UnBindBufferBase();
 	atomicCommandCountersBuffer.UnBindBufferBase( GL_ATOMIC_COUNTER_BUFFER );
+
+	geometryCache.inputVBO.UnBindBufferBase();
+	geometryCache.inputIBO.UnBindBufferBase();
+	geometryCache.IBO.UnBindBufferBase();
 
 	if ( totalPortals > 0 ) {
 		portalSurfacesSSBO.UnBindBufferBase();

@@ -639,6 +639,9 @@ static std::string GenComputeHeader() {
 		AddDefine( str, "BIND_COMMAND_COUNTERS_ATOMIC", Util::ordinal( BufferBind::COMMAND_COUNTERS_ATOMIC ) );
 		AddDefine( str, "BIND_COMMAND_COUNTERS_STORAGE", Util::ordinal( BufferBind::COMMAND_COUNTERS_STORAGE ) );
 		AddDefine( str, "BIND_PORTAL_SURFACES", Util::ordinal( BufferBind::PORTAL_SURFACES ) );
+		AddDefine( str, "GEOMETRY_CACHE_INPUT_VBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_VBO ) );
+		AddDefine( str, "GEOMETRY_CACHE_INPUT_IBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_IBO ) );
+		AddDefine( str, "GEOMETRY_CACHE_IBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_IBO ) );
 
 		AddDefine( str, "BIND_DEBUG", Util::ordinal( BufferBind::DEBUG ) );
 	}

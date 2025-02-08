@@ -41,6 +41,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class GeometryCache {
 	public:
+	friend class MaterialSystem;
+
 	void Bind();
 
 	void InitGLBuffers();
@@ -58,9 +60,10 @@ class GeometryCache {
 
 	GLVAO VAO = GLVAO( 0 );
 
-	GLBuffer inputVBO = GLBuffer( "geometryCacheInputVBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_VBO ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+	GLSSBO inputVBO = GLSSBO( "geometryCacheInputVBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_VBO ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 	GLBuffer VBO = GLBuffer( "geometryCacheVBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_VBO ), GL_MAP_WRITE_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
-	GLBuffer IBO = GLBuffer( "geometryCacheIBO", Util::ordinal( BufferBind::UNUSED ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+	GLSSBO inputIBO = GLSSBO( "geometryCacheInputIBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_IBO ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+	GLSSBO IBO = GLSSBO( "geometryCacheIBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_IBO ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 };
 
 extern GeometryCache geometryCache;

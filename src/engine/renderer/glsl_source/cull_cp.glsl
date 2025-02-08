@@ -55,6 +55,24 @@ layout(std430, binding = BIND_SURFACE_COMMANDS) writeonly restrict buffer surfac
 	SurfaceCommand surfaceCommands[];
 };
 
+struct sVertex {
+	vec3 position;
+	float padding0;
+	vec4 padding1;
+};
+
+layout(std430, binding = GEOMETRY_CACHE_INPUT_VBO) readonly restrict buffer geometryCacheVertexInputSSBO {
+	sVertex inputVertices[];
+};
+
+layout(std430, binding = GEOMETRY_CACHE_INPUT_IBO) readonly restrict buffer geometryCacheIndexInputSSBO {
+	uint inputIndices[];
+};
+
+layout(std430, binding = GEOMETRY_CACHE_IBO) writeonly restrict buffer geometryCacheIndexBuffer {
+	uint outputIndices[];
+};
+
 layout(std430, binding = BIND_PORTAL_SURFACES) restrict buffer portalSurfacesSSBO {
 	PortalSurface portalSurfaces[];
 };
@@ -64,7 +82,7 @@ layout(std430, binding = BIND_PORTAL_SURFACES) restrict buffer portalSurfacesSSB
 	#define DEBUG_ID( id ) ( id * DEBUG_INVOCATION_SIZE )
 
 	layout(std430, binding = BIND_DEBUG) writeonly restrict buffer debugSSBO {
-		uvec4 debug[];
+		vec4 debug[];
 	};
 #endif
 
@@ -167,17 +185,51 @@ bool CullSurface( in BoundingSphere boundingSphere ) {
 	return culled;
 }
 
-void ProcessSurfaceCommands( const in SurfaceDescriptor surface, const in bool enabled ) {
-	for( uint i = 0; i < MAX_SURFACE_COMMANDS; i++ ) {
+uint CopyTriangles( const in uint firstIndex, const in uint count ) {
+	uint indices = 0;
+	for( uint i = 0; i < count; i += 3 ) {
+		uvec3 triangle = uvec3( inputIndices[firstIndex + i], inputIndices[firstIndex + i + 1], inputIndices[firstIndex + i + 2] );
+		vec3 verts[3] = vec3[3](
+			vec3( inputVertices[triangle.x].position ),
+			vec3( inputVertices[triangle.y].position ),
+			vec3( inputVertices[triangle.z].position )
+		);
+
+		vec3 normal = cross( verts[1] - verts[0], verts[2] - verts[0] );
+
+        if( dot( normalize( u_CameraPosition - verts[0] ), normal ) >= 0 ) {
+            continue;
+        }
+
+		/* BoundingSphere sphere;
+		sphere.origin = ( verts[0] + verts[1] + verts[2] ) / 3.0f;
+		sphere.radius = max( distance( verts[0], sphere.origin ),
+			max( distance( verts[1], sphere.origin ), distance( verts[2], sphere.origin ) ) );
+		if( CullSurface( sphere ) ) {
+			continue;
+		} */
+
+		outputIndices[firstIndex + indices] = triangle.x;
+		outputIndices[firstIndex + indices + 1] = triangle.y;
+		outputIndices[firstIndex + indices + 2] = triangle.z;
+		indices += 3;
+	}
+
+	return indices;
+}
+
+void ProcessSurfaceCommands( const in SurfaceDescriptor surface, const in bool enabled, const in uint count ) {
+	for( uint i = 2; i < MAX_SURFACE_COMMANDS; i++ ) {
 		const uint commandID = surface.surfaceCommandIDs[i];
 		if( commandID == 0 ) { // Reserved for no-command
 			return;
 		}
 		// Subtract 1 because of no-command
 		surfaceCommands[commandID + u_SurfaceCommandsOffset - 1].enabled = enabled;
+		surfaceCommands[commandID + u_SurfaceCommandsOffset - 1].drawCommand.count = count;
 		
 		#if defined( r_materialDebug )
-			debug[DEBUG_ID( GLOBAL_INVOCATION_ID ) + 1][i] = commandID;
+			// debug[DEBUG_ID( GLOBAL_INVOCATION_ID ) + 1][i] = commandID;
 		#endif
 	}
 }
@@ -204,9 +256,14 @@ void main() {
 	SurfaceDescriptor surface = surfaces[globalInvocationID];
 	bool culled = CullSurface( surface.boundingSphere );
 
-	ProcessSurfaceCommands( surface, !culled );
+	uint count = 0;
+	if( !culled ) {
+		count = CopyTriangles( surface.surfaceCommandIDs[0], surface.surfaceCommandIDs[1] );
+	}
+
+	ProcessSurfaceCommands( surface, !culled, count );
 	
 	#if defined( r_materialDebug )
-		debug[DEBUG_ID( globalInvocationID )].x = culled ? 1 : 0;
+		// debug[DEBUG_ID( globalInvocationID )].x = culled ? 1 : 0;
 	#endif
 }
