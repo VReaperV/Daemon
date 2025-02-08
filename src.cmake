@@ -153,6 +153,7 @@ set(GLSLSOURCELIST
     ${ENGINE_DIR}/renderer/glsl_source/cull_cp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/depthReduction_cp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/processSurfaces_cp.glsl
+    ${ENGINE_DIR}/renderer/glsl_source/processTris_cp.glsl
     
     # Screen-space shaders
     ${ENGINE_DIR}/renderer/glsl_source/screenSpace_vp.glsl

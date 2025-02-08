@@ -42,6 +42,14 @@ layout(std430, binding = BIND_COMMAND_COUNTERS_STORAGE) writeonly buffer atomicC
     uint atomicCommandCounters[MAX_COMMAND_COUNTERS * MAX_VIEWFRAMES];
 };
 
+layout(std430, binding = GEOMETRY_CACHE_TRIS) writeonly buffer atomicTrisCountersBuffer {
+    uint atomicTrisCounters[2];
+};
+
+layout(std430, binding = GEOMETRY_CACHE_TRIS_WORKGROUP) writeonly buffer atomicTrisWorkgroupCountersBuffer {
+    uint atomicTrisWorkgroupCounters[3];
+};
+
 uniform uint u_Frame;
 
 void main() {
@@ -50,4 +58,15 @@ void main() {
         return;
     }
     atomicCommandCounters[globalInvocationID + MAX_COMMAND_COUNTERS * MAX_VIEWS * u_Frame] = 0;
+
+    
+    if( globalInvocationID > 0 ) {
+        return;
+    }
+
+    atomicTrisCounters[0] = 0;
+    atomicTrisCounters[1] = 0;
+    atomicTrisWorkgroupCounters[0] = 0;
+    atomicTrisWorkgroupCounters[1] = 1;
+    atomicTrisWorkgroupCounters[2] = 2;
 }

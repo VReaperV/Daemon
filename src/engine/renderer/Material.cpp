@@ -664,6 +664,12 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	uint32_t* atomicCommandCounters = ( uint32_t* ) atomicCommandCountersBuffer.GetData();
 	memset( atomicCommandCounters, 0, MAX_COMMAND_COUNTERS * MAX_VIEWFRAMES * sizeof( uint32_t ) );
 
+	geometryCache.trisI.BufferStorage( surfaceDescriptorsCount * descriptorSize, 1, nullptr );
+	geometryCache.trisI.MapAll();
+	uint32_t* trisIData = geometryCache.trisI.GetData();
+	memset( trisIData, 0, surfaceDescriptorsCount * descriptorSize * sizeof( uint32_t ) );
+	geometryCache.trisI.UnmapBuffer();
+
 	/* For use in debugging compute shaders
 	Intended for use with Nsight Graphics to format the output */
 	if ( r_materialDebug.Get() ) {
@@ -1602,12 +1608,16 @@ void MaterialSystem::UpdateDynamicSurfaces() {
 
 void MaterialSystem::UpdateFrameData() {
 	atomicCommandCountersBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER, Util::ordinal( BufferBind::COMMAND_COUNTERS_STORAGE ) );
+	geometryCache.trisC.BindBufferBase( GL_SHADER_STORAGE_BUFFER, Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS ) );
+	geometryCache.trisCW.BindBufferBase( GL_SHADER_STORAGE_BUFFER, Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS_WORKGROUP ) );
 
 	gl_clearSurfacesShader->BindProgram( 0 );
 	gl_clearSurfacesShader->SetUniform_Frame( nextFrame );
 	gl_clearSurfacesShader->DispatchCompute( MAX_VIEWS, 1, 1 );
 
 	atomicCommandCountersBuffer.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, Util::ordinal( BufferBind::COMMAND_COUNTERS_STORAGE ) );
+	geometryCache.trisC.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS ) );
+	geometryCache.trisCW.UnBindBufferBase( GL_SHADER_STORAGE_BUFFER, Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS_WORKGROUP ) );
 
 	GL_CheckErrors();
 }
@@ -1676,6 +1686,10 @@ void MaterialSystem::CullSurfaces() {
 	geometryCache.inputVBO.BindBufferBase();
 	geometryCache.inputIBO.BindBufferBase();
 	geometryCache.IBO.BindBufferBase();
+
+	geometryCache.trisI.BindBufferBase();
+	geometryCache.trisC.BindBufferBase();
+	geometryCache.trisCW.BindBufferBase();
 
 	if ( totalPortals > 0 ) {
 		portalSurfacesSSBO.BindBufferBase();
@@ -1748,6 +1762,11 @@ void MaterialSystem::CullSurfaces() {
 
 		gl_cullShader->DispatchCompute( globalWorkGroupX, 1, 1 );
 
+		glMemoryBarrier( GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT );
+
+		gl_processTrisShader->BindProgram( 0 );
+		gl_processTrisShader->DispatchComputeIndirect( 0 );
+
 		gl_processSurfacesShader->BindProgram( 0 );
 		gl_processSurfacesShader->SetUniform_Frame( nextFrame );
 		gl_processSurfacesShader->SetUniform_ViewID( view );
@@ -1766,6 +1785,10 @@ void MaterialSystem::CullSurfaces() {
 	geometryCache.inputVBO.UnBindBufferBase();
 	geometryCache.inputIBO.UnBindBufferBase();
 	geometryCache.IBO.UnBindBufferBase();
+
+	geometryCache.trisI.UnBindBufferBase();
+	geometryCache.trisC.UnBindBufferBase();
+	geometryCache.trisCW.UnBindBufferBase();
 
 	if ( totalPortals > 0 ) {
 		portalSurfacesSSBO.UnBindBufferBase();

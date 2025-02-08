@@ -224,6 +224,7 @@ static void GLSL_InitGPUShadersOrError()
 
 		gl_shaderManager.LoadShader( gl_clearSurfacesShader );
 		gl_shaderManager.LoadShader( gl_processSurfacesShader );
+		gl_shaderManager.LoadShader( gl_processTrisShader );
 		gl_shaderManager.LoadShader( gl_depthReductionShader );
 	}
 
@@ -473,6 +474,7 @@ void GLSL_ShutdownGPUShaders()
 	gl_depthReductionShader = nullptr;
 	gl_clearSurfacesShader = nullptr;
 	gl_processSurfacesShader = nullptr;
+	gl_processTrisShader = nullptr;
 	gl_lightMappingShader = nullptr;
 	gl_lightMappingShaderMaterial = nullptr;
 	gl_forwardLightingShader_omniXYZ = nullptr;

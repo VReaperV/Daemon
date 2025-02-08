@@ -51,6 +51,10 @@ void GeometryCache::InitGLBuffers() {
 	inputIBO.GenBuffer();
 	IBO.GenBuffer();
 
+	trisI.GenBuffer();
+	trisC.GenBuffer();
+	trisCW.GenBuffer();
+
 	VAO.GenVAO();
 }
 
@@ -59,6 +63,10 @@ void GeometryCache::FreeGLBuffers() {
 	VBO.DelBuffer();
 	inputIBO.DelBuffer();
 	IBO.DelBuffer();
+
+	trisI.DelBuffer();
+	trisC.DelBuffer();
+	trisCW.DelBuffer();
 
 	VAO.DelVAO();
 }
@@ -69,6 +77,10 @@ void GeometryCache::AllocBuffers() {
 
 	inputIBO.BufferData( mapIndicesNumber, nullptr, GL_STATIC_DRAW );
 	IBO.BufferData( mapIndicesNumber, nullptr, GL_STATIC_DRAW );
+
+	// trisI.BufferData( mapIndicesNumber, nullptr, GL_STATIC_DRAW );
+	trisC.BufferData( 1, nullptr, GL_STATIC_DRAW );
+	trisCW.BufferData( 3, nullptr, GL_STATIC_DRAW );
 }
 
 void GeometryCache::AddMapGeometry( const uint32_t verticesNumber, const uint32_t indicesNumber,
@@ -114,6 +126,24 @@ void GeometryCache::AddMapGeometry( const uint32_t verticesNumber, const uint32_
 	uint32_t* IBOIndices = IBO.GetData();
 	memset( IBOIndices, 0, mapIndicesNumber * sizeof( uint32_t ) );
 	IBO.UnmapBuffer();
+
+	/* trisI.BufferStorage( mapIndicesNumber, 1, nullptr );
+	trisI.MapAll();
+	uint32_t* trisIData = trisI.GetData();
+	memset( trisIData, 0, mapIndicesNumber * sizeof( uint32_t ) );
+	trisI.UnmapBuffer(); */
+
+	trisC.BufferStorage( 1, 1, nullptr );
+	trisC.MapAll();
+	uint32_t* trisCData = trisC.GetData();
+	memset( trisCData, 0, 1 * sizeof( uint32_t ) );
+	trisC.UnmapBuffer();
+
+	trisCW.BufferStorage( 3, 1, nullptr );
+	trisCW.MapAll();
+	uint32_t* trisCWData = trisCW.GetData();
+	memset( trisCWData, 0, 3 * sizeof( uint32_t ) );
+	trisCW.UnmapBuffer();
 
 	glBindVertexArray( backEnd.currentVAO );
 }

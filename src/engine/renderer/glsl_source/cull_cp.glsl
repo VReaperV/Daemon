@@ -73,6 +73,13 @@ layout(std430, binding = GEOMETRY_CACHE_IBO) writeonly restrict buffer geometryC
 	uint outputIndices[];
 };
 
+layout (binding = GEOMETRY_CACHE_TRIS) uniform atomic_uint atomicTrisCounters[2];
+layout (binding = GEOMETRY_CACHE_TRIS_WORKGROUP) uniform atomic_uint atomicTrisWorkgroupCounters[3];
+
+layout(std430, binding = GEOMETRY_CACHE_TRIS_I) writeonly restrict buffer geometryCacheTrisBuffer {
+	SurfaceDescriptor culledTris[];
+};
+
 layout(std430, binding = BIND_PORTAL_SURFACES) restrict buffer portalSurfacesSSBO {
 	PortalSurface portalSurfaces[];
 };
@@ -226,7 +233,7 @@ void ProcessSurfaceCommands( const in SurfaceDescriptor surface, const in bool e
 		}
 		// Subtract 1 because of no-command
 		surfaceCommands[commandID + u_SurfaceCommandsOffset - 1].enabled = enabled;
-		surfaceCommands[commandID + u_SurfaceCommandsOffset - 1].drawCommand.count = count;
+		// surfaceCommands[commandID + u_SurfaceCommandsOffset - 1].drawCommand.count = count;
 		
 		#if defined( r_materialDebug )
 			// debug[DEBUG_ID( GLOBAL_INVOCATION_ID ) + 1][i] = commandID;
@@ -258,10 +265,25 @@ void main() {
 
 	uint count = 0;
 	if( !culled ) {
-		count = CopyTriangles( surface.surfaceCommandIDs[0], surface.surfaceCommandIDs[1] );
+		// count = CopyTriangles( surface.surfaceCommandIDs[0], surface.surfaceCommandIDs[1] );
 	}
 
-	ProcessSurfaceCommands( surface, !culled, count );
+	// ProcessSurfaceCommands( surface, !culled, count );
+
+	if( culled ) {
+		ProcessSurfaceCommands( surface, !culled, count );
+		return;
+	}
+
+	const uint tris = atomicCounterAddARB( atomicTrisCounters[0], surface.surfaceCommandIDs[1] );
+	const uint workgroupCount = atomicCounter( atomicTrisWorkgroupCounters[0] );
+	if( tris > workgroupCount * 64 ) {
+		atomicCounterIncrement( atomicTrisWorkgroupCounters[0] );
+	}
+	
+	const uint descIndex = atomicCounterIncrement( atomicTrisWorkgroupCounters[0] );
+
+	culledTris[descIndex] = surface;
 	
 	#if defined( r_materialDebug )
 		// debug[DEBUG_ID( globalInvocationID )].x = culled ? 1 : 0;

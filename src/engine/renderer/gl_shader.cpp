@@ -47,6 +47,7 @@ GLShader_cull                            *gl_cullShader = nullptr;
 GLShader_depthReduction                  *gl_depthReductionShader = nullptr;
 GLShader_clearSurfaces                   *gl_clearSurfacesShader = nullptr;
 GLShader_processSurfaces                 *gl_processSurfacesShader = nullptr;
+GLShader_processTris                     *gl_processTrisShader = nullptr;
 
 GLShader_blur                            *gl_blurShader = nullptr;
 GLShader_cameraEffects                   *gl_cameraEffectsShader = nullptr;
@@ -642,6 +643,9 @@ static std::string GenComputeHeader() {
 		AddDefine( str, "GEOMETRY_CACHE_INPUT_VBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_VBO ) );
 		AddDefine( str, "GEOMETRY_CACHE_INPUT_IBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_IBO ) );
 		AddDefine( str, "GEOMETRY_CACHE_IBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_IBO ) );
+		AddDefine( str, "GEOMETRY_CACHE_TRIS", Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS ) );
+		AddDefine( str, "GEOMETRY_CACHE_TRIS_WORKGROUP", Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS_WORKGROUP ) );
+		AddDefine( str, "GEOMETRY_CACHE_TRIS_I", Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS_I ) );
 
 		AddDefine( str, "BIND_DEBUG", Util::ordinal( BufferBind::DEBUG ) );
 	}
@@ -3319,4 +3323,9 @@ GLShader_processSurfaces::GLShader_processSurfaces() :
 	u_Frame( this ),
 	u_ViewID( this ),
 	u_SurfaceCommandsOffset( this ) {
+}
+
+GLShader_processTris::GLShader_processTris( GLShaderManager* manager ) :
+	GLShader( "processTris", 0, manager,
+		false, "processTris" ) {
 }
