@@ -65,6 +65,7 @@
 #include "cull_cp.glsl.h"
 #include "depthReduction_cp.glsl.h"
 #include "processSurfaces_cp.glsl.h"
+#include "processTris_cp.glsl.h"
 
 std::unordered_map<std::string, std::string> shadermap({
 	{ "blur_fp.glsl", std::string(reinterpret_cast<const char*>(blur_fp_glsl), sizeof(blur_fp_glsl)) },
@@ -114,6 +115,7 @@ std::unordered_map<std::string, std::string> shadermap({
 	{ "portal_fp.glsl", std::string(reinterpret_cast<const char*>(portal_fp_glsl), sizeof(portal_fp_glsl)) },
 	{ "portal_vp.glsl", std::string(reinterpret_cast<const char*>(portal_vp_glsl), sizeof(portal_vp_glsl)) },
 	{ "processSurfaces_cp.glsl", std::string( reinterpret_cast< const char* >( processSurfaces_cp_glsl ), sizeof( processSurfaces_cp_glsl ) ) },
+	{ "processTris_cp.glsl", std::string( reinterpret_cast< const char* >( processTris_cp_glsl ), sizeof( processTris_cp_glsl ) ) },
 	{ "reflection_CB_fp.glsl", std::string(reinterpret_cast<const char*>(reflection_CB_fp_glsl), sizeof(reflection_CB_fp_glsl)) },
 	{ "reflection_CB_vp.glsl", std::string(reinterpret_cast<const char*>(reflection_CB_vp_glsl), sizeof(reflection_CB_vp_glsl)) },
 	{ "refraction_C_fp.glsl", std::string(reinterpret_cast<const char*>(refraction_C_fp_glsl), sizeof(refraction_C_fp_glsl)) },

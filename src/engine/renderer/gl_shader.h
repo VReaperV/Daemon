@@ -4645,6 +4645,12 @@ class GLShader_processSurfaces :
 	GLShader_processSurfaces( GLShaderManager* manager );
 };
 
+class GLShader_processTris :
+	public GLShader {
+	public:
+	GLShader_processTris( GLShaderManager* manager );
+};
+
 
 std::string GetShaderPath();
 
@@ -4656,6 +4662,7 @@ extern GLShader_cull                            *gl_cullShader;
 extern GLShader_depthReduction                  *gl_depthReductionShader;
 extern GLShader_clearSurfaces                   *gl_clearSurfacesShader;
 extern GLShader_processSurfaces                 *gl_processSurfacesShader;
+extern GLShader_processTris                     *gl_processTrisShader;
 extern GLShader_lightMapping                    *gl_lightMappingShader;
 extern GLShader_lightMappingMaterial            *gl_lightMappingShaderMaterial;
 extern GLShader_forwardLighting_omniXYZ         *gl_forwardLightingShader_omniXYZ;

@@ -64,6 +64,9 @@ class GeometryCache {
 	GLBuffer VBO = GLBuffer( "geometryCacheVBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_VBO ), GL_MAP_WRITE_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
 	GLSSBO inputIBO = GLSSBO( "geometryCacheInputIBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_INPUT_IBO ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 	GLSSBO IBO = GLSSBO( "geometryCacheIBO", Util::ordinal( BufferBind::GEOMETRY_CACHE_IBO ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+	GLSSBO trisI = GLSSBO( "geometryCacheTrisI", Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS_I ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+	GLAtomicCounterBuffer trisC = GLAtomicCounterBuffer( "geometryCacheTrisC", Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
+	GLAtomicCounterBuffer trisCW = GLAtomicCounterBuffer( "geometryCacheTrisWorkgroup", Util::ordinal( BufferBind::GEOMETRY_CACHE_TRIS_WORKGROUP ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 };
 
 extern GeometryCache geometryCache;
