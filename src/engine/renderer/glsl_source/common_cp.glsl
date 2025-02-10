@@ -66,6 +66,12 @@ struct SurfaceDescriptor {
 	uint surfaceCommandIDs[MAX_SURFACE_COMMANDS];
 };
 
+struct SurfaceDescriptor2 {
+	vec3 pad;
+	uint count;
+	uint surfaceCommandIDs[MAX_SURFACE_COMMANDS];
+};
+
 struct PortalSurface {
 	BoundingSphere boundingSphere;
 
