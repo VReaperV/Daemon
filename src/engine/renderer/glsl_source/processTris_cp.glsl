@@ -62,6 +62,22 @@ layout(std430, binding = GEOMETRY_CACHE_TRIS_I) readonly restrict buffer geometr
 	#define HAVE_processSurfaces_subgroup
 #endif
 
+void ProcessSurfaceCommands( const in SurfaceDescriptor surface, const in bool enabled, const in uint count ) {
+	for( uint i = 2; i < MAX_SURFACE_COMMANDS; i++ ) {
+		const uint commandID = surface.surfaceCommandIDs[i];
+		if( commandID == 0 ) { // Reserved for no-command
+			return;
+		}
+		// Subtract 1 because of no-command
+		surfaceCommands[commandID + u_SurfaceCommandsOffset - 1].enabled = enabled;
+		// surfaceCommands[commandID + u_SurfaceCommandsOffset - 1].drawCommand.count = count;
+		
+		#if defined( r_materialDebug )
+			// debug[DEBUG_ID( GLOBAL_INVOCATION_ID ) + 1][i] = commandID;
+		#endif
+	}
+}
+
 void main() {
 	const uint globalGroupID = GLOBAL_GROUP_ID;
 	const uint globalInvocationID = GLOBAL_INVOCATION_ID;
@@ -69,6 +85,8 @@ void main() {
 	if( globalInvocationID >= atomicTrisCounters ) {
 		return;
 	}
+
+	atomicTrisCounters
 
 	uvec3 triangle = uvec3( culledTris[globalInvocationID * 3], culledTris[globalInvocationID * 3 + 1],
 		culledTris[globalInvocationID * 3 + 2] );

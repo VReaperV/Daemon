@@ -73,11 +73,11 @@ layout(std430, binding = GEOMETRY_CACHE_IBO) writeonly restrict buffer geometryC
 	uint outputIndices[];
 };
 
-layout (binding = GEOMETRY_CACHE_TRIS) uniform atomic_uint atomicTrisCounters[2];
+layout (binding = GEOMETRY_CACHE_TRIS) uniform atomic_uint atomicTrisCounters[3];
 layout (binding = GEOMETRY_CACHE_TRIS_WORKGROUP) uniform atomic_uint atomicTrisWorkgroupCounters[3];
 
 layout(std430, binding = GEOMETRY_CACHE_TRIS_I) writeonly restrict buffer geometryCacheTrisBuffer {
-	SurfaceDescriptor culledTris[];
+	SurfaceDescriptor2 culledTris[];
 };
 
 layout(std430, binding = BIND_PORTAL_SURFACES) restrict buffer portalSurfacesSSBO {
@@ -283,7 +283,16 @@ void main() {
 	
 	const uint descIndex = atomicCounterIncrement( atomicTrisWorkgroupCounters[0] );
 
-	culledTris[descIndex] = surface;
+	SurfaceDescriptor2 srf;
+	srf.count = tris + surface.surfaceCommandIDs[1];
+
+	for( uint i = 0; i < MAX_SURFACE_COMMANDS; i++ ) {
+		srf.surfaceCommandIDs[i] = surface.surfaceCommandIDs[i];
+		if( surface.surfaceCommandIDs[i] == 0 ) {
+			break;
+		}
+	}
+	culledTris[descIndex] = srf;
 	
 	#if defined( r_materialDebug )
 		// debug[DEBUG_ID( globalInvocationID )].x = culled ? 1 : 0;
