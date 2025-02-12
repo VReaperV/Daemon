@@ -2570,6 +2570,10 @@ static void GLimp_InitExtensions()
 		&& glConfig.SSBOAvailable
 		&& glConfig.uniformBufferObjectAvailable;
 
+	glConfig2.adaptiveExposureAvailable = glConfig2.computeShaderAvailable && glConfig2.shaderImageLoadStoreAvailable
+		&& glConfig2.shaderAtomicCountersAvailable && glConfig2.shadingLanguage420PackAvailable
+		&& glConfig2.explicitUniformLocationAvailable && glConfig2.directStateAccessAvailable;
+
 	// This requires GLEW 2.2+, so skip if it's a lower version
 #if defined(GLEW_KHR_shader_subgroup)
 	// not required by any OpenGL version

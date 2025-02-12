@@ -155,6 +155,7 @@ struct GLConfig
 	bool reliefMapping;
 	bool reflectionMappingAvailable;
 	bool reflectionMapping;
+	bool adaptiveExposureAvailable;
 	bool bloom;
 	int  MSAA; // 0 == disabled, otherwise used as sample count
 	bool ssao;

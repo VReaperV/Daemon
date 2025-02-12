@@ -764,6 +764,11 @@ void R_InitVBOs()
 		pushBuffer.InitGLBuffers();
 	}
 
+	if ( glConfig2.adaptiveExposureAvailable ) {
+		luminanceBuffer.GenBuffer();
+		luminanceBuffer.BufferData( 1, nullptr, GL_DYNAMIC_COPY );
+	}
+
 	GL_CheckErrors();
 }
 
@@ -843,6 +848,10 @@ void R_ShutdownVBOs()
 
 	if ( glConfig.pushBufferAvailable ) {
 		pushBuffer.FreeGLBuffers();
+	}
+	
+	if ( glConfig2.adaptiveExposureAvailable ) {
+		luminanceBuffer.DelBuffer();
 	}
 
 	tess.verts = tess.vertsBuffer = nullptr;

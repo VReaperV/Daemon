@@ -60,9 +60,11 @@ GLShader_fxaa                            *gl_fxaaShader = nullptr;
 GLShader_motionblur                      *gl_motionblurShader = nullptr;
 GLShader_ssao                            *gl_ssaoShader = nullptr;
 
-GLShader_depthtile1                      *gl_depthtile1Shader = nullptr;
-GLShader_depthtile2                      *gl_depthtile2Shader = nullptr;
-GLShader_lighttile                       *gl_lighttileShader = nullptr;
+GLShader_depthtile1* gl_depthtile1Shader = nullptr;
+GLShader_depthtile2* gl_depthtile2Shader = nullptr;
+GLShader_lighttile* gl_lighttileShader = nullptr;
+GLShader_luminanceReduction* gl_luminanceReductionShader = nullptr;
+GLShader_clearFrameData* gl_clearFrameDataShader = nullptr;
 
 GLShader_generic                         *gl_genericShader = nullptr;
 GLShader_genericMaterial                 *gl_genericShaderMaterial = nullptr;
@@ -83,6 +85,7 @@ GLShader_skybox                          *gl_skyboxShader = nullptr;
 GLShader_skyboxMaterial                  *gl_skyboxShaderMaterial = nullptr;
 GlobalUBOProxy                           *globalUBOProxy = nullptr;
 GLShaderManager                           gl_shaderManager;
+GLBuffer luminanceBuffer( "luminance", Util::ordinal( BufferBind::LUMINANCE ), GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
 
 namespace // Implementation details
 {
@@ -419,8 +422,11 @@ static const std::vector<addedExtension_t> fragmentVertexAddedExtensions = {
 	{ glConfig.usingBindlessTextures, -1, "ARB_bindless_texture" },
 	/* ARB_shader_draw_parameters set to -1, because we might get a 4.6 GL context,
 	where the core variables have different names. */
-	{ glConfig.shaderDrawParametersAvailable, -1, "ARB_shader_draw_parameters" },
-	{ glConfig.SSBOAvailable, 430, "ARB_shader_storage_buffer_object" },
+	{ glConfig2.shaderDrawParametersAvailable, -1, "ARB_shader_draw_parameters" },
+	{ glConfig2.SSBOAvailable, 430, "ARB_shader_storage_buffer_object" },
+	{ glConfig2.shadingLanguage420PackAvailable, 420, "ARB_shading_language_420pack" },
+	{ glConfig2.explicitUniformLocationAvailable, 430, "ARB_explicit_uniform_location" },
+	{ glConfig2.shaderAtomicCountersAvailable, 420, "ARB_shader_atomic_counters" },
 	/* Even though these are part of the GL_KHR_shader_subgroup extension, we need to enable
 	the individual extensions for each feature.
 	GL_KHR_shader_subgroup itself can't be used in the shader. */
@@ -582,6 +588,10 @@ static std::string GenVertexHeader() {
 		AddDefine( str, "BIND_LIGHTMAP_DATA", BufferBind::LIGHTMAP_DATA );
 	}
 
+	if ( glConfig2.adaptiveExposureAvailable ) {
+		AddDefine( str, "BIND_LUMINANCE", Util::ordinal( BufferBind::LUMINANCE ) );
+	}
+
 	return str;
 }
 
@@ -631,6 +641,10 @@ static std::string GenFragmentHeader() {
 		AddDefine( str, "USE_PUSH_BUFFER", 1 );
 	}
 
+	if ( glConfig2.adaptiveExposureAvailable ) {
+		AddDefine( str, "BIND_LUMINANCE", Util::ordinal( BufferBind::LUMINANCE ) );
+	}
+
 	return str;
 }
 
@@ -658,6 +672,11 @@ static std::string GenComputeHeader() {
 
 	if ( glConfig.pushBufferAvailable ) {
 		AddDefine( str, "USE_PUSH_BUFFER", 1 );
+	}
+
+	if ( glConfig2.adaptiveExposureAvailable ) {
+		AddDefine( str, "BIND_LUMINANCE", Util::ordinal( BufferBind::LUMINANCE ) );
+		AddDefine( str, "BIND_LUMINANCE_STORAGE", Util::ordinal( BufferBind::LUMINANCE_STORAGE ) );
 	}
 
 	return str;
@@ -2606,6 +2625,23 @@ GLShader_lightMappingMaterial::GLShader_lightMappingMaterial() :
 	GLCompileMacro_USE_PHYSICAL_MAPPING( this ) {
 }
 
+GLShader_luminanceReduction::GLShader_luminanceReduction( GLShaderManager* manager ) :
+	GLShader( "luminanceReduction",
+		false, "luminanceReduction" ),
+	u_ViewWidth( this ),
+	u_ViewHeight( this ),
+	u_TonemapParms2( this ) {
+}
+
+void GLShader_luminanceReduction::SetShaderProgramUniforms( ShaderProgramDescriptor* shaderProgram ) {
+	glUniform1i( glGetUniformLocation( shaderProgram->id, "initialRenderImage" ), 0 );
+}
+
+GLShader_clearFrameData::GLShader_clearFrameData( GLShaderManager* manager ) :
+	GLShader( "clearFrameData",
+		false, "clearFrameData" ) {
+}
+
 GLShader_reflection::GLShader_reflection():
 	GLShader( "reflection", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT,
 		false, "reflection_CB", "reflection_CB" ),
@@ -2832,11 +2868,13 @@ GLShader_cameraEffects::GLShader_cameraEffects() :
 	u_GlobalLightFactor( this ),
 	u_ColorModulate( this ),
 	u_SRGB( this ),
+	u_ViewWidth( this ),
+	u_ViewHeight( this ),
 	u_Tonemap( this ),
+	u_TonemapAdaptiveExposure( this ),
 	u_TonemapParms( this ),
 	u_TonemapExposure( this ),
-	u_InverseGamma( this )
-{
+	u_InverseGamma( this ) {
 }
 
 void GLShader_cameraEffects::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderProgram )
