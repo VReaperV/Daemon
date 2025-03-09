@@ -235,6 +235,14 @@ void GLShaderManager::FreeAll() {
 	deformShaderCount = 0;
 	_deformShaderLookup.clear();
 
+	for ( const ShaderPipelineDescriptor& pipeline : shaderPipelineDescriptors ) {
+		if ( pipeline.id ) {
+			glDeleteProgramPipelines( 1, &pipeline.id );
+		}
+	}
+
+	shaderPipelineDescriptors.clear();
+
 	for ( const ShaderProgramDescriptor& program : shaderProgramDescriptors ) {
 		if ( program.id ) {
 			glDeleteProgram( program.id );
@@ -972,6 +980,10 @@ void GLShaderManager::BuildShaderProgram( ShaderProgramDescriptor* descriptor ) 
 		glProgramParameteri( program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE );
 	}
 
+	if ( glConfig2.separateShaderObjectsAvailable ) {
+		glProgramParameteri( program, GL_PROGRAM_SEPARABLE, GL_TRUE );
+	}
+
 	GLint linked;
 	glLinkProgram( program );
 
@@ -991,7 +1003,7 @@ void GLShaderManager::BuildShaderProgram( ShaderProgramDescriptor* descriptor ) 
 	Log::Debug( "Program creation + linking: %i", time );
 }
 
-ShaderProgramDescriptor* GLShaderManager::FindShaderProgram( std::vector<ShaderEntry>& shaders, const std::string& mainShader ) {
+ShaderProgramDescriptor* GLShaderManager::FindShaderProgram( std::vector<ShaderEntry>& shaders, GLShader* mainShader ) {
 	std::vector<ShaderProgramDescriptor>::iterator it = std::find_if( shaderProgramDescriptors.begin(), shaderProgramDescriptors.end(),
 		[&]( const ShaderProgramDescriptor& program ) {
 			for ( const ShaderEntry& shader : shaders ) {
@@ -1035,7 +1047,7 @@ ShaderProgramDescriptor* GLShaderManager::FindShaderProgram( std::vector<ShaderE
 
 		desc.checkSum = Com_BlockChecksum( combinedShaderText.c_str(), combinedShaderText.length() );
 
-		if ( !LoadShaderBinary( shaders, mainShader, &desc ) ) {
+		if ( !LoadShaderBinary( shaders, mainShader->_name, &desc ) ) {
 			for ( ShaderDescriptor* shader : buildQueue ) {
 				BuildShader( shader );
 				desc.AttachShader( &*shader );
@@ -1044,9 +1056,72 @@ ShaderProgramDescriptor* GLShaderManager::FindShaderProgram( std::vector<ShaderE
 			SaveShaderBinary( &desc );
 		}
 
+		UpdateShaderProgramUniformLocations( mainShader, &desc );
+		GL_BindProgram( &desc );
+		mainShader->SetShaderProgramUniforms( &desc );
+		GL_BindNullProgram();
+
 		shaderProgramDescriptors.emplace_back( desc );
 
 		return &shaderProgramDescriptors[shaderProgramDescriptors.size() - 1];
+	}
+
+	return &*it;
+}
+
+ShaderPipelineDescriptor* GLShaderManager::FindShaderPipelines(
+	std::vector<ShaderEntry>& vertexShaders, std::vector<ShaderEntry>& fragmentShaders,
+	std::vector<ShaderEntry>& computeShaders,
+	GLShader* mainShader ) {
+	std::vector<ShaderPipelineDescriptor>::iterator it = std::find_if( shaderPipelineDescriptors.begin(), shaderPipelineDescriptors.end(),
+		[&]( const ShaderPipelineDescriptor& pipeline ) {
+			for ( const ShaderEntry& shader : vertexShaders ) {
+				if ( std::find( pipeline.shaderNames, pipeline.shaderNames + pipeline.shaderCount, shader )
+					== pipeline.shaderNames + pipeline.shaderCount ) {
+					return false;
+				}
+			}
+
+			for ( const ShaderEntry& shader : fragmentShaders ) {
+				if ( std::find( pipeline.shaderNames, pipeline.shaderNames + pipeline.shaderCount, shader )
+					== pipeline.shaderNames + pipeline.shaderCount ) {
+					return false;
+				}
+			}
+
+			for ( const ShaderEntry& shader : computeShaders ) {
+				if ( std::find( pipeline.shaderNames, pipeline.shaderNames + pipeline.shaderCount, shader )
+					== pipeline.shaderNames + pipeline.shaderCount ) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+	);
+
+	if ( it == shaderPipelineDescriptors.end() ) {
+		ShaderPipelineDescriptor descriptor;
+		glGenProgramPipelines( 1, &descriptor.id );
+
+		if ( vertexShaders.size() ) {
+			ShaderProgramDescriptor* program = FindShaderProgram( vertexShaders, mainShader );
+			descriptor.AttachProgram( program );
+			descriptor.VSProgram = *program;
+		}
+		if ( fragmentShaders.size() ) {
+			ShaderProgramDescriptor* program = FindShaderProgram( fragmentShaders, mainShader );
+			descriptor.AttachProgram( program );
+			descriptor.FSProgram = *program;
+		}
+		if ( computeShaders.size() ) {
+			ShaderProgramDescriptor* program = FindShaderProgram( computeShaders, mainShader );
+			descriptor.AttachProgram( program );
+			descriptor.CSProgram = *program;
+		}
+
+		shaderPipelineDescriptors.emplace_back( descriptor );
+		return &shaderPipelineDescriptors.back();
 	}
 
 	return &*it;
@@ -1065,7 +1140,12 @@ bool GLShaderManager::BuildPermutation( GLShader* shader, int macroIndex, int de
 	}
 
 	// Program already exists
-	if ( i < shader->shaderPrograms.size() &&
+	if ( glConfig2.separateShaderObjectsAvailable ) {
+		if ( i < shader->shaderPipelines.size() &&
+			shader->shaderPipelines[i].id ) {
+			return false;
+		}
+	} else if ( i < shader->shaderPrograms.size() &&
 		shader->shaderPrograms[i].id ) {
 		return false;
 	}
@@ -1088,35 +1168,46 @@ bool GLShaderManager::BuildPermutation( GLShader* shader, int macroIndex, int de
 
 	const int start = Sys::Milliseconds();
 
-	if ( i >= shader->shaderPrograms.size() ) {
+	if ( glConfig2.separateShaderObjectsAvailable ) {
+		if ( i >= shader->shaderPipelines.size() ) {
+			shader->shaderPipelines.resize( ( deformIndex + 1 ) << shader->_compileMacros.size() );
+		}
+	} else if ( i >= shader->shaderPrograms.size() ) {
 		shader->shaderPrograms.resize( ( deformIndex + 1 ) << shader->_compileMacros.size() );
 	}
 
-	ShaderProgramDescriptor* program;
-
-	std::vector<ShaderEntry> shaders;
+	std::vector<ShaderEntry> vertexShaders;
+	std::vector<ShaderEntry> fragmentShaders;
+	std::vector<ShaderEntry> computeShaders;
 	if ( shader->hasVertexShader ) {
 		const uint32_t macros = shader->GetUniqueCompileMacros( macroIndex, GLCompileMacro::VERTEX );
-		shaders.emplace_back( ShaderEntry{ shader->_name, macros, GL_VERTEX_SHADER } );
-		shaders.emplace_back( ShaderEntry{ GetDeformShaderName( deformIndex ), 0, GL_VERTEX_SHADER } );
+		vertexShaders.emplace_back( ShaderEntry{ shader->_name, macros, GL_VERTEX_SHADER } );
+		vertexShaders.emplace_back( ShaderEntry{ GetDeformShaderName( deformIndex ), 0, GL_VERTEX_SHADER } );
 	}
 	if ( shader->hasFragmentShader ) {
 		const uint32_t macros = shader->GetUniqueCompileMacros( macroIndex, GLCompileMacro::FRAGMENT );
-		shaders.emplace_back( ShaderEntry{ shader->_name, macros, GL_FRAGMENT_SHADER } );
+		fragmentShaders.emplace_back( ShaderEntry{ shader->_name, macros, GL_FRAGMENT_SHADER } );
 	}
 	if ( shader->hasComputeShader ) {
-		shaders.emplace_back( ShaderEntry{ shader->_name, 0, GL_COMPUTE_SHADER } );
+		computeShaders.emplace_back( ShaderEntry{ shader->_name, 0, GL_COMPUTE_SHADER } );
 	}
 
-	program = FindShaderProgram( shaders, shader->_name );
+	if ( glConfig2.separateShaderObjectsAvailable ) {
+		ShaderPipelineDescriptor* pipeline = FindShaderPipelines( vertexShaders, fragmentShaders, computeShaders, shader );
 
-	UpdateShaderProgramUniformLocations( shader, program );
-	GL_BindProgram( program );
-	shader->SetShaderProgramUniforms( program );
-	GL_BindNullProgram();
+		// Copy this for a fast look-up, but the values held in program aren't supposed to change after
+		shader->shaderPipelines[i] = *pipeline;
+	} else {
+		std::vector<ShaderEntry> shaders;
+		shaders.reserve( vertexShaders.size() + fragmentShaders.size() + computeShaders.size() );
+		shaders.insert( shaders.end(), vertexShaders.begin(), vertexShaders.end() );
+		shaders.insert( shaders.end(), fragmentShaders.begin(), fragmentShaders.end() );
+		shaders.insert( shaders.end(), computeShaders.begin(), computeShaders.end() );
+		ShaderProgramDescriptor* program = FindShaderProgram( shaders, shader );
 
-	// Copy this for a fast look-up, but the values held in program aren't supposed to change after
-	shader->shaderPrograms[i] = *program;
+		// Copy this for a fast look-up, but the values held in program aren't supposed to change after
+		shader->shaderPrograms[i] = *program;
+	}
 
 	GL_CheckErrors();
 
@@ -1425,6 +1516,10 @@ bool GLShaderManager::LoadShaderBinary( const std::vector<ShaderEntry>& shaders,
 		return false;
 	}
 
+	if ( glConfig2.separateShaderObjectsAvailable && !shaderHeader.separateShaderObject ) {
+		return false;
+	}
+
 	// Load the shader program
 	descriptor->id = glCreateProgram();
 	glProgramBinary( descriptor->id, shaderHeader.binaryFormat, binaryptr, shaderHeader.binaryLength );
@@ -1490,6 +1585,8 @@ void GLShaderManager::SaveShaderBinary( ShaderProgramDescriptor* descriptor ) {
 	shaderHeader.binaryLength = binaryLength;
 	shaderHeader.checkSum = descriptor->checkSum;
 	shaderHeader.driverVersionHash = _driverVersionHash;
+
+	shaderHeader.separateShaderObject = glConfig2.separateShaderObjectsAvailable;
 
 	// Write the header to the buffer
 	memcpy( binary, &shaderHeader, sizeof( shaderHeader ) );
@@ -1932,33 +2029,8 @@ std::string GLShaderManager::GetInfoLog( GLuint object ) const
 	return out;
 }
 
-void GLShaderManager::LinkProgram( GLuint program ) const
-{
-	GLint linked;
-
-#ifdef GL_ARB_get_program_binary
-	// Apparently, this is necessary to get the binary program via glGetProgramBinary
-	if( glConfig2.getProgramBinaryAvailable )
-	{
-		glProgramParameteri( program, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE );
-	}
-#endif
-	glLinkProgram( program );
-
-	glGetProgramiv( program, GL_LINK_STATUS, &linked );
-
-	if ( !linked )
-	{
-		Log::Warn( "Link log:" );
-		Log::Warn( GetInfoLog( program ) );
-		ThrowShaderError( "Shaders failed to link!" );
-	}
-}
-
-void GLShaderManager::BindAttribLocations( GLuint program ) const
-{
-	for ( uint32_t i = 0; i < ATTR_INDEX_MAX; i++ )
-	{
+void GLShaderManager::BindAttribLocations( GLuint program ) const {
+	for ( uint32_t i = 0; i < ATTR_INDEX_MAX; i++ ) {
 		glBindAttribLocation( program, i, attributeNames[ i ] );
 	}
 }
@@ -2269,12 +2341,12 @@ GLuint GLShader::GetProgram( int deformIndex, const bool buildOneShader ) {
 	// program is still not loaded
 	if ( index >= shaderPrograms.size() || !shaderPrograms[index].id ) {
 		std::string activeMacros;
-		size_t      numMacros = _compileMacros.size();
+		size_t numMacros = _compileMacros.size();
 
 		for ( size_t j = 0; j < numMacros; j++ ) {
 			GLCompileMacro* macro = _compileMacros[j];
 
-			int           bit = macro->GetBit();
+			int bit = macro->GetBit();
 
 			if ( IsMacroSet( bit ) ) {
 				activeMacros += macro->GetName();

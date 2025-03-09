@@ -53,6 +53,7 @@ struct GLBinaryHeader {
 	uint32_t driverVersionHash; // detect if the graphics driver was different
 
 	GLuint type;
+	uint32_t separateShaderObject;
 	uint32_t macro; // Bitmask of macros the shader uses ( may or may not be enabled )
 
 	GLenum binaryFormat; // argument to glProgramBinary
@@ -110,6 +111,7 @@ protected:
 
 	std::vector<ShaderProgramDescriptor> shaderPrograms;
 	std::vector<bool> shaderProgramsToBuild;
+	std::vector<ShaderPipelineDescriptor> shaderPipelines;
 
 	std::vector<int> vertexShaderDescriptors;
 	std::vector<int> fragmentShaderDescriptors;
@@ -322,6 +324,25 @@ struct ShaderProgramDescriptor {
 	};
 };
 
+struct ShaderPipelineDescriptor {
+	GLuint id = 0;
+
+	ShaderProgramDescriptor VSProgram;
+	ShaderProgramDescriptor FSProgram;
+	ShaderProgramDescriptor CSProgram;
+
+	uint32_t shaderCount = 0;
+	ShaderEntry shaderNames[MAX_SHADER_PROGRAM_SHADERS * 3] {};
+
+	void AttachProgram( ShaderProgramDescriptor* descriptor ) {
+		ASSERT_LE( shaderCount, MAX_SHADER_PROGRAM_SHADERS );
+
+		for ( ; shaderCount < descriptor->shaderCount; shaderCount++ ) {
+			shaderNames[shaderCount] = descriptor->shaderNames[shaderCount];
+		}
+	};
+};
+
 class GLShaderManager {
 	std::queue<GLShader*> _shaderBuildQueue;
 	std::vector<std::unique_ptr<GLShader>> _shaders;
@@ -380,6 +401,7 @@ private:
 
 	std::vector<ShaderDescriptor> shaderDescriptors;
 	std::vector<ShaderProgramDescriptor> shaderProgramDescriptors;
+	std::vector<ShaderPipelineDescriptor> shaderPipelineDescriptors;
 
 	int compileTime;
 	uint32_t compileCount;
@@ -392,30 +414,35 @@ private:
 	int cacheSaveTime;
 	uint32_t cacheSaveCount;
 
+	std::string BuildDeformShaderText( const std::string& steps );
+	std::string GetDeformShaderName( const int index );
+
 	void BuildShader( ShaderDescriptor* descriptor );
 	void BuildShaderProgram( ShaderProgramDescriptor* descriptor );
+	ShaderProgramDescriptor* FindShaderProgram( std::vector<ShaderEntry>& shaders, GLShader* mainShader );
+	ShaderPipelineDescriptor* FindShaderPipelines(
+		std::vector<ShaderEntry>& vertexShaders, std::vector<ShaderEntry>& fragmentShaders,
+		std::vector<ShaderEntry>& computeShaders,
+		GLShader* mainShader );
 
-	std::string GetDeformShaderName( const int index );
-	ShaderProgramDescriptor* FindShaderProgram( std::vector<ShaderEntry>& shaders, const std::string& mainShader );
+	void BindAttribLocations( GLuint program ) const;
+	void UpdateShaderProgramUniformLocations( GLShader* shader, ShaderProgramDescriptor* shaderProgram ) const;
 
 	bool LoadShaderBinary( const std::vector<ShaderEntry>& shaders, const std::string& mainShader,
 		ShaderProgramDescriptor* out );
 	void SaveShaderBinary( ShaderProgramDescriptor* descriptor );
 
-	std::string ShaderPostProcess( GLShader *shader, const std::string& shaderText, const uint32_t offset );
-	std::string BuildDeformShaderText( const std::string& steps );
-	std::string ProcessInserts( const std::string& shaderText ) const;
-	void LinkProgram( GLuint program ) const;
-	void BindAttribLocations( GLuint program ) const;
-	void PrintShaderSource( Str::StringRef programName, GLuint object, std::vector<InfoLogEntry>& infoLogLines ) const;
-	std::vector<InfoLogEntry> ParseInfoLog( const std::string& infoLog ) const;
 	std::string GetInfoLog( GLuint object ) const;
-	std::string BuildShaderText( const std::string& mainShaderText, const std::vector<GLHeader*>& headers, const std::string& macros );
+	std::vector<InfoLogEntry> ParseInfoLog( const std::string& infoLog ) const;
+	void PrintShaderSource( Str::StringRef programName, GLuint object, std::vector<InfoLogEntry>& infoLogLines ) const;
+
+	std::string ProcessInserts( const std::string& shaderText ) const;
 	ShaderDescriptor* FindShader( const std::string& name, const std::string& mainText,
 		const GLenum type, const std::vector<GLHeader*>& headers,
 		const uint32_t macro = 0, const std::string& compileMacros = "", const bool main = false );
+	std::string BuildShaderText( const std::string& mainShaderText, const std::vector<GLHeader*>& headers, const std::string& macros );
 	void InitShader( GLShader* shader );
-	void UpdateShaderProgramUniformLocations( GLShader* shader, ShaderProgramDescriptor* shaderProgram ) const;
+	std::string ShaderPostProcess( GLShader *shader, const std::string& shaderText, const uint32_t offset );
 };
 
 class GLUniform
