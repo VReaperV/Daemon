@@ -1358,6 +1358,7 @@ enum class ssaoMode {
 
 // *INDENT-ON*
 	struct ShaderProgramDescriptor;
+	struct ShaderPipelineDescriptor;
 
 // trRefdef_t holds everything that comes in refdef_t,
 // as well as the locally generated scene information
@@ -2239,6 +2240,7 @@ enum class ssaoMode {
 		uint32_t        vertexAttribsNewFrame; // offset for VBO vertex animations
 		uint32_t        vertexAttribsOldFrame; // offset for VBO vertex animations
 		ShaderProgramDescriptor* currentProgram;
+		ShaderPipelineDescriptor* currentPipeline;
 		FBO_t           *currentFBO;
 		VBO_t           *currentVBO;
 		IBO_t           *currentIBO;
@@ -2989,9 +2991,11 @@ inline bool checkGLErrors()
 	void GL_Bind( image_t *image );
 	void GL_Unbind( image_t *image );
 	GLuint64 BindAnimatedImage( int unit, const textureBundle_t *bundle );
+	GLuint64 GL_BindToTMU( int unit, image_t* image );
 	void GL_BindProgram( ShaderProgramDescriptor* program );
-	GLuint64 GL_BindToTMU( int unit, image_t *image );
 	void GL_BindNullProgram();
+	void GL_BindProgramPipeline( ShaderPipelineDescriptor* program );
+	void GL_BindNullProgramPipeline();
 	void GL_SetDefaultState();
 	void GL_SelectTexture( int unit );
 	void GL_TextureMode( const char *string );
