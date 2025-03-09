@@ -1236,31 +1236,6 @@ std::string GLShaderManager::ProcessInserts( const std::string& shaderText ) con
 	return out;
 }
 
-ShaderDescriptor* GLShaderManager::FindShader( const std::string& name, const std::string& mainText,
-	const GLenum type, const std::vector<GLHeader*>& headers,
-	const uint32_t macro, const std::string& compileMacros, const bool main ) {
-
-	ShaderDescriptor desc{ name, compileMacros, macro, type, main };
-	const std::vector<ShaderDescriptor>::iterator it = std::find_if( shaderDescriptors.begin(), shaderDescriptors.end(),
-		[&]( const ShaderDescriptor& other ) {
-			return desc.type == other.type && desc.macro == other.macro && desc.name == other.name;
-		}
-	);
-
-	if ( it != shaderDescriptors.end() ) {
-		return nullptr;
-	}
-
-	std::string combinedShaderText = BuildShaderText( mainText, headers, compileMacros );
-	combinedShaderText = ProcessInserts( combinedShaderText );
-
-	desc.shaderSource = combinedShaderText;
-
-	shaderDescriptors.emplace_back( desc );
-
-	return &shaderDescriptors.back();
-}
-
 std::string GLShaderManager::BuildShaderText( const std::string& mainShaderText, const std::vector<GLHeader*>& headers,
 	const std::string& macros ) {
 	std::string combinedText;
@@ -1284,12 +1259,37 @@ std::string GLShaderManager::BuildShaderText( const std::string& mainShaderText,
 			break;
 		}
 
-		combinedText += Str::Format( "#ifndef %s\n#define %s 1\n#endif\n", token, token );
+		combinedText += Str::Format( "%s\n", token );
 	}
 
 	combinedText += mainShaderText;
 
 	return combinedText;
+}
+
+ShaderDescriptor* GLShaderManager::FindShader( const std::string& name, const std::string& mainText,
+	const GLenum type, const std::vector<GLHeader*>& headers,
+	const uint32_t macro, const std::string& compileMacros, const bool main ) {
+
+	ShaderDescriptor desc{ name, compileMacros, macro, type, main };
+	const std::vector<ShaderDescriptor>::iterator it = std::find_if( shaderDescriptors.begin(), shaderDescriptors.end(),
+		[&]( const ShaderDescriptor& other ) {
+			return desc.type == other.type && desc.macro == other.macro && desc.name == other.name;
+		}
+	);
+
+	if ( it != shaderDescriptors.end() ) {
+		return nullptr;
+	}
+
+	std::string combinedShaderText = BuildShaderText( mainText, headers, compileMacros );
+	combinedShaderText = ProcessInserts( combinedShaderText );
+
+	desc.shaderSource = combinedShaderText;
+
+	shaderDescriptors.emplace_back( desc );
+
+	return &shaderDescriptors.back();
 }
 
 void GLShaderManager::InitShader( GLShader* shader ) {
@@ -2252,6 +2252,15 @@ bool GLShader::GetCompileMacrosString( size_t permutation, std::string &compileM
 				return false;
 			}
 
+			switch ( macro->preProcessorType ) {
+				case GLCompileMacro::DEFINE:
+					compileMacrosOut += "#define ";
+				case GLCompileMacro::INSERT:
+					compileMacrosOut += "#insert ";
+				default:
+					break;
+			}
+
 			compileMacrosOut += macro->GetName();
 			compileMacrosOut += " ";
 		}
@@ -2406,11 +2415,11 @@ GLShader_generic::GLShader_generic( GLShaderManager *manager ) :
 	u_ProfilerZero( this ),
 	u_ProfilerRenderSubGroups( this ),
 	GLDeformStage( this ),
-	GLCompileMacro_USE_VERTEX_SKINNING( this ),
-	GLCompileMacro_USE_VERTEX_ANIMATION( this ),
 	GLCompileMacro_USE_TCGEN_ENVIRONMENT( this ),
 	GLCompileMacro_USE_TCGEN_LIGHTMAP( this ),
-	GLCompileMacro_USE_DEPTH_FADE( this )
+	GLCompileMacro_USE_DEPTH_FADE( this ),
+	GLCompileMacro_USE_VERTEX_SKINNING( this ),
+	GLCompileMacro_USE_VERTEX_ANIMATION( this )
 {
 }
 
@@ -2485,15 +2494,15 @@ GLShader_lightMapping::GLShader_lightMapping( GLShaderManager *manager ) :
 	u_ProfilerRenderSubGroups( this ),
 	GLDeformStage( this ),
 	GLCompileMacro_USE_BSP_SURFACE( this ),
-	GLCompileMacro_USE_VERTEX_SKINNING( this ),
-	GLCompileMacro_USE_VERTEX_ANIMATION( this ),
 	GLCompileMacro_USE_DELUXE_MAPPING( this ),
 	GLCompileMacro_USE_GRID_LIGHTING( this ),
 	GLCompileMacro_USE_GRID_DELUXE_MAPPING( this ),
 	GLCompileMacro_USE_HEIGHTMAP_IN_NORMALMAP( this ),
 	GLCompileMacro_USE_RELIEF_MAPPING( this ),
 	GLCompileMacro_USE_REFLECTIVE_SPECULAR( this ),
-	GLCompileMacro_USE_PHYSICAL_MAPPING( this )
+	GLCompileMacro_USE_PHYSICAL_MAPPING( this ),
+	GLCompileMacro_USE_VERTEX_SKINNING( this ),
+	GLCompileMacro_USE_VERTEX_ANIMATION( this )
 {
 }
 

@@ -180,13 +180,12 @@ public:
 
 	void RegisterUniform( GLUniform* uniform );
 
-	void RegisterUniformBlock( GLUniformBlock *uniformBlock ) {
+	void RegisterUniformBlock( GLUniformBlock* uniformBlock ) {
 		_uniformBlocks.push_back( uniformBlock );
 	}
 
-	void RegisterCompileMacro( GLCompileMacro *compileMacro ) {
-		if ( _compileMacros.size() >= MAX_SHADER_MACROS )
-		{
+	void RegisterCompileMacro( GLCompileMacro* compileMacro ) {
+		if ( _compileMacros.size() >= MAX_SHADER_MACROS ) {
 			Sys::Drop( "Can't register more than %u compile macros for a single shader", MAX_SHADER_MACROS );
 		}
 
@@ -197,7 +196,7 @@ public:
 		return _compileMacros.size();
 	}
 
-	GLint GetUniformLocation( const GLchar *uniformName ) const;
+	GLint GetUniformLocation( const GLchar* uniformName ) const;
 
 	ShaderProgramDescriptor* GetProgram() const {
 		return currentProgram;
@@ -1649,25 +1648,16 @@ class GLVAO {
 	GLuint stride;
 };
 
-class GLCompileMacro
-{
+class GLCompileMacro {
 private:
-	int     _bit;
+	int _bit;
 
 protected:
-	GLShader *_shader;
-
-	GLCompileMacro( GLShader *shader ) :
-		_shader( shader )
-	{
-		_bit = BIT( _shader->GetNumOfCompiledMacros() );
-		_shader->RegisterCompileMacro( this );
-	}
+	GLShader* _shader;
 
 // RB: This is not good oo design, but it can be a workaround and its cost is more or less only a virtual function call.
 // It also works regardless of RTTI is enabled or not.
-	enum EGLCompileMacro : unsigned
-	{
+	enum EGLCompileMacro : uint32_t {
 	  USE_BSP_SURFACE,
 	  USE_VERTEX_SKINNING,
 	  USE_VERTEX_ANIMATION,
@@ -1692,43 +1682,49 @@ public:
 		COMPUTE = BIT( 2 )
 	};
 
-	virtual const char       *GetName() const = 0;
+	enum PreProcessorType {
+		DEFINE,
+		INSERT
+	};
+
+	const PreProcessorType preProcessorType;
+
+	GLCompileMacro( GLShader* shader, PreProcessorType newPreProcessorType ) :
+		_shader( shader ),
+		preProcessorType( newPreProcessorType ) {
+		_bit = BIT( _shader->GetNumOfCompiledMacros() );
+		_shader->RegisterCompileMacro( this );
+	}
+
+	virtual const char *GetName() const = 0;
 	virtual EGLCompileMacro GetType() const = 0;
 	virtual int GetShaderTypes() const = 0;
 
-	virtual bool            HasConflictingMacros( size_t, const std::vector<GLCompileMacro*>& ) const
-	{
+	virtual bool HasConflictingMacros( size_t, const std::vector<GLCompileMacro*>& ) const {
 		return false;
 	}
 
-	virtual bool            MissesRequiredMacros( size_t, const std::vector<GLCompileMacro*>& ) const
-	{
+	virtual bool MissesRequiredMacros( size_t, const std::vector<GLCompileMacro*>& ) const {
 		return false;
 	}
 
-	virtual uint32_t        GetRequiredVertexAttributes() const
-	{
+	virtual uint32_t GetRequiredVertexAttributes() const {
 		return 0;
 	}
 
-	void SetMacro( bool enable )
-	{
+	void SetMacro( bool enable ) {
 		int bit = GetBit();
 
-		if ( enable && !_shader->IsMacroSet( bit ) )
-		{
+		if ( enable && !_shader->IsMacroSet( bit ) ) {
 			_shader->AddMacroBit( bit );
-		}
-		else if ( !enable && _shader->IsMacroSet( bit ) )
-		{
+		} else if ( !enable && _shader->IsMacroSet( bit ) ) {
 			_shader->DelMacroBit( bit );
 		}
-		// else do nothing because already enabled/disabled
+		// Else do nothing because already enabled/disabled
 	}
 
 public:
-	int GetBit() const
-	{
+	int GetBit() const {
 		return _bit;
 	}
 
@@ -1736,23 +1732,19 @@ public:
 };
 
 class GLCompileMacro_USE_BSP_SURFACE :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_BSP_SURFACE( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_BSP_SURFACE";
 	}
 
 	bool HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_BSP_SURFACE;
 	}
 
@@ -1760,28 +1752,23 @@ public:
 		return ShaderType::VERTEX | ShaderType::FRAGMENT;
 	}
 
-	void SetBspSurface( bool enable )
-	{
+	void SetBspSurface( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_VERTEX_SKINNING :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
-	GLCompileMacro_USE_VERTEX_SKINNING( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+	GLCompileMacro_USE_VERTEX_SKINNING( GLShader* shader ) :
+		GLCompileMacro( shader, GLCompileMacro::INSERT ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_VERTEX_SKINNING";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_VERTEX_SKINNING;
 	}
 
@@ -1792,33 +1779,27 @@ public:
 	bool HasConflictingMacros( size_t permutation, const std::vector< GLCompileMacro * > &macros ) const override;
 	bool MissesRequiredMacros( size_t permutation, const std::vector< GLCompileMacro * > &macros ) const override;
 
-	uint32_t        GetRequiredVertexAttributes() const override
-	{
+	uint32_t GetRequiredVertexAttributes() const override {
 		return ATTR_BONE_FACTORS;
 	}
 
-	void SetVertexSkinning( bool enable )
-	{
+	void SetVertexSkinning( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_VERTEX_ANIMATION :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_VERTEX_ANIMATION( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::INSERT ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_VERTEX_ANIMATION";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_VERTEX_ANIMATION;
 	}
 
@@ -1826,31 +1807,26 @@ public:
 		return ShaderType::VERTEX;
 	}
 
-	bool     HasConflictingMacros( size_t permutation, const std::vector< GLCompileMacro * > &macros ) const override;
+	bool HasConflictingMacros( size_t permutation, const std::vector< GLCompileMacro * > &macros ) const override;
 	uint32_t GetRequiredVertexAttributes() const override;
 
-	void SetVertexAnimation( bool enable )
-	{
+	void SetVertexAnimation( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_TCGEN_ENVIRONMENT :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_TCGEN_ENVIRONMENT( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_TCGEN_ENVIRONMENT";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_TCGEN_ENVIRONMENT;
 	}
 
@@ -1858,35 +1834,29 @@ public:
 		return ShaderType::VERTEX;
 	}
 
-	bool     HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
-	uint32_t        GetRequiredVertexAttributes() const override
-	{
+	bool HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
+	uint32_t GetRequiredVertexAttributes() const override {
 		return ATTR_QTANGENT;
 	}
 
-	void SetTCGenEnvironment( bool enable )
-	{
+	void SetTCGenEnvironment( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_TCGEN_LIGHTMAP :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_TCGEN_LIGHTMAP( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_TCGEN_LIGHTMAP";
 	}
 
-	bool     HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
-	EGLCompileMacro GetType() const override
-	{
+	bool HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_TCGEN_LIGHTMAP;
 	}
 
@@ -1894,30 +1864,25 @@ public:
 		return ShaderType::VERTEX;
 	}
 
-	void SetTCGenLightmap( bool enable )
-	{
+	void SetTCGenLightmap( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_GRID_LIGHTING :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_GRID_LIGHTING( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_GRID_LIGHTING";
 	}
 
 	bool HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_GRID_LIGHTING;
 	}
 
@@ -1925,30 +1890,25 @@ public:
 		return ShaderType::VERTEX | ShaderType::FRAGMENT;
 	}
 
-	void SetGridLighting( bool enable )
-	{
+	void SetGridLighting( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_DELUXE_MAPPING :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_DELUXE_MAPPING( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_DELUXE_MAPPING";
 	}
 
 	bool HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_DELUXE_MAPPING;
 	}
 
@@ -1956,30 +1916,25 @@ public:
 		return ShaderType::VERTEX | ShaderType::FRAGMENT;
 	}
 
-	void SetDeluxeMapping( bool enable )
-	{
+	void SetDeluxeMapping( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_GRID_DELUXE_MAPPING :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_GRID_DELUXE_MAPPING( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_GRID_DELUXE_MAPPING";
 	}
 
 	bool HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_GRID_DELUXE_MAPPING;
 	}
 
@@ -1987,28 +1942,23 @@ public:
 		return ShaderType::FRAGMENT;
 	}
 
-	void SetGridDeluxeMapping( bool enable )
-	{
+	void SetGridDeluxeMapping( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_HEIGHTMAP_IN_NORMALMAP :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_HEIGHTMAP_IN_NORMALMAP( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_HEIGHTMAP_IN_NORMALMAP";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_HEIGHTMAP_IN_NORMALMAP;
 	}
 
@@ -2016,28 +1966,23 @@ public:
 		return ShaderType::FRAGMENT;
 	}
 
-	void SetHeightMapInNormalMap( bool enable )
-	{
+	void SetHeightMapInNormalMap( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_RELIEF_MAPPING :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_RELIEF_MAPPING( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_RELIEF_MAPPING";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_RELIEF_MAPPING;
 	}
 
@@ -2045,30 +1990,25 @@ public:
 		return ShaderType::FRAGMENT;
 	}
 
-	void SetReliefMapping( bool enable )
-	{
+	void SetReliefMapping( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_REFLECTIVE_SPECULAR :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_REFLECTIVE_SPECULAR( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_REFLECTIVE_SPECULAR";
 	}
 
 	bool HasConflictingMacros(size_t permutation, const std::vector< GLCompileMacro * > &macros) const override;
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_REFLECTIVE_SPECULAR;
 	}
 
@@ -2076,28 +2016,23 @@ public:
 		return ShaderType::FRAGMENT;
 	}
 
-	void SetReflectiveSpecular( bool enable )
-	{
+	void SetReflectiveSpecular( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_LIGHT_DIRECTIONAL :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_LIGHT_DIRECTIONAL( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "LIGHT_DIRECTIONAL";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::LIGHT_DIRECTIONAL;
 	}
 
@@ -2105,28 +2040,23 @@ public:
 		return ShaderType::VERTEX | ShaderType::FRAGMENT;
 	}
 
-	void SetMacro_LIGHT_DIRECTIONAL( bool enable )
-	{
+	void SetMacro_LIGHT_DIRECTIONAL( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_SHADOWING :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_SHADOWING( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_SHADOWING";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_SHADOWING;
 	}
 
@@ -2134,28 +2064,23 @@ public:
 		return ShaderType::FRAGMENT;
 	}
 
-	void SetShadowing( bool enable )
-	{
+	void SetShadowing( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_DEPTH_FADE :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_DEPTH_FADE( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_DEPTH_FADE";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return EGLCompileMacro::USE_DEPTH_FADE;
 	}
 
@@ -2163,28 +2088,23 @@ public:
 		return ShaderType::VERTEX | ShaderType::FRAGMENT;
 	}
 
-	void SetDepthFade( bool enable )
-	{
+	void SetDepthFade( bool enable ) {
 		SetMacro( enable );
 	}
 };
 
 class GLCompileMacro_USE_PHYSICAL_MAPPING :
-	GLCompileMacro
-{
+	GLCompileMacro {
 public:
 	GLCompileMacro_USE_PHYSICAL_MAPPING( GLShader *shader ) :
-		GLCompileMacro( shader )
-	{
+		GLCompileMacro( shader, GLCompileMacro::DEFINE ) {
 	}
 
-	const char *GetName() const override
-	{
+	const char* GetName() const override {
 		return "USE_PHYSICAL_MAPPING";
 	}
 
-	EGLCompileMacro GetType() const override
-	{
+	EGLCompileMacro GetType() const override {
 		return USE_PHYSICAL_MAPPING;
 	}
 
@@ -2192,8 +2112,7 @@ public:
 		return ShaderType::FRAGMENT;
 	}
 
-	void SetPhysicalShading( bool enable )
-	{
+	void SetPhysicalShading( bool enable ) {
 		SetMacro( enable );
 	}
 };
@@ -4063,11 +3982,11 @@ class GLShader_generic :
 	public u_ProfilerZero,
 	public u_ProfilerRenderSubGroups,
 	public GLDeformStage,
-	public GLCompileMacro_USE_VERTEX_SKINNING,
-	public GLCompileMacro_USE_VERTEX_ANIMATION,
 	public GLCompileMacro_USE_TCGEN_ENVIRONMENT,
 	public GLCompileMacro_USE_TCGEN_LIGHTMAP,
-	public GLCompileMacro_USE_DEPTH_FADE
+	public GLCompileMacro_USE_DEPTH_FADE,
+	public GLCompileMacro_USE_VERTEX_SKINNING,
+	public GLCompileMacro_USE_VERTEX_ANIMATION
 {
 public:
 	GLShader_generic( GLShaderManager *manager );
@@ -4136,15 +4055,15 @@ class GLShader_lightMapping :
 	public u_ProfilerRenderSubGroups,
 	public GLDeformStage,
 	public GLCompileMacro_USE_BSP_SURFACE,
-	public GLCompileMacro_USE_VERTEX_SKINNING,
-	public GLCompileMacro_USE_VERTEX_ANIMATION,
 	public GLCompileMacro_USE_DELUXE_MAPPING,
 	public GLCompileMacro_USE_GRID_LIGHTING,
 	public GLCompileMacro_USE_GRID_DELUXE_MAPPING,
 	public GLCompileMacro_USE_HEIGHTMAP_IN_NORMALMAP,
 	public GLCompileMacro_USE_RELIEF_MAPPING,
 	public GLCompileMacro_USE_REFLECTIVE_SPECULAR,
-	public GLCompileMacro_USE_PHYSICAL_MAPPING
+	public GLCompileMacro_USE_PHYSICAL_MAPPING,
+	public GLCompileMacro_USE_VERTEX_SKINNING,
+	public GLCompileMacro_USE_VERTEX_ANIMATION
 {
 public:
 	GLShader_lightMapping( GLShaderManager *manager );

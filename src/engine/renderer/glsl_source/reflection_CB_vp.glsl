@@ -22,10 +22,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 /* reflection_CB_vp.glsl */
 
-#insert vertexSimple_vp
-#insert vertexSkinning_vp
-#insert vertexAnimation_vp
-
 #if !defined(USE_MATERIAL_SYSTEM)
 	uniform mat3x2 u_TextureMatrix;
 #endif
