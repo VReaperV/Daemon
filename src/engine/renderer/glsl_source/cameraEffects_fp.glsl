@@ -32,8 +32,6 @@ uniform vec4      u_ColorModulate;
 uniform float     u_GlobalLightFactor; // 1 / tr.identityLight
 uniform float     u_InverseGamma;
 
-IN(smooth) vec2		var_TexCoords;
-
 DECLARE_OUTPUT(vec4)
 
 /* x: contrast
