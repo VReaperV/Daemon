@@ -1150,16 +1150,16 @@ bool GLShaderManager::BuildPermutation( GLShader* shader, int macroIndex, int de
 	ShaderProgramDescriptor* program;
 
 	std::vector<ShaderEntry> shaders;
-	if ( shader->_hasVertexShader ) {
+	if ( shader->hasVertexShader ) {
 		const uint32_t macros = shader->GetUniqueCompileMacros( macroIndex, GLCompileMacro::VERTEX );
 		shaders.emplace_back( ShaderEntry{ shader->_name, macros, GL_VERTEX_SHADER } );
 		shaders.emplace_back( ShaderEntry{ GetDeformShaderName( deformIndex ), 0, GL_VERTEX_SHADER } );
 	}
-	if ( shader->_hasFragmentShader ) {
+	if ( shader->hasFragmentShader ) {
 		const uint32_t macros = shader->GetUniqueCompileMacros( macroIndex, GLCompileMacro::FRAGMENT );
 		shaders.emplace_back( ShaderEntry{ shader->_name, macros, GL_FRAGMENT_SHADER } );
 	}
-	if ( shader->_hasComputeShader ) {
+	if ( shader->hasComputeShader ) {
 		shaders.emplace_back( ShaderEntry{ shader->_name, 0, GL_COMPUTE_SHADER } );
 	}
 
@@ -1318,21 +1318,24 @@ void GLShaderManager::InitShader( GLShader* shader ) {
 		GLenum GLType;
 
 		const char* postfix;
+		std::string path;
 		uint32_t offset;
 		std::vector<GLHeader*> headers;
 
-		std::string path = "";
 		std::string mainText = "";
 	};
 
 	ShaderType shaderTypes[] = {
-		{ shader->_hasVertexShader, GLCompileMacro::VERTEX, GL_VERTEX_SHADER, "_vp",
+		{ shader->hasVertexShader, GLCompileMacro::VERTEX, GL_VERTEX_SHADER, "_vp",
+			shader->vertexShaderName,
 			uint32_t( GLVersionDeclaration.getText().size() ),
 			{ &GLVersionDeclaration, &GLCompatHeader, &GLEngineConstants, &GLVertexHeader } },
-		{ shader->_hasFragmentShader, GLCompileMacro::FRAGMENT, GL_FRAGMENT_SHADER, "_fp",
+		{ shader->hasFragmentShader, GLCompileMacro::FRAGMENT, GL_FRAGMENT_SHADER, "_fp",
+			shader->fragmentShaderName,
 			uint32_t( GLVersionDeclaration.getText().size() ),
 			{ &GLVersionDeclaration, &GLCompatHeader, &GLEngineConstants, &GLFragmentHeader } },
-		{ shader->_hasComputeShader, GLCompileMacro::COMPUTE, GL_COMPUTE_SHADER, "_cp",
+		{ shader->hasComputeShader, GLCompileMacro::COMPUTE, GL_COMPUTE_SHADER, "_cp",
+			shader->computeShaderName,
 			uint32_t( GLComputeVersionDeclaration.getText().size() ),
 			{ &GLComputeVersionDeclaration, &GLCompatHeader, &GLEngineConstants, &GLComputeHeader, &GLWorldHeader } }
 	};
@@ -1340,9 +1343,8 @@ void GLShaderManager::InitShader( GLShader* shader ) {
 	char filename[MAX_QPATH];
 	for ( ShaderType& shaderType : shaderTypes ) {
 		if ( shaderType.enabled ) {
-			Com_sprintf( filename, sizeof( filename ), "%s%s.glsl", shader->GetMainShaderName().c_str(), shaderType.postfix );
+			Com_sprintf( filename, sizeof( filename ), "%s%s.glsl", shaderType.path.c_str(), shaderType.postfix );
 
-			shaderType.path = filename;
 			shaderType.mainText = GetShaderText( filename );
 		}
 	}
@@ -2355,13 +2357,13 @@ void GLShader::BindProgram( int deformIndex ) {
 
 void GLShader::DispatchCompute( const GLuint globalWorkgroupX, const GLuint globalWorkgroupY, const GLuint globalWorkgroupZ ) {
 	ASSERT_EQ( currentProgram, glState.currentProgram );
-	ASSERT( _hasComputeShader );
+	ASSERT( hasComputeShader );
 	glDispatchCompute( globalWorkgroupX, globalWorkgroupY, globalWorkgroupZ );
 }
 
 void GLShader::DispatchComputeIndirect( const GLintptr indirectBuffer ) {
 	ASSERT_EQ( currentProgram, glState.currentProgram );
-	ASSERT( _hasComputeShader );
+	ASSERT( hasComputeShader );
 	glDispatchComputeIndirect( indirectBuffer );
 }
 
@@ -2391,7 +2393,8 @@ void GLShader::WriteUniformsToBuffer( uint32_t* buffer ) {
 }
 
 GLShader_generic::GLShader_generic( GLShaderManager *manager ) :
-	GLShader( "generic", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager ),
+	GLShader( "generic", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager,
+		false, "generic", "generic" ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
 	u_TextureMatrix( this ),
@@ -2423,7 +2426,8 @@ void GLShader_generic::SetShaderProgramUniforms( ShaderProgramDescriptor *shader
 }
 
 GLShader_genericMaterial::GLShader_genericMaterial( GLShaderManager* manager ) :
-	GLShader( "genericMaterial", "generic", true, ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager ),
+	GLShader( "genericMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager,
+		true, "generic", "generic" ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
 	u_TextureMatrix( this ),
@@ -2451,8 +2455,8 @@ void GLShader_genericMaterial::SetShaderProgramUniforms( ShaderProgramDescriptor
 }
 
 GLShader_lightMapping::GLShader_lightMapping( GLShaderManager *manager ) :
-	GLShader( "lightMapping",
-	ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager ),
+	GLShader( "lightMapping", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager,
+		false, "lightMapping", "lightMapping" ),
 	u_DiffuseMap( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
@@ -2519,8 +2523,8 @@ void GLShader_lightMapping::SetShaderProgramUniforms( ShaderProgramDescriptor *s
 }
 
 GLShader_lightMappingMaterial::GLShader_lightMappingMaterial( GLShaderManager* manager ) :
-	GLShader( "lightMappingMaterial", "lightMapping", true,
-		ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager ),
+	GLShader( "lightMappingMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR, manager,
+		true, "lightMapping", "lightMapping" ),
 	u_DiffuseMap( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
@@ -2581,7 +2585,8 @@ void GLShader_lightMappingMaterial::SetShaderProgramUniforms( ShaderProgramDescr
 }
 
 GLShader_forwardLighting_omniXYZ::GLShader_forwardLighting_omniXYZ( GLShaderManager *manager ):
-	GLShader("forwardLighting_omniXYZ", "forwardLighting", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager),
+	GLShader( "forwardLighting_omniXYZ", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		false, "forwardLighting", "forwardLighting" ),
 	u_DiffuseMap( this ),
 	u_NormalMap( this ),
 	u_MaterialMap( this ),
@@ -2634,7 +2639,8 @@ void GLShader_forwardLighting_omniXYZ::SetShaderProgramUniforms( ShaderProgramDe
 }
 
 GLShader_forwardLighting_projXYZ::GLShader_forwardLighting_projXYZ( GLShaderManager *manager ):
-	GLShader("forwardLighting_projXYZ", "forwardLighting", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager),
+	GLShader( "forwardLighting_projXYZ", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		false, "forwardLighting", "forwardLighting" ),
 	u_DiffuseMap( this ),
 	u_NormalMap( this ),
 	u_MaterialMap( this ),
@@ -2693,7 +2699,8 @@ void GLShader_forwardLighting_projXYZ::SetShaderProgramUniforms( ShaderProgramDe
 }
 
 GLShader_forwardLighting_directionalSun::GLShader_forwardLighting_directionalSun( GLShaderManager *manager ):
-	GLShader("forwardLighting_directionalSun", "forwardLighting", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager),
+	GLShader( "forwardLighting_directionalSun", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		false, "forwardLighting", "forwardLighting" ),
 	u_DiffuseMap( this ),
 	u_NormalMap( this ),
 	u_MaterialMap( this ),
@@ -2766,7 +2773,8 @@ void GLShader_forwardLighting_directionalSun::SetShaderProgramUniforms( ShaderPr
 }
 
 GLShader_shadowFill::GLShader_shadowFill( GLShaderManager *manager ) :
-	GLShader( "shadowFill", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
+	GLShader( "shadowFill", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		false, "shadowFill", "shadowFill" ),
 	u_ColorMap( this ),
 	u_TextureMatrix( this ),
 	u_AlphaThreshold( this ),
@@ -2790,7 +2798,8 @@ void GLShader_shadowFill::SetShaderProgramUniforms( ShaderProgramDescriptor *sha
 }
 
 GLShader_reflection::GLShader_reflection( GLShaderManager *manager ):
-	GLShader("reflection", "reflection_CB", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
+	GLShader( "reflection", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		false, "reflection_CB", "reflection_CB" ),
 	u_ColorMapCube( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
@@ -2820,7 +2829,8 @@ void GLShader_reflection::SetShaderProgramUniforms( ShaderProgramDescriptor *sha
 }
 
 GLShader_reflectionMaterial::GLShader_reflectionMaterial( GLShaderManager* manager ) :
-	GLShader( "reflectionMaterial", "reflection_CB", true, ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
+	GLShader( "reflectionMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		true, "reflection_CB", "reflection_CB" ),
 	u_ColorMapCube( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
@@ -2844,7 +2854,8 @@ void GLShader_reflectionMaterial::SetShaderProgramUniforms( ShaderProgramDescrip
 }
 
 GLShader_skybox::GLShader_skybox( GLShaderManager *manager ) :
-	GLShader( "skybox", ATTR_POSITION, manager ),
+	GLShader( "skybox", ATTR_POSITION, manager,
+		false, "skybox", "skybox" ),
 	u_ColorMapCube( this ),
 	u_CloudMap( this ),
 	u_TextureMatrix( this ),
@@ -2862,7 +2873,8 @@ void GLShader_skybox::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderP
 }
 
 GLShader_skyboxMaterial::GLShader_skyboxMaterial( GLShaderManager* manager ) :
-	GLShader( "skyboxMaterial", "skybox", true, ATTR_POSITION, manager ),
+	GLShader( "skyboxMaterial", ATTR_POSITION, manager,
+		true, "skybox", "skybox" ),
 	u_ColorMapCube( this ),
 	u_CloudMap( this ),
 	u_TextureMatrix( this ),
@@ -2878,7 +2890,8 @@ void GLShader_skyboxMaterial::SetShaderProgramUniforms( ShaderProgramDescriptor*
 }
 
 GLShader_fogQuake3::GLShader_fogQuake3( GLShaderManager *manager ) :
-	GLShader( "fogQuake3", ATTR_POSITION | ATTR_QTANGENT, manager ),
+	GLShader( "fogQuake3", ATTR_POSITION | ATTR_QTANGENT, manager,
+		false, "fogQuake3", "fogQuake3" ),
 	u_FogMap( this ),
 	u_ModelMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),
@@ -2900,7 +2913,8 @@ void GLShader_fogQuake3::SetShaderProgramUniforms( ShaderProgramDescriptor *shad
 }
 
 GLShader_fogQuake3Material::GLShader_fogQuake3Material( GLShaderManager* manager ) :
-	GLShader( "fogQuake3Material", "fogQuake3", true, ATTR_POSITION | ATTR_QTANGENT, manager ),
+	GLShader( "fogQuake3Material", ATTR_POSITION | ATTR_QTANGENT, manager,
+		true, "fogQuake3", "fogQuake3" ),
 	u_FogMap( this ),
 	u_ModelMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),
@@ -2916,10 +2930,10 @@ void GLShader_fogQuake3Material::SetShaderProgramUniforms( ShaderProgramDescript
 }
 
 GLShader_fogGlobal::GLShader_fogGlobal( GLShaderManager *manager ) :
-	GLShader( "fogGlobal", ATTR_POSITION, manager ),
+	GLShader( "fogGlobal", ATTR_POSITION, manager,
+		false, "screenSpace", "fogGlobal" ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
-	u_ModelViewProjectionMatrix( this ),
 	u_UnprojectMatrix( this ),
 	u_Color( this ),
 	u_FogDistanceVector( this )
@@ -2933,7 +2947,8 @@ void GLShader_fogGlobal::SetShaderProgramUniforms( ShaderProgramDescriptor *shad
 }
 
 GLShader_heatHaze::GLShader_heatHaze( GLShaderManager *manager ) :
-	GLShader( "heatHaze", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
+	GLShader( "heatHaze", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		false, "heatHaze", "heatHaze" ),
 	u_CurrentMap( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
@@ -2959,7 +2974,8 @@ void GLShader_heatHaze::SetShaderProgramUniforms( ShaderProgramDescriptor *shade
 }
 
 GLShader_heatHazeMaterial::GLShader_heatHazeMaterial( GLShaderManager* manager ) :
-	GLShader( "heatHazeMaterial", "heatHaze", true, ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
+	GLShader( "heatHazeMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		true, "heatHaze", "heatHaze" ),
 	u_CurrentMap( this ),
 	u_NormalMap( this ),
 	u_HeightMap( this ),
@@ -2981,7 +2997,8 @@ void GLShader_heatHazeMaterial::SetShaderProgramUniforms( ShaderProgramDescripto
 }
 
 GLShader_screen::GLShader_screen( GLShaderManager *manager ) :
-	GLShader( "screen", ATTR_POSITION, manager ),
+	GLShader( "screen", ATTR_POSITION, manager,
+		false, "screen", "screen" ),
 	u_CurrentMap( this ),
 	u_ModelViewProjectionMatrix( this )
 {
@@ -2993,7 +3010,8 @@ void GLShader_screen::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderP
 }
 
 GLShader_screenMaterial::GLShader_screenMaterial( GLShaderManager* manager ) :
-	GLShader( "screenMaterial", "screen", true, ATTR_POSITION, manager ),
+	GLShader( "screenMaterial", ATTR_POSITION, manager,
+		true, "screen", "screen" ),
 	u_CurrentMap( this ),
 	u_ModelViewProjectionMatrix( this ) {
 }
@@ -3003,7 +3021,8 @@ void GLShader_screenMaterial::SetShaderProgramUniforms( ShaderProgramDescriptor*
 }
 
 GLShader_portal::GLShader_portal( GLShaderManager *manager ) :
-	GLShader( "portal", ATTR_POSITION, manager ),
+	GLShader( "portal", ATTR_POSITION, manager,
+		false, "portal", "portal" ),
 	u_CurrentMap( this ),
 	u_ModelViewMatrix( this ),
 	u_ModelViewProjectionMatrix( this ),
@@ -3017,10 +3036,9 @@ void GLShader_portal::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderP
 }
 
 GLShader_contrast::GLShader_contrast( GLShaderManager *manager ) :
-	GLShader( "contrast", ATTR_POSITION, manager ),
-	u_ColorMap( this ),
-	u_ModelViewProjectionMatrix( this )
-{
+	GLShader( "contrast", ATTR_POSITION, manager,
+		false, "screenSpace", "contrast" ),
+	u_ColorMap( this ) {
 }
 
 void GLShader_contrast::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderProgram )
@@ -3029,7 +3047,8 @@ void GLShader_contrast::SetShaderProgramUniforms( ShaderProgramDescriptor *shade
 }
 
 GLShader_cameraEffects::GLShader_cameraEffects( GLShaderManager *manager ) :
-	GLShader( "cameraEffects", ATTR_POSITION | ATTR_TEXCOORD, manager ),
+	GLShader( "cameraEffects", ATTR_POSITION | ATTR_TEXCOORD, manager,
+		false, "cameraEffects", "cameraEffects" ),
 	u_ColorMap3D( this ),
 	u_CurrentMap( this ),
 	u_GlobalLightFactor( this ),
@@ -3050,9 +3069,9 @@ void GLShader_cameraEffects::SetShaderProgramUniforms( ShaderProgramDescriptor *
 }
 
 GLShader_blur::GLShader_blur( GLShaderManager *manager ) :
-	GLShader( "blur", ATTR_POSITION, manager ),
+	GLShader( "blur", ATTR_POSITION, manager,
+		false, "screenSpace", "blur" ),
 	u_ColorMap( this ),
-	u_ModelViewProjectionMatrix( this ),
 	u_DeformMagnitude( this ),
 	u_TexScale( this ),
 	u_Horizontal( this )
@@ -3065,7 +3084,8 @@ void GLShader_blur::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderPro
 }
 
 GLShader_debugShadowMap::GLShader_debugShadowMap( GLShaderManager *manager ) :
-	GLShader( "debugShadowMap", ATTR_POSITION, manager ),
+	GLShader( "debugShadowMap", ATTR_POSITION, manager,
+		false, "debugShadowMap", "debugShadowMap" ),
 	u_CurrentMap( this ),
 	u_ModelViewProjectionMatrix( this )
 {
@@ -3077,7 +3097,8 @@ void GLShader_debugShadowMap::SetShaderProgramUniforms( ShaderProgramDescriptor 
 }
 
 GLShader_liquid::GLShader_liquid( GLShaderManager *manager ) :
-	GLShader( "liquid", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
+	GLShader( "liquid", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		false, "liquid", "liquid" ),
 	u_CurrentMap( this ),
 	u_DepthMap( this ),
 	u_NormalMap( this ),
@@ -3120,7 +3141,8 @@ void GLShader_liquid::SetShaderProgramUniforms( ShaderProgramDescriptor* shaderP
 }
 
 GLShader_liquidMaterial::GLShader_liquidMaterial( GLShaderManager* manager ) :
-	GLShader( "liquidMaterial", "liquid", true, ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager ),
+	GLShader( "liquidMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT, manager,
+		true, "liquid", "liquid" ),
 	u_CurrentMap( this ),
 	u_DepthMap( this ),
 	u_NormalMap( this ),
@@ -3164,10 +3186,10 @@ void GLShader_liquidMaterial::SetShaderProgramUniforms( ShaderProgramDescriptor 
 }
 
 GLShader_motionblur::GLShader_motionblur( GLShaderManager *manager ) :
-	GLShader( "motionblur", ATTR_POSITION, manager ),
+	GLShader( "motionblur", ATTR_POSITION, manager,
+		false, "screenSpace", "motionblur" ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
-	u_ModelViewProjectionMatrix( this ),
 	u_blurVec( this )
 {
 }
@@ -3179,9 +3201,9 @@ void GLShader_motionblur::SetShaderProgramUniforms( ShaderProgramDescriptor *sha
 }
 
 GLShader_ssao::GLShader_ssao( GLShaderManager *manager ) :
-	GLShader( "ssao", ATTR_POSITION, manager ),
+	GLShader( "ssao", ATTR_POSITION, manager,
+		false, "screenSpace", "ssao" ),
 	u_DepthMap( this ),
-	u_ModelViewProjectionMatrix( this ),
 	u_UnprojectionParams( this ),
 	u_zFar( this )
 {
@@ -3193,7 +3215,8 @@ void GLShader_ssao::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderPro
 }
 
 GLShader_depthtile1::GLShader_depthtile1( GLShaderManager *manager ) :
-	GLShader( "depthtile1", ATTR_POSITION, manager ),
+	GLShader( "depthtile1", ATTR_POSITION, manager,
+		false, "depthtile1", "depthtile1" ),
 	u_DepthMap( this ),
 	u_ModelViewProjectionMatrix( this ),
 	u_zFar( this )
@@ -3206,10 +3229,9 @@ void GLShader_depthtile1::SetShaderProgramUniforms( ShaderProgramDescriptor *sha
 }
 
 GLShader_depthtile2::GLShader_depthtile2( GLShaderManager *manager ) :
-	GLShader( "depthtile2", ATTR_POSITION, manager ),
-	u_DepthMap( this ),
-	u_ModelViewProjectionMatrix( this )
-{
+	GLShader( "depthtile2", ATTR_POSITION, manager,
+		false, "screenSpace", "depthtile2" ),
+	u_DepthMap( this ) {
 }
 
 void GLShader_depthtile2::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderProgram )
@@ -3218,7 +3240,8 @@ void GLShader_depthtile2::SetShaderProgramUniforms( ShaderProgramDescriptor *sha
 }
 
 GLShader_lighttile::GLShader_lighttile( GLShaderManager *manager ) :
-	GLShader( "lighttile", ATTR_POSITION | ATTR_TEXCOORD, manager ),
+	GLShader( "lighttile", ATTR_POSITION | ATTR_TEXCOORD, manager,
+		false, "lighttile", "lighttile" ),
 	u_DepthMap( this ),
 	u_Lights( this ),
 	u_numLights( this ),
@@ -3238,10 +3261,9 @@ void GLShader_lighttile::SetShaderProgramUniforms( ShaderProgramDescriptor *shad
 }
 
 GLShader_fxaa::GLShader_fxaa( GLShaderManager *manager ) :
-	GLShader( "fxaa", ATTR_POSITION, manager ),
-	u_ColorMap( this ),
-	u_ModelViewProjectionMatrix( this )
-{
+	GLShader( "fxaa", ATTR_POSITION, manager,
+		false, "screenSpace", "fxaa" ),
+	u_ColorMap( this ) {
 }
 
 void GLShader_fxaa::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderProgram )
@@ -3250,7 +3272,8 @@ void GLShader_fxaa::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderPro
 }
 
 GLShader_cull::GLShader_cull( GLShaderManager* manager ) :
-	GLShader( "cull", ATTR_POSITION, manager, false, false, true ),
+	GLShader( "cull", ATTR_POSITION, manager,
+		false, "cull" ),
 	u_Frame( this ),
 	u_ViewID( this ),
 	u_TotalDrawSurfs( this ),
@@ -3269,7 +3292,8 @@ GLShader_cull::GLShader_cull( GLShaderManager* manager ) :
 }
 
 GLShader_depthReduction::GLShader_depthReduction( GLShaderManager* manager ) :
-	GLShader( "depthReduction", ATTR_POSITION, manager, false, false, true ),
+	GLShader( "depthReduction", ATTR_POSITION, manager,
+		false, "depthReduction" ),
 	u_ViewWidth( this ),
 	u_ViewHeight( this ),
 	u_InitialDepthLevel( this ) {
@@ -3280,12 +3304,14 @@ void GLShader_depthReduction::SetShaderProgramUniforms( ShaderProgramDescriptor*
 }
 
 GLShader_clearSurfaces::GLShader_clearSurfaces( GLShaderManager* manager ) :
-	GLShader( "clearSurfaces", ATTR_POSITION, manager, false, false, true ),
+	GLShader( "clearSurfaces", ATTR_POSITION, manager,
+		false, "clearSurfaces" ),
 	u_Frame( this ) {
 }
 
 GLShader_processSurfaces::GLShader_processSurfaces( GLShaderManager* manager ) :
-	GLShader( "processSurfaces", ATTR_POSITION, manager, false, false, true ),
+	GLShader( "processSurfaces", ATTR_POSITION, manager,
+		false, "processSurfaces" ),
 	u_Frame( this ),
 	u_ViewID( this ),
 	u_SurfaceCommandsOffset( this ) {
