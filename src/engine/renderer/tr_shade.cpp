@@ -529,7 +529,7 @@ void Tess_DrawElements()
 	}
 
 	// move tess data through the GPU, finally
-	if ( glState.currentVBO && glState.currentIBO )
+	if ( ( glState.currentVBO || tr.skipVBO ) && glState.currentIBO )
 	{
 		if ( tess.multiDrawPrimitives )
 		{

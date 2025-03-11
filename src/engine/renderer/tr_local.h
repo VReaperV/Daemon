@@ -2815,7 +2815,8 @@ enum class shaderProfilerRenderSubGroupsMode {
 		trRefdef_t     refdef;
 
 		// Generic shapes
-		drawSurf_t *genericQuad;
+		drawSurf_t* genericQuad;
+		drawSurf_t* genericTriangle;
 
 		bool           hasSkybox;
 		bool           drawingSky = false;
@@ -2828,6 +2829,7 @@ enum class shaderProfilerRenderSubGroupsMode {
 		int                frontEndMsec; // not in pc due to clearing issue
 
 		bool skipSubgroupProfiler = false;
+		bool skipVBO = false;
 
 		vec4_t             clipRegion; // 2D clipping region
 

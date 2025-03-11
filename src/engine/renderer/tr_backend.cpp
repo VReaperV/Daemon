@@ -2022,11 +2022,10 @@ static void RB_BlurShadowMap( const trRefLight_t *light, int i )
 		return;
 	}
 
-	int     index;
+	int index;
 	image_t **images;
-	FBO_t   **fbos;
-	vec2_t  texScale;
-	matrix_t ortho;
+	FBO_t **fbos;
+	vec2_t texScale;
 
 	fbos = ( light->l.rlType == refLightType_t::RL_DIRECTIONAL ) ? tr.sunShadowMapFBO : tr.shadowMapFBO;
 	images = ( light->l.rlType == refLightType_t::RL_DIRECTIONAL ) ? tr.sunShadowMapFBOImage : tr.shadowMapFBOImage;
@@ -2051,13 +2050,6 @@ static void RB_BlurShadowMap( const trRefLight_t *light, int i )
 
 	GL_Cull( cullType_t::CT_TWO_SIDED );
 	GL_State( GLS_DEPTHTEST_DISABLE );
-
-	// GL_BindToTMU( 0, images[ index ] );
-
-	GL_PushMatrix();
-
-	MatrixOrthogonalProjection( ortho, 0, fbos[index]->width, 0, fbos[index]->height, -99999, 99999 );
-	GL_LoadProjectionMatrix( ortho );
 
 	gl_blurShader->BindProgram( 0 );
 	gl_blurShader->SetUniform_DeformMagnitude( 1 );
@@ -2084,8 +2076,6 @@ static void RB_BlurShadowMap( const trRefLight_t *light, int i )
 	);
 
 	Tess_InstantScreenSpaceQuad();
-
-	GL_PopMatrix();
 }
 
 /*
@@ -2878,6 +2868,8 @@ void RB_RenderPostDepthLightTile()
 	                  backEnd.viewParms.viewportX, backEnd.viewParms.viewportY,
 	                  backEnd.viewParms.viewportWidth, backEnd.viewParms.viewportHeight );
 
+	GL_PopMatrix();
+
 	// 2nd step
 	R_BindFBO( tr.depthtile2FBO );
 
@@ -2892,8 +2884,6 @@ void RB_RenderPostDepthLightTile()
 	);
 
 	Tess_InstantScreenSpaceQuad();
-
-	GL_PopMatrix();
 
 	vec3_t projToViewParams;
 	projToViewParams[0] = tanf(DEG2RAD(backEnd.refdef.fov_x * 0.5f)) * backEnd.viewParms.zFar;
@@ -2950,10 +2940,6 @@ void RB_RenderPostDepthLightTile()
 
 void RB_RenderGlobalFog()
 {
-	vec3_t   local;
-	vec4_t   fogDistanceVector;
-	matrix_t ortho;
-
 	GLimp_LogComment( "--- RB_RenderGlobalFog ---\n" );
 
 	if ( backEnd.refdef.rdflags & RDF_NOWORLDMODEL )
@@ -2979,9 +2965,7 @@ void RB_RenderGlobalFog()
 	backEnd.orientation = backEnd.viewParms.world;
 
 	{
-		fog_t *fog;
-
-		fog = &tr.world->fogs[ tr.world->globalFog ];
+		fog_t* fog = &tr.world->fogs[ tr.world->globalFog ];
 
 		if ( r_logFile->integer )
 		{
@@ -2991,6 +2975,8 @@ void RB_RenderGlobalFog()
 		GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 
 		// all fogging distance is based on world Z units
+		vec4_t fogDistanceVector;
+		vec3_t local;
 		VectorSubtract( backEnd.orientation.origin, backEnd.viewParms.orientation.origin, local );
 		fogDistanceVector[ 0 ] = -backEnd.orientation.modelViewMatrix[ 2 ];
 		fogDistanceVector[ 1 ] = -backEnd.orientation.modelViewMatrix[ 6 ];
@@ -2998,9 +2984,7 @@ void RB_RenderGlobalFog()
 		fogDistanceVector[ 3 ] = DotProduct( local, backEnd.viewParms.orientation.axis[ 0 ] );
 
 		// scale the fog vectors based on the fog's thickness
-		fogDistanceVector[ 0 ] *= fog->tcScale;
-		fogDistanceVector[ 1 ] *= fog->tcScale;
-		fogDistanceVector[ 2 ] *= fog->tcScale;
+		VectorScale( fogDistanceVector, fog->tcScale, fogDistanceVector );
 		fogDistanceVector[ 3 ] *= fog->tcScale;
 
 		gl_fogGlobalShader->SetUniform_FogDistanceVector( fogDistanceVector );
@@ -3020,9 +3004,6 @@ void RB_RenderGlobalFog()
 	);
 
 	Tess_InstantScreenSpaceQuad();
-
-	// go back to 3D
-	GL_PopMatrix();
 
 	GL_CheckErrors();
 }
@@ -3101,9 +3082,6 @@ void RB_RenderBloom()
 		Tess_InstantScreenSpaceQuad();
 	}
 
-	// go back to 3D
-	GL_PopMatrix();
-
 	GL_CheckErrors();
 }
 
@@ -3137,8 +3115,6 @@ void RB_RenderMotionBlur()
 	);
 
 	Tess_InstantScreenSpaceQuad();
-
-	GL_PopMatrix();
 
 	GL_CheckErrors();
 }
@@ -3188,8 +3164,6 @@ void RB_RenderSSAO()
 
 	Tess_InstantScreenSpaceQuad();
 
-	GL_PopMatrix();
-
 	GL_CheckErrors();
 }
 
@@ -3223,8 +3197,6 @@ void RB_FXAA()
 	R_BindFBO( tr.mainFBO[ backEnd.currentMainFBO ] );
 
 	Tess_InstantScreenSpaceQuad();
-
-	GL_PopMatrix();
 
 	GL_CheckErrors();
 }
