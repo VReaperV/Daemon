@@ -3325,7 +3325,7 @@ GLShader_processSurfaces::GLShader_processSurfaces() :
 	u_SurfaceCommandsOffset( this ) {
 }
 
-GLShader_processTris::GLShader_processTris( GLShaderManager* manager ) :
-	GLShader( "processTris", 0, manager,
+GLShader_processTris::GLShader_processTris() :
+	GLShader( "processTris",
 		false, "processTris" ) {
 }

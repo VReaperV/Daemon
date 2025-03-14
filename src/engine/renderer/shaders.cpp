@@ -78,7 +78,7 @@ std::unordered_map<std::string, std::string> shadermap({
 	{ "cull_cp.glsl", std::string( reinterpret_cast< const char* >( cull_cp_glsl ), sizeof( cull_cp_glsl ) ) },
 	{ "depthReduction_cp.glsl", std::string( reinterpret_cast< const char* >( depthReduction_cp_glsl ), sizeof( depthReduction_cp_glsl ) ) },
 	{ "processSurfaces_cp.glsl", std::string( reinterpret_cast< const char* >( processSurfaces_cp_glsl ), sizeof( processSurfaces_cp_glsl ) ) },
-<<<<<<< HEAD
+	{ "processTris_cp.glsl", std::string( reinterpret_cast< const char* >( processTris_cp_glsl ), sizeof( processTris_cp_glsl ) ) },
 
 	//  Screen-space shaders
 	{ "screenSpace_vp.glsl", std::string( reinterpret_cast< const char* >( screenSpace_vp_glsl ), sizeof( screenSpace_vp_glsl ) ) },
@@ -131,25 +131,4 @@ std::unordered_map<std::string, std::string> shadermap({
 	{ "shadowFill_fp.glsl", std::string( reinterpret_cast< const char* >( shadowFill_fp_glsl ), sizeof( shadowFill_fp_glsl ) ) },
 	{ "skybox_vp.glsl", std::string( reinterpret_cast< const char* >( skybox_vp_glsl ), sizeof( skybox_vp_glsl ) ) },
 	{ "skybox_fp.glsl", std::string( reinterpret_cast< const char* >( skybox_fp_glsl ), sizeof( skybox_fp_glsl ) ) },
-=======
-	{ "processTris_cp.glsl", std::string( reinterpret_cast< const char* >( processTris_cp_glsl ), sizeof( processTris_cp_glsl ) ) },
-	{ "reflection_CB_fp.glsl", std::string(reinterpret_cast<const char*>(reflection_CB_fp_glsl), sizeof(reflection_CB_fp_glsl)) },
-	{ "reflection_CB_vp.glsl", std::string(reinterpret_cast<const char*>(reflection_CB_vp_glsl), sizeof(reflection_CB_vp_glsl)) },
-	{ "refraction_C_fp.glsl", std::string(reinterpret_cast<const char*>(refraction_C_fp_glsl), sizeof(refraction_C_fp_glsl)) },
-	{ "refraction_C_vp.glsl", std::string(reinterpret_cast<const char*>(refraction_C_vp_glsl), sizeof(refraction_C_vp_glsl)) },
-	{ "reliefMapping_fp.glsl", std::string(reinterpret_cast<const char*>(reliefMapping_fp_glsl), sizeof(reliefMapping_fp_glsl)) },
-	{ "screen_fp.glsl", std::string(reinterpret_cast<const char*>(screen_fp_glsl), sizeof(screen_fp_glsl)) },
-	{ "screen_vp.glsl", std::string(reinterpret_cast<const char*>(screen_vp_glsl), sizeof(screen_vp_glsl)) },
-	{ "shaderProfiler_vp.glsl", std::string( reinterpret_cast< const char* >( shaderProfiler_vp_glsl ), sizeof( shaderProfiler_vp_glsl ) ) },
-	{ "shaderProfiler_fp.glsl", std::string( reinterpret_cast< const char* >( shaderProfiler_fp_glsl ), sizeof( shaderProfiler_fp_glsl ) ) },
-	{ "shadowFill_fp.glsl", std::string(reinterpret_cast<const char*>(shadowFill_fp_glsl), sizeof(shadowFill_fp_glsl)) },
-	{ "shadowFill_vp.glsl", std::string(reinterpret_cast<const char*>(shadowFill_vp_glsl), sizeof(shadowFill_vp_glsl)) },
-	{ "skybox_fp.glsl", std::string(reinterpret_cast<const char*>(skybox_fp_glsl), sizeof(skybox_fp_glsl)) },
-	{ "skybox_vp.glsl", std::string(reinterpret_cast<const char*>(skybox_vp_glsl), sizeof(skybox_vp_glsl)) },
-	{ "ssao_fp.glsl", std::string(reinterpret_cast<const char*>(ssao_fp_glsl), sizeof(ssao_fp_glsl)) },
-	{ "ssao_vp.glsl", std::string(reinterpret_cast<const char*>(ssao_vp_glsl), sizeof(ssao_vp_glsl)) },
-	{ "vertexAnimation_vp.glsl", std::string(reinterpret_cast<const char*>(vertexAnimation_vp_glsl), sizeof(vertexAnimation_vp_glsl)) },
-	{ "vertexSimple_vp.glsl", std::string(reinterpret_cast<const char*>(vertexSimple_vp_glsl), sizeof(vertexSimple_vp_glsl)) },
-	{ "vertexSkinning_vp.glsl", std::string(reinterpret_cast<const char*>(vertexSkinning_vp_glsl), sizeof(vertexSkinning_vp_glsl)) },
->>>>>>> d0048acaa (.)
 	});
