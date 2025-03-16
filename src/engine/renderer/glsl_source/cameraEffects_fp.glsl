@@ -55,12 +55,12 @@ vec3 TonemapLottes( vec3 color ) {
 
 #if defined(HAVE_ARB_explicit_uniform_location) && defined(HAVE_ARB_shader_atomic_counters)
 	layout(std140, binding = BIND_LUMINANCE) uniform ub_LuminanceUBO {
-		uint luminanceU;
+		uvec2 luminanceU;
 	};
 #endif
 
 float GetAverageLuminance( const in uint luminance ) {
-    return float( luminanceU ) / ( u_TonemapParms2[1] * u_ViewWidth * u_ViewHeight );
+    return float( luminance ) / ( u_TonemapParms2[1] * u_ViewWidth * u_ViewHeight );
 }
 #endif
 
@@ -77,7 +77,7 @@ void main() {
 	if( u_Tonemap ) {
 		#if defined(HAVE_ARB_explicit_uniform_location) && defined(HAVE_ARB_shader_atomic_counters)
 			if( u_TonemapAdaptiveExposure ) {
-					const float l = GetAverageLuminance( luminanceU ) - 8;
+					const float l = GetAverageLuminance( luminanceU.x ) - 8;
 					color.rgb *= clamp( 0.18f / exp2( l * 0.8f + 0.1f ), 0.0f, 2.0f );
 			}
 		#endif

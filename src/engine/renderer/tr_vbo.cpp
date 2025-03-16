@@ -783,7 +783,8 @@ void R_InitVBOs()
 
 	if ( glConfig2.adaptiveExposureAvailable ) {
 		luminanceBuffer.GenBuffer();
-		luminanceBuffer.BufferData( 1, nullptr, GL_DYNAMIC_COPY );
+		uint32_t data[2] {};
+		luminanceBuffer.BufferData( 2, data, GL_DYNAMIC_COPY );
 	}
 
 	GL_CheckErrors();

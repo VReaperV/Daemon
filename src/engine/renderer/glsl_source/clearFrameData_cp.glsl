@@ -38,16 +38,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = BIND_LUMINANCE_STORAGE) writeonly buffer luminanceBuffer {
-    uint luminance;
+layout(std430, binding = BIND_LUMINANCE_STORAGE) restrict buffer luminanceBuffer {
+	uvec2 luminance;
 };
 
 uniform uint u_Frame;
 
 void main() {
-    const uint globalInvocationID = GLOBAL_INVOCATION_ID;
-    if( globalInvocationID >= 1 ) {
-        return;
-    }
-    luminance = 0;
+	const uint globalInvocationID = GLOBAL_INVOCATION_ID;
+	if( globalInvocationID >= 1 ) {
+		return;
+	}
+	luminance.x = uint( 0.15f * luminance.y + ( 1.0f - 0.15f ) * luminance.x );
 }

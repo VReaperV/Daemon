@@ -50,7 +50,7 @@ z: reserved
 w: reserved */
 uniform vec4 u_TonemapParms2;
 
-layout (binding = BIND_LUMINANCE) uniform atomic_uint atomicLuminance;
+layout (binding = BIND_LUMINANCE) uniform atomic_uint atomicLuminance[2];
 
 float ColorToLuminance( const in vec3 color ) {
     float luminance = dot( color.rgb, vec3( 0.2126f, 0.7152f, 0.0722f ) ); // sRGB luminance
@@ -78,9 +78,9 @@ void main() {
 		const float luminanceSum = subgroupInclusiveAdd( luminance );
 		
 		if( subgroupElect() ) {
-			atomicCounterAddARB( atomicLuminance, FloatLuminanceToUint( luminanceSum ) );
+			atomicCounterAddARB( atomicLuminance[1], FloatLuminanceToUint( luminanceSum ) );
 		}
     #else
-        atomicCounterAddARB( atomicLuminance, FloatLuminanceToUint( luminance ) );
+        atomicCounterAddARB( atomicLuminance[1], FloatLuminanceToUint( luminance ) );
     #endif
 }

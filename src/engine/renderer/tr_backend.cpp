@@ -3214,8 +3214,8 @@ void RB_FXAA()
 static void AdaptiveLightingReduction() {
 	luminanceBuffer.BindBufferBase( GL_SHADER_STORAGE_BUFFER, Util::ordinal( BufferBind::LUMINANCE_STORAGE ) );
 
-	gl_clearFrameDataShader->BindProgram( 0 );
-	gl_clearFrameDataShader->DispatchCompute( 1, 1, 1 );
+	// gl_clearFrameDataShader->BindProgram( 0 );
+	// gl_clearFrameDataShader->DispatchCompute( 1, 1, 1 );
 
 	luminanceBuffer.BindBufferBase( GL_ATOMIC_COUNTER_BUFFER, Util::ordinal( BufferBind::LUMINANCE ) );
 
@@ -3239,7 +3239,10 @@ static void AdaptiveLightingReduction() {
 
 	gl_luminanceReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
 
-	glMemoryBarrier( GL_UNIFORM_BARRIER_BIT );
+	glMemoryBarrier( GL_SHADER_STORAGE_BARRIER_BIT | GL_UNIFORM_BARRIER_BIT );
+
+	gl_clearFrameDataShader->BindProgram( 0 );
+	gl_clearFrameDataShader->DispatchCompute( 1, 1, 1 );
 }
 
 static void ComputeTonemapParams( const float contrast, const float highlightsCompressionSpeed,
