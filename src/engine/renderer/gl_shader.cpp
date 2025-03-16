@@ -3102,6 +3102,7 @@ GLShader_cameraEffects::GLShader_cameraEffects() :
 	u_Tonemap( this ),
 	u_TonemapAdaptiveExposure( this ),
 	u_TonemapParms( this ),
+	u_TonemapParms2( this ),
 	u_TonemapExposure( this ),
 	u_InverseGamma( this ) {
 }
