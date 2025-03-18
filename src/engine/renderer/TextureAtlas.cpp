@@ -2,7 +2,7 @@
 ===========================================================================
 
 Daemon BSD Source Code
-Copyright (c) 2024 Daemon Developers
+Copyright (c) 2025 Daemon Developers
 All rights reserved.
 
 This file is part of the Daemon BSD Source Code (Daemon Source Code).
@@ -134,58 +134,46 @@ void TextureAtlas::UploadTexture( image_t* image ) {
 	image->atlas[2] = (float) ( image->textureAtlasX ) / width;
 	image->atlas[3] = (float) ( image->textureAtlasY ) / height;
 
-	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + borderSize, image->textureAtlasY + borderSize,
-					 image->textureAtlasWidth - 2 * borderSize, image->textureAtlasHeight - 2 * borderSize,
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + 1, image->textureAtlasY + 1,
+					 image->textureAtlasWidth - 2, image->textureAtlasHeight - 2,
 					 format, type, image->imageData );
 
 	GL_CheckErrors();
-
-	if ( borderSize == 0 ) {
-		return;
-	}
 
 	byte* border = ( byte* ) ri.Hunk_AllocateTempMemory( image->textureAtlasWidth * texelBytes );
 
 	// Copy bottom border
 	for ( uint16_t x = 0; x < image->uploadWidth; x++ ) {
 		for ( uint8_t i = 0; i < texelBytes; i++ ) {
-			border[( x + borderSize ) * texelBytes + i] = image->imageData[x * texelBytes + i];
+			border[( x + 1 ) * texelBytes + i] = image->imageData[x * texelBytes + i];
 		}
 	}
 	// Copy corners
-	for ( uint16_t i = 0; i < borderSize; i++ ) {
-		for ( uint8_t j = 0; j < texelBytes; j++ ) {
-			border[i * texelBytes] = image->imageData[j];
-			border[( image->uploadWidth + borderSize + i ) * texelBytes + j] =
-				image->imageData[image->uploadWidth * texelBytes - ( texelBytes - j )];
-		}
+	for ( uint8_t i = 0; i < texelBytes; i++ ) {
+		border[i] = image->imageData[i];
+		border[( image->uploadWidth + 1 ) * texelBytes + i] =
+			image->imageData[image->uploadWidth * texelBytes - ( texelBytes - i )];
 	}
 
-	for ( uint16_t i = 0; i < borderSize; i++ ) {
-		glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY + i, image->textureAtlasWidth, 1,
-			format, type, border );
-	}
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY, image->textureAtlasWidth, 1,
+		format, type, border );
 
 	// Copy top border
 	for ( uint16_t x = 0; x < image->uploadWidth; x++ ) {
 		for ( uint8_t i = 0; i < texelBytes; i++ ) {
-			border[( borderSize + x ) * texelBytes + i] =
+			border[( x + 1 ) * texelBytes + i] =
 				image->imageData[( ( image->uploadHeight - 1 ) * image->uploadWidth + x ) * texelBytes + i];
 		}
 	}
 	// Copy corners
-	for ( uint16_t i = 0; i < borderSize; i++ ) {
-		for ( uint8_t j = 0; j < texelBytes; j++ ) {
-			border[i * texelBytes + j] = image->imageData[( image->uploadHeight - 1 ) * image->uploadWidth * texelBytes + j];
-			border[( image->textureAtlasWidth - i ) * texelBytes - ( texelBytes - j )] =
-				image->imageData[( image->uploadHeight * image->uploadWidth ) * texelBytes - ( texelBytes - j )];
-		}
+	for ( uint8_t i = 0; i < texelBytes; i++ ) {
+		border[0 + i] = image->imageData[( image->uploadHeight - 1 ) * image->uploadWidth * texelBytes + i];
+		border[image->textureAtlasWidth * texelBytes - ( texelBytes - i )] =
+			image->imageData[( image->uploadHeight * image->uploadWidth ) * texelBytes - ( texelBytes - i )];
 	}
 
-	for ( uint16_t i = 0; i < borderSize; i++ ) {
-		glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY + borderSize + image->uploadHeight + i,
-			image->textureAtlasWidth, 1, format, type, border );
-	}
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY + 1 + image->uploadHeight,
+		image->textureAtlasWidth, 1, format, type, border );
 
 	ri.Hunk_FreeTempMemory( border );
 
@@ -198,10 +186,8 @@ void TextureAtlas::UploadTexture( image_t* image ) {
 		}
 	}
 
-	for ( uint16_t i = 0; i < borderSize; i++ ) {
-		glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + i, image->textureAtlasY + borderSize, 1, image->uploadHeight,
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX, image->textureAtlasY + 1, 1, image->uploadHeight,
 			format, type, border );
-	}
 
 	// Copy right border
 	for ( uint16_t y = 0; y < image->uploadHeight; y++ ) {
@@ -210,11 +196,9 @@ void TextureAtlas::UploadTexture( image_t* image ) {
 		}
 	}
 
-	for ( uint16_t i = 0; i < borderSize; i++ ) {
-		glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + borderSize + image->uploadWidth + i,
-						 image->textureAtlasY + borderSize, 1, image->uploadHeight,
-						 format, type, border );
-	}
+	glTexSubImage2D( GL_TEXTURE_2D, 0, image->textureAtlasX + 1 + image->uploadWidth,
+						image->textureAtlasY + 1, 1, image->uploadHeight,
+						format, type, border );
 
 	ri.Hunk_FreeTempMemory( border );
 
@@ -222,8 +206,8 @@ void TextureAtlas::UploadTexture( image_t* image ) {
 }
 
 void TextureAtlas::AddImageToTextureBin( image_t* image, byte* imageData, const TextureBin textureBin ) {
-	const uint16_t imageWidth = image->uploadWidth + 2 * borderSize;
-	const uint16_t imageHeight = image->uploadHeight + 2 * borderSize;
+	const uint16_t imageWidth = image->uploadWidth + 2;
+	const uint16_t imageHeight = image->uploadHeight + 2;
 
 	image->textureAtlasID = id;
 	image->textureAtlasX = textureBin.x;
@@ -232,13 +216,13 @@ void TextureAtlas::AddImageToTextureBin( image_t* image, byte* imageData, const 
 	image->textureAtlasHeight = imageHeight;
 
 	// Add bin to the right of the image if there's space
-	if ( textureBin.width - imageWidth >= 1 + 2 * borderSize ) {
+	if ( textureBin.width - imageWidth >= 1 + 2 ) {
 		TextureBin splitBin{ textureBin.x + imageWidth, textureBin.y, textureBin.width - imageWidth, imageHeight };
 		textureBins.push_back( splitBin );
 	}
 
 	// Add bin above the image if there's space
-	if ( textureBin.height - imageHeight >= 1 + 2 * borderSize ) {
+	if ( textureBin.height - imageHeight >= 1 + 2 ) {
 		TextureBin splitBin{ textureBin.x, textureBin.y + imageHeight, textureBin.width, textureBin.height - imageHeight };
 		textureBins.push_back( splitBin );
 	}
@@ -255,8 +239,8 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 	}
 
 	// We'll need to copy border pixels for proper bilinear filtering
-	const uint16_t imageWidth = image->uploadWidth + 2 * borderSize;
-	const uint16_t imageHeight = image->uploadHeight + 2 * borderSize;
+	const uint16_t imageWidth = image->uploadWidth + 2;
+	const uint16_t imageHeight = image->uploadHeight + 2;
 
 	for ( size_t i = 0; i < textureBins.size(); i++ ) {
 		TextureBin& textureBin = textureBins[i];
@@ -287,11 +271,11 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 	// Extend atlas upwards
 	if ( extendUp ) {
 		// Add a bin to the right of the current atlas right border if the image we insert exceeds the current atlas width
-		if ( ( width > imageWidth ) && ( width - imageWidth >= 1 + 2 * borderSize ) ) {
+		if ( ( width > imageWidth ) && ( width - imageWidth >= 1 + 2 ) ) {
 			TextureBin extendBin{ imageWidth, height, width - imageWidth, imageHeight };
 			textureBins.push_back( extendBin );
 			// Add a bin to the right of the image we insert if there's space
-		} else if ( ( height > 0 ) && ( width < imageWidth ) && ( imageWidth - width >= 1 + 2 * borderSize ) ) {
+		} else if ( ( height > 0 ) && ( width < imageWidth ) && ( imageWidth - width >= 1 + 2 ) ) {
 			TextureBin extendBin{ width, 0, imageWidth - width, height };
 			textureBins.push_back( extendBin );
 			width = imageWidth;
@@ -309,11 +293,11 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 	// Extend atlas to the right
 	} else if ( width + imageWidth <= glConfig.maxTextureSize ) {
 		// Add a bin above the image we insert if there's space
-		if ( ( height > imageHeight ) && ( height - imageHeight >= 1 + 2 * borderSize ) ) {
+		if ( ( height > imageHeight ) && ( height - imageHeight >= 1 + 2 ) ) {
 			TextureBin extendBin{ width, imageHeight, imageWidth, height - imageHeight };
 			textureBins.push_back( extendBin );
 			// Add a bin above the current atlas top border if the image we insert exceeds the current atlas height
-		} else if ( ( width > 0 ) && ( height < imageHeight ) && ( imageHeight - height >= 1 + 2 * borderSize ) ) {
+		} else if ( ( width > 0 ) && ( height < imageHeight ) && ( imageHeight - height >= 1 + 2 ) ) {
 			TextureBin extendBin{ 0, height, width, imageHeight - height };
 			textureBins.push_back( extendBin );
 		}
@@ -328,52 +312,6 @@ bool TextureAtlas::InsertImage( image_t* image, const filterProxy newFilterProxy
 
 		return true;
 	}
-
-	// Extend atlas to the right
-	/* if ( ( width + imageWidth <= glConfig.maxTextureSize )
-		&& ( ( area1 <= area2 ) || ( height + imageHeight > glConfig.maxTextureSize ) ) ) {
-		// Add a bin above the image we insert if there's space
-		if ( ( height > imageHeight ) && ( height - imageHeight >= 1 + 2 * borderSize ) ) {
-			TextureBin extendBin{ width, imageHeight, imageWidth, height - imageHeight };
-			textureBins.push_back( extendBin );
-			// Add a bin above the current atlas top border if the image we insert exceeds the current atlas height
-		} else if ( ( width > 0 ) && ( height < imageHeight ) && ( imageHeight - height >= 1 + 2 * borderSize ) ) {
-			TextureBin extendBin{ 0, height, width, imageHeight - height };
-			textureBins.push_back( extendBin );
-		}
-
-		TextureBin tempBin{ width, 0, imageWidth, imageHeight, image };
-		textureBins.push_back( tempBin );
-
-		width += imageWidth;
-		height = std::max( height, imageHeight );
-
-		AddImageToTextureBin( image, imageData, tempBin );
-
-		return true;
-		// Extend atlas downwards
-	} else if ( height + imageHeight <= glConfig.maxTextureSize ) {
-		// Add a bin to the right of the current atlas right border if the image we insert exceeds the current atlas width
-		if ( ( width > imageWidth ) && ( width - imageWidth >= 1 + 2 * borderSize ) ) {
-			TextureBin extendBin{ imageWidth, height, width - imageWidth, imageHeight };
-			textureBins.push_back( extendBin );
-			// Add a bin to the right of the image we insert if there's space
-		} else if ( ( height > 0 ) && ( width < imageWidth ) && ( imageWidth - width >= 1 + 2 * borderSize ) ) {
-			TextureBin extendBin{ width, 0, imageWidth - width, height };
-			textureBins.push_back( extendBin );
-			width = imageWidth;
-		}
-
-		TextureBin tempBin{ 0, height, imageWidth, imageHeight, image };
-		textureBins.push_back( tempBin );
-
-		height += imageHeight;
-		width = std::max( width, imageWidth );
-
-		AddImageToTextureBin( image, imageData, tempBin );
-
-		return true;
-	} */
 
 	return false;
 }

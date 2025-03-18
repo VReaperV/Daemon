@@ -2,7 +2,7 @@
 ===========================================================================
 
 Daemon BSD Source Code
-Copyright (c) 2024 Daemon Developers
+Copyright (c) 2025 Daemon Developers
 All rights reserved.
 
 This file is part of the Daemon BSD Source Code (Daemon Source Code).
@@ -83,7 +83,6 @@ class TextureAtlas {
 
     uint16_t width = 0;
     uint16_t height = 0;
-    const uint16_t borderSize = 1;
     const uint32_t bits;
     const GLenum format;
     const GLint internalFormat;
