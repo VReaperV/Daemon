@@ -42,6 +42,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_MATERIAL_SURFACE_TRIS 64
 #define MAX_MATERIAL_SURFACE_DISTANCE 256
 
+struct TriEdge {
+	uint32_t index1;
+	uint32_t index2;
+};
+
+struct TriIndex {
+	int tri1 = -1;
+	int tri2 = -1;
+};
+
 bspSurface_t** OptimiseMapGeometryCore( world_t* world, int &numSurfaces );
 std::vector<MaterialSurface> OptimiseMapGeometryMaterial( world_t* world, int numSurfaces,
 	srfVert_t* verts, int numVerts, glIndex_t* indices, int numIndices );

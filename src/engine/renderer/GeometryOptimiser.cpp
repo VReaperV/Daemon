@@ -201,6 +201,8 @@ std::vector<MaterialSurface> OptimiseMapGeometryMaterial( world_t* world, int nu
 	std::vector<MaterialSurface> processedMaterialSurfaces;
 	processedMaterialSurfaces.reserve( numSurfaces );
 
+	std::unordered_map<TriEdge, TriIndex> triEdges;
+
 	int surfaceIndex = 0;
 	for ( int k = 0; k < world->numSurfaces; k++ ) {
 		bspSurface_t* surface = &world->surfaces[k];
