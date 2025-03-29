@@ -43,8 +43,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_MATERIAL_SURFACE_DISTANCE 256
 
 struct TriEdge {
+	enum State : uint32_t {
+		MERGEABLE_TRUE = BIT( 29 ),
+		MERGEABLE_FALSE = BIT( 30 ),
+		MERGEABLE_NOT_PROCESSED = BIT( 31 ),
+		NONE = BIT( 31 )
+	};
+
 	uint32_t index1;
 	uint32_t index2;
+};
+
+struct TriEdgeHasher {
+	size_t operator()( const TriEdge& triEdge ) {
+		return std::hash<uint32_t>{} ( triEdge.index1 ) ^ ( std::hash<uint32_t>{} ( triEdge.index2 ) << 16 );
+	}
 };
 
 struct TriIndex {
@@ -52,6 +65,7 @@ struct TriIndex {
 	int tri2 = -1;
 };
 
+std::vector<bspSurface_t>;
 bspSurface_t** OptimiseMapGeometryCore( world_t* world, int &numSurfaces );
 std::vector<MaterialSurface> OptimiseMapGeometryMaterial( world_t* world, int numSurfaces,
 	srfVert_t* verts, int numVerts, glIndex_t* indices, int numIndices );
