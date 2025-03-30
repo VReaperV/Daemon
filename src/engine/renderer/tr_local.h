@@ -1706,17 +1706,15 @@ enum class ssaoMode {
 
 // when cgame directly specifies a polygon, it becomes a srfPoly_t
 // as soon as it is called
-	struct srfPoly_t
-	{
+	struct srfPoly_t {
 		surfaceType_t surfaceType;
-		qhandle_t     hShader;
-		int16_t       numVerts;
-		int16_t       fogIndex;
-		polyVert_t    *verts;
+		qhandle_t hShader;
+		int16_t numVerts;
+		int16_t fogIndex;
+		polyVert_t* verts;
 	};
 
-	struct srfVert_t
-	{
+	struct srfVert_t {
 		vec3_t xyz;
 
 		// HACK: st and lightmap must be adjacent for R_CreateWorldVBO
@@ -1728,146 +1726,105 @@ enum class ssaoMode {
 		Color::Color32Bit lightColor;
 	};
 
-	struct srfTriangle_t
-	{
-		int      indexes[ 3 ];
+	struct srfTriangle_t {
+		int indexes[3];
 	};
 
 // ydnar: plain map drawsurfaces must match this header
-	struct srfGeneric_t
-	{
+	struct srfGeneric_t {
 		surfaceType_t surfaceType;
 
-		// culling information
-		vec3_t   bounds[ 2 ];
-		vec3_t   origin;
-		float    radius;
+		// Culling information
+		vec3_t bounds[2];
+		vec3_t origin;
+		float radius;
+
+		int numVerts;
+		srfVert_t* verts;
+
+		int numTriangles;
+		srfTriangle_t* triangles;
+
+		// Static render data
+		VBO_t* vbo;
+		IBO_t* ibo;
+
+		// BSP VBO offset
+		int firstIndex;
 	};
 
-	struct srfGridMesh_t : srfGeneric_t
-	{
+	struct srfGridMesh_t : srfGeneric_t {
 		// lod information, which may be different
 		// than the culling information to allow for
 		// groups of curves that LOD as a unit
 		vec3_t lodOrigin;
-		float  lodRadius;
-		int    lodFixed;
-		int    lodStitched;
+		float lodRadius;
+		int lodFixed;
+		int lodStitched;
 
 		// triangle definitions
-		int           width, height;
-		float         *widthLodError;
-		float         *heightLodError;
-
-		int           numTriangles;
-		srfTriangle_t *triangles;
-
-		int           numVerts;
-		srfVert_t     *verts;
-
-		// BSP VBO offset
-		int firstIndex;
-
-		// static render data
-		VBO_t *vbo; // points to bsp model VBO
-		IBO_t *ibo;
+		int width, height;
+		float* widthLodError;
+		float* heightLodError;
 	};
 
-	struct srfSurfaceFace_t : srfGeneric_t
-	{
-		cplane_t     plane;
-
-		// triangle definitions
-		int           numTriangles;
-		srfTriangle_t *triangles;
-
-		int           numVerts;
-		srfVert_t     *verts;
-
-		// BSP VBO offset
-		int firstIndex;
-
-		// static render data
-		VBO_t *vbo; // points to bsp model VBO
-		IBO_t *ibo;
+	struct srfSurfaceFace_t : srfGeneric_t {
+		cplane_t plane;
 	};
 
 // misc_models in maps are turned into direct geometry by q3map
-	struct srfTriangles_t : srfGeneric_t
-	{
-		// triangle definitions
-		int           numTriangles;
-		srfTriangle_t *triangles;
-
-		int           numVerts;
-		srfVert_t     *verts;
-
-		// BSP VBO offset
-		int firstIndex;
-
-		// static render data
-		VBO_t *vbo; // points to bsp model VBO
-		IBO_t *ibo;
+	struct srfTriangles_t : srfGeneric_t {
 	};
 
-	struct srfVBOMesh_t : srfGeneric_t
-	{
+	struct srfVBOMesh_t : srfGeneric_t {
 		struct shader_t *shader; // FIXME move this to somewhere else
 
-		int             lightmapNum; // FIXME get rid of this by merging all lightmaps at level load
-		int             fogIndex;
+		int lightmapNum; // FIXME get rid of this by merging all lightmaps at level load
+		int fogIndex;
 
 		// backEnd stats
-		int firstIndex;
 		int numIndexes;
-		int numVerts;
-
-		// static render data
-		VBO_t *vbo;
-		IBO_t *ibo;
 	};
 
-	struct srfVBOMD5Mesh_t
-	{
-		surfaceType_t     surfaceType;
+	struct srfVBOMD5Mesh_t {
+		surfaceType_t surfaceType;
 
-		struct md5Model_t *md5Model;
+		struct md5Model_t* md5Model;
 
-		shader_t   *shader; // FIXME move this to somewhere else
+		shader_t* shader; // FIXME move this to somewhere else
 
-		int               skinIndex;
+		int skinIndex;
 
-		int               numBoneRemap;
-		int               boneRemap[ MAX_BONES ];
-		int               boneRemapInverse[ MAX_BONES ];
+		int numBoneRemap;
+		int boneRemap[MAX_BONES];
+		int boneRemapInverse[MAX_BONES];
 
 		// backEnd stats
 		int numIndexes;
 		int numVerts;
 
 		// static render data
-		VBO_t *vbo;
-		IBO_t *ibo;
+		VBO_t* vbo;
+		IBO_t* ibo;
 	};
 
-	struct srfVBOMDVMesh_t
-	{
-		surfaceType_t       surfaceType;
+	struct srfVBOMDVMesh_t {
+		surfaceType_t surfaceType;
 
-		struct mdvModel_t   *mdvModel;
+		struct mdvModel_t* mdvModel;
 
-		struct mdvSurface_t *mdvSurface;
+		struct mdvSurface_t* mdvSurface;
 
 		// backEnd stats
 		int numIndexes;
 		int numVerts;
 
 		// static render data
-		VBO_t *vbo;
-		IBO_t *ibo;
+		VBO_t* vbo;
+		IBO_t* ibo;
 	};
 
-	extern void ( *rb_surfaceTable[Util::ordinal(surfaceType_t::SF_NUM_SURFACE_TYPES)] )(void * );
+	extern void ( *rb_surfaceTable[Util::ordinal( surfaceType_t::SF_NUM_SURFACE_TYPES )] )( void * );
 
 	/*
 	==============================================================================
