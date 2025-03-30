@@ -79,11 +79,12 @@ vec3 TonemapLottes( vec3 color ) {
 	layout(std430, binding = BIND_LUMINANCE_STORAGE) readonly buffer luminanceBuffer {
 		uint luminanceU;
 	};
+
+	float GetAverageLuminance( const in uint luminance ) {
+		return float( luminanceU ) / ( u_TonemapParms2[1] * u_ViewWidth * u_ViewHeight );
+	}
 #endif
 
-float GetAverageLuminance( const in uint luminance ) {
-    return float( luminanceU ) / ( u_TonemapParms2[1] * u_ViewWidth * u_ViewHeight );
-}
 #endif
 
 DECLARE_OUTPUT(vec4)
