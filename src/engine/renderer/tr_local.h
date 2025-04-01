@@ -1770,9 +1770,6 @@ enum class ssaoMode {
 		float* heightLodError;
 	};
 
-	struct srfSurfaceFace_t : srfGeneric_t {
-	};
-
 	struct srfVBOMesh_t : srfGeneric_t {
 		struct shader_t *shader; // FIXME move this to somewhere else
 
