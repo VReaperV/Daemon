@@ -549,16 +549,6 @@ void Tess_DrawElements()
 			backEnd.pc.c_multiDrawPrimitives += tess.multiDrawPrimitives;
 
 			backEnd.pc.c_vboVertexes += tess.numVertexes;
-
-			for ( i = 0; i < tess.multiDrawPrimitives; i++ )
-			{
-				backEnd.pc.c_multiVboIndexes += tess.multiDrawCounts[ i ];
-				backEnd.pc.c_indexes += tess.multiDrawCounts[ i ];
-				if ( materialSystem.generatingWorldCommandBuffer ) {
-					materialSystem.AddDrawCommand( tess.materialID, tess.materialPackID, tess.currentSSBOOffset,
-						( GLuint ) tess.multiDrawCounts[i], tess.multiDrawOffsets[i] );
-				}
-			}
 		}
 		else
 		{
@@ -568,11 +558,7 @@ void Tess_DrawElements()
 				base = tess.indexBase * sizeof( glIndex_t );
 			}
 
-			if ( materialSystem.generatingWorldCommandBuffer ) {
-				materialSystem.AddDrawCommand( tess.materialID, tess.materialPackID, tess.currentSSBOOffset, tess.numIndexes, tess.indexBase );
-			} else {
-				glDrawRangeElements( GL_TRIANGLES, 0, tess.numVertexes, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ) );
-			}
+			glDrawRangeElements( GL_TRIANGLES, 0, tess.numVertexes, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ) );
 
 			backEnd.pc.c_drawElements++;
 
@@ -585,11 +571,7 @@ void Tess_DrawElements()
 	}
 	else
 	{
-		if ( materialSystem.generatingWorldCommandBuffer ) {
-			materialSystem.AddDrawCommand( tess.materialID, tess.materialPackID, tess.currentSSBOOffset, tess.numIndexes, tess.indexBase );
-		} else {
-			glDrawElements( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, tess.indexes );
-		}
+		glDrawElements( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, tess.indexes );
 
 		backEnd.pc.c_drawElements++;
 
@@ -2634,12 +2616,6 @@ void Tess_StageIteratorColor()
 
 		Tess_ComputeColor( pStage );
 		Tess_ComputeTexMatrices( pStage );
-
-		if ( materialSystem.generatingWorldCommandBuffer && pStage->useMaterialSystem ) {
-			tess.currentSSBOOffset = pStage->materialOffset;
-			tess.materialID = tess.currentDrawSurf->materialIDs[stage];
-			tess.materialPackID = tess.currentDrawSurf->materialPackIDs[stage];
-		}
 
 		pStage->colorRenderer( pStage );
 

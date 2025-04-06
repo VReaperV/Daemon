@@ -1093,7 +1093,7 @@ enum class ssaoMode {
 
 	struct shaderStage_t;
 	struct Material;
-	struct drawSurf_t;
+	struct MaterialSurface;
 
 	using stageRenderer_t = void(*)(shaderStage_t *);
 	using surfaceDataUpdater_t = void(*)(uint32_t*, shaderStage_t*, bool, bool, bool);

@@ -2588,7 +2588,7 @@ static void R_CreateWorldVBO() {
 		srfVert_t* materialVerts = ( srfVert_t* ) ri.Hunk_AllocateTempMemory( numVerts * sizeof( srfVert_t ) );
 		glIndex_t* materialIdxs = ( glIndex_t* ) ri.Hunk_AllocateTempMemory( numTriangles * 3 * sizeof( glIndex_t ) );
 
-		// OptimiseMapGeometryMaterial( &s_worldData, numSurfaces, materialVerts, numVerts, materialIdxs, numTriangles * 3 );
+		OptimiseMapGeometryMaterial( &s_worldData, rendererSurfaces, numSurfaces, materialVerts, numVerts, materialIdxs, numTriangles * 3 );
 
 		ri.Hunk_FreeTempMemory( materialIdxs );
 		ri.Hunk_FreeTempMemory( materialVerts );

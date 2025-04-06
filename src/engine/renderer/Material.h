@@ -86,6 +86,9 @@ struct MaterialSurface {
 	GLuint firstIndex;
 	GLuint count;
 
+	vec3_t origin;
+	float radius;
+
 	srfVert_t* verts;
 	srfTriangle_t* tris;
 
@@ -144,6 +147,7 @@ struct Material {
 
 	//std::vector<MaterialSurface*> surfaces;
 	std::vector<DrawCommand> drawCommands;
+	uint32_t drawCommandCount = 0;
 	bool texturesResident = false;
 	std::vector<Texture*> textures;
 
@@ -321,7 +325,7 @@ class MaterialSystem {
 	public:
 	bool generatedWorldCommandBuffer = false;
 	bool generatingWorldCommandBuffer = false;
-	vec3_t worldViewBounds[2] = {};
+	vec3_t worldViewBounds[2] = { -32000, -32000, -32000, 32000, 32000, 32000 };
 
 	uint8_t maxStages = 0;
 	uint32_t descriptorSize;
@@ -388,13 +392,13 @@ class MaterialSystem {
 	void GenerateMaterial( MaterialSurface* surface );
 	void GenerateWorldMaterials();
 	void GenerateWorldMaterialsBuffer();
-	void GenerateWorldCommandBuffer();
+	void GenerateWorldCommandBuffer( std::vector<MaterialSurface>& surfaces );
 	void GeneratePortalBoundingSpheres();
 
 	void GenerateMaterialsBuffer( std::vector<shaderStage_t*>& stages, const uint32_t size, uint32_t* materialsData );
 	void GenerateTexturesBuffer( std::vector<TextureData>& textures, TexBundle* textureBundles );
 
-	void AddAllWorldSurfaces();
+	// void AddAllWorldSurfaces();
 
 	void GLSLRestart();
 
@@ -485,15 +489,15 @@ void BindShaderHeatHaze( Material* material );
 void BindShaderLiquid( Material* material );
 void BindShaderFog( Material* material );
 
-void ProcessMaterialNONE( Material*, shaderStage_t*, drawSurf_t* );
-void ProcessMaterialNOP( Material*, shaderStage_t*, drawSurf_t* );
-void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ );
-void ProcessMaterialLightMapping( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf );
-void ProcessMaterialReflection( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ );
-void ProcessMaterialSkybox( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ );
-void ProcessMaterialScreen( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ );
-void ProcessMaterialHeatHaze( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf );
-void ProcessMaterialLiquid( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ );
-void ProcessMaterialFog( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf );
+void ProcessMaterialNONE( Material*, shaderStage_t*, MaterialSurface* );
+void ProcessMaterialNOP( Material*, shaderStage_t*, MaterialSurface* );
+void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, MaterialSurface* /* surface */ );
+void ProcessMaterialLightMapping( Material* material, shaderStage_t* pStage, MaterialSurface* surface );
+void ProcessMaterialReflection( Material* material, shaderStage_t* pStage, MaterialSurface* /* surface */ );
+void ProcessMaterialSkybox( Material* material, shaderStage_t* pStage, MaterialSurface* /* surface */ );
+void ProcessMaterialScreen( Material* material, shaderStage_t* pStage, MaterialSurface* /* surface */ );
+void ProcessMaterialHeatHaze( Material* material, shaderStage_t* pStage, MaterialSurface* surface );
+void ProcessMaterialLiquid( Material* material, shaderStage_t* pStage, MaterialSurface* /* surface */ );
+void ProcessMaterialFog( Material* material, shaderStage_t* pStage, MaterialSurface* surface );
 
 #endif // MATERIAL_H

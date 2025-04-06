@@ -430,38 +430,6 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 
 	GenerateMaterialsBuffer( materialStages, offset, materialsData );
 
-	for ( uint32_t materialPackID = 0; materialPackID < 3; materialPackID++ ) {
-		for ( Material& material : materialPacks[materialPackID].materials ) {
-			for ( MaterialSurface* surface : material.surfaces ) {
-				uint32_t stage = 0;
-				for ( shaderStage_t* pStage = surface->shader->stages; pStage < surface->shader->lastStage; pStage++ ) {
-					if ( surface->materialIDs[stage] != material.id || surface->materialPackIDs[stage] != materialPackID ) {
-						stage++;
-						continue;
-					}
-
-					// We need some of the values from the remapped stage, but material/materialPack ID has to come from pStage
-					shaderStage_t* remappedStage = pStage->materialRemappedStage ? pStage->materialRemappedStage : pStage;
-					const uint32_t SSBOOffset =
-						remappedStage->materialOffset + remappedStage->variantOffsets[surface->shaderVariant[stage]];
-
-					surface->drawCommandIDs[stage] = material.drawCommands.size();
-
-					DrawCommand cmd {};
-					cmd.cmd.firstIndex = surface->firstIndex;
-					cmd.cmd.count = surface->count;
-					cmd.cmd.baseInstance = SSBOOffset;
-					cmd.materialsSSBOOffset = SSBOOffset;
-					cmd.textureCount = 0;
-
-					material.drawCommands.emplace_back( cmd );
-
-					stage++;
-				}
-			}
-		}
-	}
-
 	for ( shaderStage_t* pStage : materialStages ) {
 		if ( pStage->dynamic ) {
 			pStage->bufferOffset -= dynamicStagesOffset;
@@ -529,7 +497,7 @@ void MaterialSystem::GenerateTexturesBuffer( std::vector<TextureData>& textures,
 }
 
 // This generates the buffers with indirect rendering commands etc.
-void MaterialSystem::GenerateWorldCommandBuffer() {
+void MaterialSystem::GenerateWorldCommandBuffer( std::vector<MaterialSurface>& surfaces ) {
 	Log::Debug( "Generating world command buffer" );
 
 	totalBatchCount = 0;
@@ -540,7 +508,7 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		for ( Material& material : pack.materials ) {
 			material.surfaceCommandBatchOffset = batchOffset;
 
-			const uint32_t cmdCount = material.drawCommands.size();
+			const uint32_t cmdCount = material.drawCommandCount; // material.drawCommands.size();
 			const uint32_t batchCount = cmdCount % SURFACE_COMMANDS_PER_BATCH == 0 ? cmdCount / SURFACE_COMMANDS_PER_BATCH
 				: cmdCount / SURFACE_COMMANDS_PER_BATCH + 1;
 
@@ -673,91 +641,41 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 		debugSSBO.UnmapBuffer();
 	}
 
-	for ( int i = 0; i < tr.refdef.numDrawSurfs; i++ ) {
-		const drawSurf_t* drawSurf = &tr.refdef.drawSurfs[i];
+	for ( MaterialSurface& surface : surfaces ) {
+		SurfaceDescriptor surfaceDescriptor;
+		VectorCopy( surface.origin, surfaceDescriptor.boundingSphere.origin );
+		surfaceDescriptor.boundingSphere.radius = surface.radius;
 
-		if ( drawSurf->entity != &tr.worldEntity ) {
-			continue;
-		}
+		const bool depthPrePass = surface.shader->depthShader != nullptr;
 
-		shader_t* shader = drawSurf->shader;
-		if ( !shader ) {
-			continue;
-		}
-
-		shader = shader->remappedShader ? shader->remappedShader : shader;
-		if ( shader->isSky || shader->isPortal || shader->autoSpriteMode ) {
-			continue;
-		}
-
-		// Don't add SF_SKIP surfaces
-		if ( *drawSurf->surface == surfaceType_t::SF_SKIP ) {
-			continue;
-		}
-
-		// Depth prepass surfaces are added as stages to the main surface instead
-		if ( drawSurf->materialSystemSkip ) {
-			continue;
-		}
-
-		SurfaceDescriptor surface;
-		VectorCopy( ( ( srfGeneric_t* ) drawSurf->surface )->origin, surface.boundingSphere.origin );
-		surface.boundingSphere.radius = ( ( srfGeneric_t* ) drawSurf->surface )->radius;
-
-		const bool depthPrePass = drawSurf->depthSurface != nullptr;
-
-		if ( depthPrePass ) {
-			const drawSurf_t* depthDrawSurf = drawSurf->depthSurface;
-			const Material* material = &materialPacks[depthDrawSurf->materialPackIDs[0]]
-				.materials[depthDrawSurf->materialIDs[0]];
-			uint cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + depthDrawSurf->drawCommandIDs[0];
-			// Add 1 because cmd 0 == no-command
-			surface.surfaceCommandIDs[0] = cmdID + 1;
-
-			SurfaceCommand surfaceCommand;
-			surfaceCommand.enabled = 0;
-			surfaceCommand.drawCommand = material->drawCommands[depthDrawSurf->drawCommandIDs[0]].cmd;
-			// We still need the textures for alpha-tested depth pre-pass surface commands
-			surfaceCommand.drawCommand.baseInstance |= depthDrawSurf->texDataDynamic[0]
-				? ( depthDrawSurf->texDataIDs[0] + texData.size() ) << TEX_BUNDLE_BITS
-				: depthDrawSurf->texDataIDs[0] << TEX_BUNDLE_BITS;
-			surfaceCommands[cmdID] = surfaceCommand;
-		}
+		IndirectCompactCommand drawCmd { surface.count, surface.firstIndex };
 
 		uint32_t stage = 0;
-		for ( shaderStage_t* pStage = drawSurf->shader->stages; pStage < drawSurf->shader->lastStage; pStage++ ) {
-			const Material* material = &materialPacks[drawSurf->materialPackIDs[stage]].materials[drawSurf->materialIDs[stage]];
-			uint32_t cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + drawSurf->drawCommandIDs[stage];
+		for ( shaderStage_t* pStage = surface.shader->stages; pStage < surface.shader->lastStage; pStage++ ) {
+			const Material* material = &materialPacks[surface.materialPackIDs[stage]].materials[surface.materialIDs[stage]];
+			uint32_t cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + surface.drawCommandIDs[stage];
 			// Add 1 because cmd 0 == no-command
-			surface.surfaceCommandIDs[stage + ( depthPrePass ? 1 : 0 )] = cmdID + 1;
+			surfaceDescriptor.surfaceCommandIDs[stage + ( depthPrePass ? 1 : 0 )] = cmdID + 1;
 
 			SurfaceCommand surfaceCommand;
 			surfaceCommand.enabled = 0;
-			surfaceCommand.drawCommand = material->drawCommands[drawSurf->drawCommandIDs[stage]].cmd;
-			surfaceCommand.drawCommand.baseInstance |= drawSurf->texDataDynamic[stage]
-				? ( drawSurf->texDataIDs[stage] + texData.size() ) << TEX_BUNDLE_BITS
-				: drawSurf->texDataIDs[stage] << TEX_BUNDLE_BITS;
-			surfaceCommand.drawCommand.baseInstance |= ( HasLightMap( drawSurf ) ? GetLightMapNum( drawSurf ) : 255 ) << LIGHTMAP_BITS;
+
+			shaderStage_t* remappedStage = pStage->materialRemappedStage ? pStage->materialRemappedStage : pStage;
+			const uint32_t SSBOOffset =
+				remappedStage->materialOffset + remappedStage->variantOffsets[surface.shaderVariant[stage]];
+
+			surfaceCommand.drawCommand = drawCmd;
+			surfaceCommand.drawCommand.baseInstance = SSBOOffset;
+			surfaceCommand.drawCommand.baseInstance |= surface.texDataDynamic[stage]
+				? ( surface.texDataIDs[stage] + texData.size() ) << TEX_BUNDLE_BITS
+				: surface.texDataIDs[stage] << TEX_BUNDLE_BITS;
+			surfaceCommand.drawCommand.baseInstance |= ( HasLightMap( &surface ) ? GetLightMapNum( &surface ) : 255 ) << LIGHTMAP_BITS;
 			surfaceCommands[cmdID] = surfaceCommand;
 
 			stage++;
 		}
 
-		if ( drawSurf->fogSurface ) {
-			const drawSurf_t* fogDrawSurf = drawSurf->fogSurface;
-			const Material* material = &materialPacks[fogDrawSurf->materialPackIDs[0]]
-				.materials[fogDrawSurf->materialIDs[0]];
-			uint cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + fogDrawSurf->drawCommandIDs[0];
-			// Add 1 because cmd 0 == no-command
-			surface.surfaceCommandIDs[stage + ( depthPrePass ? 1 : 0 )] = cmdID + 1;
-
-			SurfaceCommand surfaceCommand;
-			surfaceCommand.enabled = 0;
-			surfaceCommand.drawCommand = material->drawCommands[fogDrawSurf->drawCommandIDs[0]].cmd;
-			surfaceCommands[cmdID] = surfaceCommand;
-		}
-
-		memcpy( surfaceDescriptors, &surface, descriptorSize * sizeof( uint32_t ) );
+		memcpy( surfaceDescriptors, &surfaceDescriptor, descriptorSize * sizeof( uint32_t ) );
 		surfaceDescriptors += descriptorSize;
 	}
 
@@ -774,6 +692,8 @@ void MaterialSystem::GenerateWorldCommandBuffer() {
 	atomicCommandCountersBuffer.UnmapBuffer();
 
 	surfaceBatchesUBO.UnmapBuffer();
+
+	generatedWorldCommandBuffer = true;
 
 	GL_CheckErrors();
 }
@@ -1063,16 +983,16 @@ void BindShaderFog( Material* material ) {
 	);
 }
 
-void ProcessMaterialNONE( Material*, shaderStage_t*, drawSurf_t* ) {
+void ProcessMaterialNONE( Material*, shaderStage_t*, MaterialSurface* ) {
 	ASSERT_UNREACHABLE();
 }
 
-void ProcessMaterialNOP( Material*, shaderStage_t*, drawSurf_t* ) {
+void ProcessMaterialNOP( Material*, shaderStage_t*, MaterialSurface* ) {
 }
 
 // ProcessMaterial*() are essentially same as BindShader*(), but only set the GL program id to the material,
 // without actually binding it
-void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSurf_t* ) {
+void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, MaterialSurface* ) {
 	material->shader = gl_genericShaderMaterial;
 
 	material->tcGenEnvironment = pStage->tcGen_Environment;
@@ -1089,14 +1009,14 @@ void ProcessMaterialGeneric3D( Material* material, shaderStage_t* pStage, drawSu
 	material->program = gl_genericShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void ProcessMaterialLightMapping( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf ) {
+void ProcessMaterialLightMapping( Material* material, shaderStage_t* pStage, MaterialSurface* surface ) {
 	material->shader = gl_lightMappingShaderMaterial;
 
-	gl_lightMappingShaderMaterial->SetBspSurface( drawSurf->bspSurface );
+	gl_lightMappingShaderMaterial->SetBspSurface( surface->bspSurface );
 
 	lightMode_t lightMode;
 	deluxeMode_t deluxeMode;
-	SetLightDeluxeMode( drawSurf, pStage->type, lightMode, deluxeMode );
+	SetLightDeluxeMode( surface, pStage->type, lightMode, deluxeMode );
 
 	bool enableDeluxeMapping = ( deluxeMode == deluxeMode_t::MAP );
 	bool enableGridLighting = ( lightMode == lightMode_t::GRID );
@@ -1131,7 +1051,7 @@ void ProcessMaterialLightMapping( Material* material, shaderStage_t* pStage, dra
 	material->program = gl_lightMappingShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void ProcessMaterialReflection( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ ) {
+void ProcessMaterialReflection( Material* material, shaderStage_t* pStage, MaterialSurface* /* surface */ ) {
 	material->shader = gl_reflectionShaderMaterial;
 
 	material->hasHeightMapInNormalMap = pStage->hasHeightMapInNormalMap;
@@ -1145,7 +1065,7 @@ void ProcessMaterialReflection( Material* material, shaderStage_t* pStage, drawS
 	material->program = gl_reflectionShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void ProcessMaterialSkybox( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ ) {
+void ProcessMaterialSkybox( Material* material, shaderStage_t* pStage, MaterialSurface* /* surface */ ) {
 	material->shader = gl_skyboxShaderMaterial;
 
 	material->deformIndex = pStage->deformIndex;
@@ -1153,7 +1073,7 @@ void ProcessMaterialSkybox( Material* material, shaderStage_t* pStage, drawSurf_
 	material->program = gl_skyboxShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void ProcessMaterialScreen( Material* material, shaderStage_t* pStage, drawSurf_t* /* drawSurf */ ) {
+void ProcessMaterialScreen( Material* material, shaderStage_t* pStage, MaterialSurface* /* surface */ ) {
 	material->shader = gl_screenShaderMaterial;
 
 	material->deformIndex = pStage->deformIndex;
@@ -1161,7 +1081,7 @@ void ProcessMaterialScreen( Material* material, shaderStage_t* pStage, drawSurf_
 	material->program = gl_screenShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void ProcessMaterialHeatHaze( Material* material, shaderStage_t* pStage, drawSurf_t* ) {
+void ProcessMaterialHeatHaze( Material* material, shaderStage_t* pStage, MaterialSurface* ) {
 	material->shader = gl_heatHazeShaderMaterial;
 
 	material->deformIndex = pStage->deformIndex;
@@ -1169,12 +1089,12 @@ void ProcessMaterialHeatHaze( Material* material, shaderStage_t* pStage, drawSur
 	material->program = gl_heatHazeShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void ProcessMaterialLiquid( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf ) {
+void ProcessMaterialLiquid( Material* material, shaderStage_t* pStage, MaterialSurface* surface ) {
 	material->shader = gl_liquidShaderMaterial;
 
 	lightMode_t lightMode;
 	deluxeMode_t deluxeMode;
-	SetLightDeluxeMode( drawSurf, pStage->type, lightMode, deluxeMode );
+	SetLightDeluxeMode( surface, pStage->type, lightMode, deluxeMode );
 
 	material->hasHeightMapInNormalMap = pStage->hasHeightMapInNormalMap;
 	material->enableReliefMapping = pStage->enableReliefMapping;
@@ -1193,9 +1113,9 @@ void ProcessMaterialLiquid( Material* material, shaderStage_t* pStage, drawSurf_
 	material->program = gl_liquidShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void ProcessMaterialFog( Material* material, shaderStage_t* pStage, drawSurf_t* drawSurf ) {
+void ProcessMaterialFog( Material* material, shaderStage_t* pStage, MaterialSurface* surface ) {
 	material->shader = gl_fogQuake3ShaderMaterial;
-	material->fog = tr.world->fogs + drawSurf->fog;
+	material->fog = tr.world->fogs + surface->fog;
 
 	material->program = gl_fogQuake3ShaderMaterial->GetProgram( pStage->deformIndex );
 }
@@ -1398,12 +1318,26 @@ void MaterialSystem::ProcessStage( MaterialSurface* surface, shaderStage_t* pSta
 
 	packIDs[materialPack] = id;
 
+	materials[previousMaterialID].drawCommandCount++;
+
 	stage++;
 }
 
 void MaterialSystem::GenerateMaterial( MaterialSurface* surface ) {
 	totalDrawSurfs++;
 	
+	if ( surface->shader->depthShader ) {
+		uint32_t unused;
+		uint32_t stage = 0;
+		ProcessStage( surface, surface->shader->depthShader->stages, surface->shader->depthShader, packIDs, stage, unused );
+	}
+
+	if ( !surface->shader->noFog && surface->fog >= 1 ) {
+		uint32_t unused;
+		uint32_t stage = 0;
+		ProcessStage( surface, surface->shader->fogShader->stages, surface->shader->fogShader, packIDs, stage, unused );
+	}
+
 	uint32_t stage = 0;
 	uint32_t previousMaterialID = 0;
 	for ( shaderStage_t* pStage = surface->shader->stages; pStage < surface->shader->lastStage; pStage++ ) {
@@ -1484,18 +1418,18 @@ void MaterialSystem::GenerateWorldMaterials() {
 
 	r_nocull->integer = current_r_nocull;
 	r_drawworld->integer = current_r_drawworld;
-	AddAllWorldSurfaces();
+	// AddAllWorldSurfaces();
 
 	GeneratePortalBoundingSpheres();
 
 	generatedWorldCommandBuffer = true;
 }
 
-void MaterialSystem::AddAllWorldSurfaces() {
+/* void MaterialSystem::AddAllWorldSurfaces() {
 	GenerateWorldCommandBuffer();
 
 	generatingWorldCommandBuffer = false;
-}
+} */
 
 void MaterialSystem::GLSLRestart() {
 	for ( MaterialPack& materialPack : materialPacks ) {
@@ -1912,7 +1846,7 @@ void MaterialSystem::Free() {
 	for ( MaterialPack& pack : materialPacks ) {
 		for ( Material& material : pack.materials ) {
 			material.drawCommands.clear();
-			material.surfaces.clear();
+			// material.surfaces.clear();
 		}
 		pack.materials.clear();
 	}

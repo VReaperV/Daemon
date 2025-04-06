@@ -653,7 +653,7 @@ void RE_RenderScene( const refdef_t *fd )
 	R_AddSetupLightsCmd();
 
 	if ( glConfig2.usingMaterialSystem && !materialSystem.generatedWorldCommandBuffer ) {
-		materialSystem.GenerateWorldMaterials();
+		// materialSystem.GenerateWorldMaterials();
 	}
 
 	if ( glConfig2.usingMaterialSystem ) {

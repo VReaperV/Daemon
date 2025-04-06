@@ -367,7 +367,7 @@ static void ProcessMaterialSurface( MaterialSurface& surface, std::vector<Materi
 	}
 }
 
-std::vector<MaterialSurface> OptimiseMapGeometryMaterial( world_t* world, int numSurfaces,
+std::vector<MaterialSurface> OptimiseMapGeometryMaterial( world_t* world, bspSurface_t** rendererSurfaces, int numSurfaces,
 	srfVert_t* verts, int numVerts, glIndex_t* indices, int numIndices ) {
 	std::vector<MaterialSurface> materialSurfaces;
 	materialSurfaces.reserve( numSurfaces );
@@ -378,27 +378,37 @@ std::vector<MaterialSurface> OptimiseMapGeometryMaterial( world_t* world, int nu
 	// std::unordered_map<TriEdge, TriIndex> triEdges;
 
 	int surfaceIndex = 0;
-	for ( int k = 0; k < world->numSurfaces; k++ ) {
-		bspSurface_t* surface = &world->surfaces[k];
+	for ( int i = 0; i < numSurfaces; i++ ) {
+		bspSurface_t* surface = rendererSurfaces[i];
 
 		MaterialSurface srf {};
 
 		srf.shader = surface->shader;
 		srf.bspSurface = true;
+		srf.lightMapNum = surface->lightmapNum;
 		srf.fog = surface->fogIndex;
+		srf.portalNum = surface->portalNum;
 
 		srf.firstIndex = ( ( srfGeneric_t* ) surface->data )->firstIndex;
 		srf.count = ( ( srfGeneric_t* ) surface->data )->numTriangles;
 		srf.verts = ( ( srfGeneric_t* ) surface->data )->verts;
 		srf.tris = ( ( srfGeneric_t* ) surface->data )->triangles;
 
+		VectorCopy( ( ( srfGeneric_t* ) surface->data )->origin, srf.origin );
+		srf.radius = ( ( srfGeneric_t* ) surface->data )->radius;
+
+		materialSystem.GenerateMaterial( &srf );
+
 		materialSurfaces.emplace_back( srf );
 		surfaceIndex++;
 	}
 
-	while ( materialSurfaces.size() ) {
+	materialSystem.GenerateWorldMaterialsBuffer();
+	materialSystem.GenerateWorldCommandBuffer( materialSurfaces );
+
+	/* while ( materialSurfaces.size() ) {
 		ProcessMaterialSurface( materialSurfaces.front(), materialSurfaces, processedMaterialSurfaces, verts, indices );
-	}
+	} */
 
 	// qsort( materialSurfaces, numSurfaces, sizeof( bspSurface_t* ), LeafSurfaceCompare );
 
