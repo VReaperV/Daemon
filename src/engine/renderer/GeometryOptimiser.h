@@ -68,18 +68,18 @@ struct TriIndex {
 
 struct MapVertHasher {
 	size_t operator()( const srfVert_t& vert ) const {
-		size_t hash = ~( *( ( uint32_t* ) &vert.xyz[0] ) << 15 );
-		hash ^= ( *( ( uint32_t* ) &vert.xyz[0] ) >> 10 );
-		hash += ( *( ( uint32_t* ) &vert.xyz[1] ) << 3 );
-		hash ^= ( *( ( uint32_t* ) &vert.xyz[1] ) >> 6 );
-		hash += ~( *( ( uint32_t* ) &vert.xyz[2] ) << 11 );
-		hash ^= ( *( ( uint32_t* ) &vert.xyz[2] ) >> 16 );
+		size_t hash = ~( *( ( size_t* ) &vert.xyz[0] ) << 15 );
+		hash ^= ( *( ( size_t* ) &vert.xyz[0] ) >> 10 );
+		hash += ( *( ( size_t* ) &vert.xyz[1] ) << 3 );
+		hash ^= ( *( ( size_t* ) &vert.xyz[1] ) >> 6 );
+		hash += ~( *( ( size_t* ) &vert.xyz[2] ) << 11 );
+		hash ^= ( *( ( size_t* ) &vert.xyz[2] ) >> 16 );
 
-		hash ^= ( *( ( uint32_t* ) &vert.st[0] ) << 7 );
-		hash += ( *( ( uint32_t* ) &vert.st[0] ) >> 12 );
+		hash ^= ( *( ( size_t* ) &vert.st[0] ) << 7 );
+		hash += ( *( ( size_t* ) &vert.st[0] ) >> 12 );
 
-		hash ^= ( *( ( uint32_t* ) &vert.st[1] ) << 13 );
-		hash += ( *( ( uint32_t* ) &vert.st[1] ) >> 8 );
+		hash ^= ( *( ( size_t* ) &vert.st[1] ) << 13 );
+		hash += ( *( ( size_t* ) &vert.st[1] ) >> 8 );
 
 		return hash;
 	}
@@ -106,6 +106,8 @@ void OptimiseMapGeometryCore( world_t* world, bspSurface_t** rendererSurfaces, i
 void MergeLeafSurfacesCore( world_t* world, bspSurface_t** rendererSurfaces, int numSurfaces, int numTriangles );
 void MergeDuplicateVertices( bspSurface_t** rendererSurfaces, int numSurfaces, srfVert_t* vertices, int numVerticesIn,
 	glIndex_t* indices, int numIndicesIn, int& numVerticesOut, int& numIndicesOut );
+void BuildMapGeometry( bspSurface_t** rendererSurfaces, int numSurfaces, srfVert_t* vertices, int numVertices,
+	glIndex_t* indices, int numIndices );
 std::vector<MaterialSurface> OptimiseMapGeometryMaterial( world_t* world, int numSurfaces,
 	srfVert_t* verts, int numVerts, glIndex_t* indices, int numIndices );
 

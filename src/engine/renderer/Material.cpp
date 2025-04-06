@@ -432,10 +432,10 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 
 	for ( uint32_t materialPackID = 0; materialPackID < 3; materialPackID++ ) {
 		for ( Material& material : materialPacks[materialPackID].materials ) {
-			for ( drawSurf_t* drawSurf : material.drawSurfs ) {
+			for ( MaterialSurface* surface : material.surfaces ) {
 				uint32_t stage = 0;
-				for ( shaderStage_t* pStage = drawSurf->shader->stages; pStage < drawSurf->shader->lastStage; pStage++ ) {
-					if ( drawSurf->materialIDs[stage] != material.id || drawSurf->materialPackIDs[stage] != materialPackID ) {
+				for ( shaderStage_t* pStage = surface->shader->stages; pStage < surface->shader->lastStage; pStage++ ) {
+					if ( surface->materialIDs[stage] != material.id || surface->materialPackIDs[stage] != materialPackID ) {
 						stage++;
 						continue;
 					}
@@ -443,20 +443,18 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 					// We need some of the values from the remapped stage, but material/materialPack ID has to come from pStage
 					shaderStage_t* remappedStage = pStage->materialRemappedStage ? pStage->materialRemappedStage : pStage;
 					const uint32_t SSBOOffset =
-						remappedStage->materialOffset + remappedStage->variantOffsets[drawSurf->shaderVariant[stage]];
+						remappedStage->materialOffset + remappedStage->variantOffsets[surface->shaderVariant[stage]];
 
-					tess.currentDrawSurf = drawSurf;
+					surface->drawCommandIDs[stage] = material.drawCommands.size();
 
-					tess.currentSSBOOffset = SSBOOffset;
-					tess.materialID = drawSurf->materialIDs[stage];
-					tess.materialPackID = drawSurf->materialPackIDs[stage];
+					DrawCommand cmd {};
+					cmd.cmd.firstIndex = surface->firstIndex;
+					cmd.cmd.count = surface->count;
+					cmd.cmd.baseInstance = SSBOOffset;
+					cmd.materialsSSBOOffset = SSBOOffset;
+					cmd.textureCount = 0;
 
-					Tess_Begin( Tess_StageIteratorDummy, nullptr, nullptr, false, -1, 0 );
-					rb_surfaceTable[Util::ordinal( *drawSurf->surface )]( drawSurf->surface );
-					Tess_DrawElements();
-					Tess_Clear();
-
-					drawSurf->drawCommandIDs[stage] = lastCommandID;
+					material.drawCommands.emplace_back( cmd );
 
 					stage++;
 				}
@@ -1202,7 +1200,7 @@ void ProcessMaterialFog( Material* material, shaderStage_t* pStage, drawSurf_t* 
 	material->program = gl_fogQuake3ShaderMaterial->GetProgram( pStage->deformIndex );
 }
 
-void MaterialSystem::AddStage( drawSurf_t* drawSurf, shaderStage_t* pStage, uint32_t stage,
+void MaterialSystem::AddStage( MaterialSurface* surface, shaderStage_t* pStage, uint32_t stage,
 	const bool mayUseVertexOverbright, const bool vertexLit, const bool fullbright ) {
 	const int variant = ( mayUseVertexOverbright ? ShaderStageVariant::VERTEX_OVERBRIGHT : 0 )
 		| ( vertexLit ? ShaderStageVariant::VERTEX_LIT : 0 )
@@ -1213,7 +1211,7 @@ void MaterialSystem::AddStage( drawSurf_t* drawSurf, shaderStage_t* pStage, uint
 		pStage->variantOffset++;
 	}
 
-	drawSurf->shaderVariant[stage] = variant;
+	surface->shaderVariant[stage] = variant;
 
 	// Look for a stage that will have the same data layout and data + data changes themselves
 	for ( shaderStage_t* pStage2 : materialStages ) {
@@ -1307,12 +1305,13 @@ void MaterialSystem::AddStage( drawSurf_t* drawSurf, shaderStage_t* pStage, uint
 	}
 }
 
-void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage,
+void MaterialSystem::ProcessStage( MaterialSurface* surface, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage,
 	uint32_t& previousMaterialID ) {
 	lightMode_t lightMode;
 	deluxeMode_t deluxeMode;
-	SetLightDeluxeMode( drawSurf, pStage->type, lightMode, deluxeMode );
-	const bool mayUseVertexOverbright = pStage->type == stageType_t::ST_COLORMAP && drawSurf->bspSurface && pStage->shaderBinder == BindShaderGeneric3D;
+	SetLightDeluxeMode( surface, pStage->type, lightMode, deluxeMode );
+	const bool mayUseVertexOverbright = pStage->type == stageType_t::ST_COLORMAP
+		&& surface->bspSurface && pStage->shaderBinder == BindShaderGeneric3D;
 	const bool vertexLit = lightMode == lightMode_t::VERTEX && pStage->shaderBinder == BindShaderLightMapping;
 	const bool fullbright = lightMode == lightMode_t::FULLBRIGHT && pStage->shaderBinder == BindShaderLightMapping;
 
@@ -1347,16 +1346,15 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 	material.cullType = shader->cullType;
 	material.usePolygonOffset = shader->polygonOffset;
 
-	material.bspSurface = drawSurf->bspSurface;
-	pStage->materialProcessor( &material, pStage, drawSurf );
+	material.bspSurface = surface->bspSurface;
+	pStage->materialProcessor( &material, pStage, surface );
 	pStage->paddedSize = material.shader->GetPaddedSize();
 
 	// HACK: Copy the shaderStage_t and drawSurf_t that we need into the material, so we can use it with glsl_restart
 	material.refStage = pStage;
-	material.refDrawSurf = *drawSurf;
-	material.refDrawSurf.entity = nullptr;
-	material.refDrawSurf.depthSurface = nullptr;
-	material.refDrawSurf.fogSurface = nullptr;
+	material.refDrawSurf = *surface;
+	material.refDrawSurf.verts = nullptr;
+	material.refDrawSurf.tris = nullptr;
 
 	std::vector<Material>& materials = materialPacks[materialPack].materials;
 	std::vector<Material>::iterator currentSearchIt = materials.begin();
@@ -1387,20 +1385,30 @@ void MaterialSystem::ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, 
 	pStage->useMaterialSystem = true;
 	pStage->initialized = true;
 
-	AddStage( drawSurf, pStage, stage, mayUseVertexOverbright, vertexLit, fullbright );
-	AddStageTextures( drawSurf, stage, &materials[previousMaterialID] );
+	AddStage( surface, pStage, stage, mayUseVertexOverbright, vertexLit, fullbright );
+	AddStageTextures( surface, stage, &materials[previousMaterialID] );
 
-	if ( std::find( materials[previousMaterialID].drawSurfs.begin(), materials[previousMaterialID].drawSurfs.end(), drawSurf )
-		== materials[previousMaterialID].drawSurfs.end() ) {
-		materials[previousMaterialID].drawSurfs.emplace_back( drawSurf );
-	}
+	/* if ( std::find( materials[previousMaterialID].surfaces.begin(), materials[previousMaterialID].surfaces.end(), surface )
+		== materials[previousMaterialID].surfaces.end() ) {
+		materials[previousMaterialID].surfaces.emplace_back( surface );
+	} */
 
-	drawSurf->materialIDs[stage] = previousMaterialID;
-	drawSurf->materialPackIDs[stage] = materialPack;
+	surface->materialIDs[stage] = previousMaterialID;
+	surface->materialPackIDs[stage] = materialPack;
 
 	packIDs[materialPack] = id;
 
 	stage++;
+}
+
+void MaterialSystem::GenerateMaterial( MaterialSurface* surface ) {
+	totalDrawSurfs++;
+	
+	uint32_t stage = 0;
+	uint32_t previousMaterialID = 0;
+	for ( shaderStage_t* pStage = surface->shader->stages; pStage < surface->shader->lastStage; pStage++ ) {
+		ProcessStage( surface, pStage, surface->shader, packIDs, stage, previousMaterialID );
+	}
 }
 
 /* This will only generate the materials themselves
@@ -1429,8 +1437,6 @@ void MaterialSystem::GenerateWorldMaterials() {
 
 	totalDrawSurfs = 0;
 
-	uint32_t packIDs[3] = { 0, 0, 0 };
-
 	for ( int i = 0; i < tr.refdef.numDrawSurfs; i++ ) {
 		drawSurf_t* drawSurf = &tr.refdef.drawSurfs[i];
 		if ( drawSurf->entity != &tr.worldEntity ) {
@@ -1452,16 +1458,7 @@ void MaterialSystem::GenerateWorldMaterials() {
 			continue;
 		}
 
-		// Only add the main surface for surfaces with depth pre-pass or fog to the total count
-		if ( !drawSurf->materialSystemSkip ) {
-			totalDrawSurfs++;
-		}
-
-		uint32_t stage = 0;
-		uint32_t previousMaterialID = 0;
-		for ( shaderStage_t* pStage = drawSurf->shader->stages; pStage < drawSurf->shader->lastStage; pStage++ ) {
-			ProcessStage( drawSurf, pStage, shader, packIDs, stage, previousMaterialID );
-		}
+		
 	}
 
 	GenerateWorldMaterialsBuffer();
@@ -1510,9 +1507,9 @@ void MaterialSystem::GLSLRestart() {
 	}
 }
 
-void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, const uint32_t stage, Material* material ) {
+void MaterialSystem::AddStageTextures( MaterialSurface* surface, const uint32_t stage, Material* material ) {
 	TextureData textureData;
-	const shaderStage_t* pStage = &drawSurf->shader->stages[stage];
+	const shaderStage_t* pStage = &surface->shader->stages[stage];
 
 	int bundleNum = 0;
 	bool dynamic = false;
@@ -1542,11 +1539,11 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, const uint32_t stag
 	// Add lightmap and deluxemap for this surface to the material as well
 	lightMode_t lightMode;
 	deluxeMode_t deluxeMode;
-	SetLightDeluxeMode( drawSurf, pStage->type, lightMode, deluxeMode );
+	SetLightDeluxeMode( surface, pStage->type, lightMode, deluxeMode );
 
 	// u_Map, u_DeluxeMap
-	image_t* lightmap = SetLightMap( drawSurf, lightMode );
-	image_t* deluxemap = SetDeluxeMap( drawSurf, deluxeMode );
+	image_t* lightmap = SetLightMap( surface, lightMode );
+	image_t* deluxemap = SetDeluxeMap( surface, deluxeMode );
 
 	material->AddTexture( lightmap->texture );
 	material->AddTexture( deluxemap->texture );
@@ -1559,12 +1556,12 @@ void MaterialSystem::AddStageTextures( drawSurf_t* drawSurf, const uint32_t stag
 
 	std::vector<TextureData>::iterator it = std::find( textures.begin(), textures.end(), textureData );
 	if ( it == textures.end() ) {
-		drawSurf->texDataIDs[stage] = textures.size();
+		surface->texDataIDs[stage] = textures.size();
 		textures.emplace_back( textureData );
 	} else {
-		drawSurf->texDataIDs[stage] = it - textures.begin();
+		surface->texDataIDs[stage] = it - textures.begin();
 	}
-	drawSurf->texDataDynamic[stage] = dynamic;
+	surface->texDataDynamic[stage] = dynamic;
 
 	if ( glConfig2.realtimeLighting ) {
 		if ( r_realtimeLightingRenderer.Get() == Util::ordinal( realtimeLightingRenderer_t::TILED ) ) {
@@ -1915,7 +1912,7 @@ void MaterialSystem::Free() {
 	for ( MaterialPack& pack : materialPacks ) {
 		for ( Material& material : pack.materials ) {
 			material.drawCommands.clear();
-			material.drawSurfs.clear();
+			material.surfaces.clear();
 		}
 		pack.materials.clear();
 	}
@@ -1938,7 +1935,7 @@ void MaterialSystem::AddTexture( Texture* texture ) {
 	if ( cmd.textureCount >= MAX_DRAWCOMMAND_TEXTURES ) {
 		Sys::Drop( "Exceeded max DrawCommand textures" );
 	}
-	cmd.textures[cmd.textureCount] = texture;
+	// cmd.textures[cmd.textureCount] = texture;
 	cmd.textureCount++;
 }
 

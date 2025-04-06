@@ -314,6 +314,41 @@ void MergeDuplicateVertices( bspSurface_t** rendererSurfaces, int numSurfaces, s
 	Log::Notice( "Merged %i vertices into %i in %i ms", numVerticesIn, numVerticesOut, Sys::Milliseconds() - start );
 }
 
+void BuildMapGeometry( bspSurface_t** rendererSurfaces, int numSurfaces, srfVert_t* vertices, int numVertices,
+	glIndex_t* indices, int numIndices ) {
+	std::unordered_map<srfVert_t, uint32_t, MapVertHasher, MapVertEqual> verts;
+	int start = Sys::Milliseconds();
+	for ( int i = 0; i < numSurfaces; i++ ) {
+		bspSurface_t* surface = rendererSurfaces[i];
+		srfGeneric_t* face = ( srfGeneric_t* ) surface->data;
+		for ( srfTriangle_t* triangle = face->triangles; triangle < face->triangles + face->numTriangles; triangle++ ) {
+			for ( int i = 0; i < 3; i++ ) {
+				uint32_t index = verts[face->verts[triangle->indexes[i]]];
+				if ( !index ) {
+
+				}
+			}
+		}
+
+		uint32_t total = 0;
+		for ( const std::pair<srfVert_t, uint32_t>& vert : verts ) {
+			if ( vert.second > 1 && false ) {
+				Log::Warn( "%u: %f %f %f, st: %f %f, lm: %f %f, n: %f %f %f, q: %f %f %f %f",
+					vert.second, vert.first.xyz[0], vert.first.xyz[1],
+					vert.first.xyz[2], vert.first.st[0], vert.first.st[1], vert.first.lightmap[0], vert.first.lightmap[1],
+					vert.first.normal[0], vert.first.normal[1], vert.first.normal[2],
+					vert.first.qtangent[0], vert.first.qtangent[1], vert.first.qtangent[2], vert.first.qtangent[3] );
+				total += vert.second;
+			}
+		}
+		if ( total ) {
+			Log::Warn( "total: %u", total );
+		}
+	}
+
+	Log::Warn( "%i ms", Sys::Milliseconds() - start );
+}
+
 static void ProcessMaterialSurface( MaterialSurface& surface, std::vector<MaterialSurface>& materialSurfaces,
 	std::vector<MaterialSurface>& processedMaterialSurfaces,
 	srfVert_t* verts, glIndex_t* indices ) {

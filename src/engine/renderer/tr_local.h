@@ -1098,7 +1098,7 @@ enum class ssaoMode {
 	using stageRenderer_t = void(*)(shaderStage_t *);
 	using surfaceDataUpdater_t = void(*)(uint32_t*, shaderStage_t*, bool, bool, bool);
 	using stageShaderBinder_t = void(*)(Material*);
-	using stageMaterialProcessor_t = void(*)(Material*, shaderStage_t*, drawSurf_t*);
+	using stageMaterialProcessor_t = void(*)(Material*, shaderStage_t*, MaterialSurface*);
 
 	enum ShaderStageVariant {
 		VERTEX_OVERBRIGHT = 1,
@@ -3381,12 +3381,6 @@ void GLimp_LogComment_( std::string comment );
 		// For some static VBO/IBO-based drawing, these can be used to request a single data range.
 		uint32_t    numIndexes;
 		uint32_t    numVertexes;
-
-		// Material system stuff for setting up correct SSBO offsets
-		uint materialPackID = 0;
-		uint materialID = 0;
-		uint currentSSBOOffset = 0;
-		drawSurf_t* currentDrawSurf;
 
 		// Must be set by the stage iterator function if needed. These are *not*
 		// automatically cleared by the likes of Tess_End.

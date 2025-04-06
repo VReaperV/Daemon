@@ -37,9 +37,9 @@ inline size_t GetLightMapNum( const shaderCommands_t* tess )
 	return tess->lightmapNum;
 }
 
-inline size_t GetLightMapNum( const drawSurf_t* drawSurf )
+inline size_t GetLightMapNum( const MaterialSurface* surface )
 {
-	return drawSurf->lightmapNum();
+	return surface->lightMapNum;
 }
 
 template<typename Obj> bool HasLightMap( Obj* obj )
@@ -77,9 +77,9 @@ inline shader_t* GetSurfaceShader( shaderCommands_t* tess )
 	return tess->surfaceShader;
 }
 
-inline shader_t* GetSurfaceShader( drawSurf_t* drawSurf )
+inline shader_t* GetSurfaceShader( MaterialSurface* surface )
 {
-	return drawSurf->shader;
+	return surface->shader;
 }
 
 template<typename Obj> static bool hasExplicitelyDisabledLightMap( Obj* obj )
@@ -92,9 +92,9 @@ inline shaderStage_t* GetSurfaceLastStage( shaderCommands_t* tess )
 	return tess->surfaceLastStage;
 }
 
-inline shaderStage_t* GetSurfaceLastStage( drawSurf_t* drawSurf )
+inline shaderStage_t* GetSurfaceLastStage( MaterialSurface* surface )
 {
-	return drawSurf->shader->lastStage;
+	return surface->shader->lastStage;
 }
 
 inline shaderStage_t* GetSurfaceStages( shaderCommands_t* tess )
@@ -102,9 +102,9 @@ inline shaderStage_t* GetSurfaceStages( shaderCommands_t* tess )
 	return tess->surfaceStages;
 }
 
-inline shaderStage_t* GetSurfaceStages( drawSurf_t* drawSurf )
+inline shaderStage_t* GetSurfaceStages( MaterialSurface* surface )
 {
-	return drawSurf->shader->stages;
+	return surface->shader->stages;
 }
 
 template<typename Obj> bool isExplicitelyVertexLitSurface( Obj* obj )

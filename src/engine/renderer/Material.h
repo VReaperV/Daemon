@@ -63,7 +63,7 @@ struct DrawCommand {
 	IndirectCompactCommand cmd;
 	uint32_t materialsSSBOOffset = 0;
 	uint32_t textureCount = 0;
-	Texture* textures[MAX_DRAWCOMMAND_TEXTURES];
+	// Texture* textures[MAX_DRAWCOMMAND_TEXTURES];
 
 	DrawCommand() {
 	}
@@ -72,13 +72,14 @@ struct DrawCommand {
 		cmd = other.cmd;
 		materialsSSBOOffset = other.materialsSSBOOffset;
 		textureCount = other.textureCount;
-		memcpy( textures, other.textures, textureCount * sizeof( Texture* ) );
+		// memcpy( textures, other.textures, textureCount * sizeof( Texture* ) );
 	}
 };
 
 struct MaterialSurface {
 	shader_t* shader;
 	bool bspSurface;
+	int lightMapNum;
 	int fog;
 	int portalNum = -1;
 
@@ -116,7 +117,7 @@ struct Material {
 
 	// Used only for glsl_restart
 	shaderStage_t* refStage;
-	drawSurf_t refDrawSurf;
+	MaterialSurface refDrawSurf;
 
 	int deformIndex;
 	bool tcGenEnvironment;
@@ -141,7 +142,7 @@ struct Material {
 
 	fog_t* fog = nullptr;
 
-	std::vector<drawSurf_t*> drawSurfs;
+	//std::vector<MaterialSurface*> surfaces;
 	std::vector<DrawCommand> drawCommands;
 	bool texturesResident = false;
 	std::vector<Texture*> textures;
@@ -379,11 +380,12 @@ class MaterialSystem {
 	void InitGLBuffers();
 	void FreeGLBuffers();
 
-	void AddStageTextures( drawSurf_t* drawSurf, const uint32_t stage, Material* material );
-	void AddStage( drawSurf_t* drawSurf, shaderStage_t* pStage, uint32_t stage,
+	void AddStageTextures( MaterialSurface* surface, const uint32_t stage, Material* material );
+	void AddStage( MaterialSurface* surface, shaderStage_t* pStage, uint32_t stage,
 		const bool mayUseVertexOverbright, const bool vertexLit, const bool fullbright );
-	void ProcessStage( drawSurf_t* drawSurf, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage,
+	void ProcessStage( MaterialSurface* surface, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage,
 		uint32_t& previousMaterialID );
+	void GenerateMaterial( MaterialSurface* surface );
 	void GenerateWorldMaterials();
 	void GenerateWorldMaterialsBuffer();
 	void GenerateWorldCommandBuffer();
@@ -417,6 +419,8 @@ class MaterialSystem {
 
 	uint32_t surfaceCommandsCount = 0;
 	uint32_t surfaceDescriptorsCount = 0;
+
+	uint32_t packIDs[3] = { 0, 0, 0 };
 
 	std::vector<shaderStage_t*> materialStages;
 	std::vector<shaderStage_t*> dynamicStages;
