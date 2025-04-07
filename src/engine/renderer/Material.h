@@ -148,6 +148,7 @@ struct Material {
 	//std::vector<MaterialSurface*> surfaces;
 	std::vector<DrawCommand> drawCommands;
 	uint32_t drawCommandCount = 0;
+	uint32_t drawCommandCount2 = 0;
 	bool texturesResident = false;
 	std::vector<Texture*> textures;
 

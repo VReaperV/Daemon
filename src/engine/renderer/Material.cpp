@@ -646,16 +646,14 @@ void MaterialSystem::GenerateWorldCommandBuffer( std::vector<MaterialSurface>& s
 		VectorCopy( surface.origin, surfaceDescriptor.boundingSphere.origin );
 		surfaceDescriptor.boundingSphere.radius = surface.radius;
 
-		const bool depthPrePass = surface.shader->depthShader != nullptr;
-
 		IndirectCompactCommand drawCmd { surface.count, surface.firstIndex };
 
 		uint32_t stage = 0;
 		for ( shaderStage_t* pStage = surface.shader->stages; pStage < surface.shader->lastStage; pStage++ ) {
-			const Material* material = &materialPacks[surface.materialPackIDs[stage]].materials[surface.materialIDs[stage]];
-			uint32_t cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + surface.drawCommandIDs[stage];
+			Material* material = &materialPacks[surface.materialPackIDs[stage]].materials[surface.materialIDs[stage]];
+			uint32_t cmdID = material->surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH + material->drawCommandCount2;
 			// Add 1 because cmd 0 == no-command
-			surfaceDescriptor.surfaceCommandIDs[stage + ( depthPrePass ? 1 : 0 )] = cmdID + 1;
+			surfaceDescriptor.surfaceCommandIDs[stage] = cmdID + 1;
 
 			SurfaceCommand surfaceCommand;
 			surfaceCommand.enabled = 0;
@@ -671,6 +669,8 @@ void MaterialSystem::GenerateWorldCommandBuffer( std::vector<MaterialSurface>& s
 				: surface.texDataIDs[stage] << TEX_BUNDLE_BITS;
 			surfaceCommand.drawCommand.baseInstance |= ( HasLightMap( &surface ) ? GetLightMapNum( &surface ) : 255 ) << LIGHTMAP_BITS;
 			surfaceCommands[cmdID] = surfaceCommand;
+
+			material->drawCommandCount2++;
 
 			stage++;
 		}
