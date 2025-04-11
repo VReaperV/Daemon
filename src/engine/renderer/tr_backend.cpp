@@ -170,11 +170,6 @@ GLuint64 GL_BindToTMU( int unit, image_t *image )
 	}
 
 	if ( glConfig2.usingBindlessTextures ) {
-		if ( materialSystem.generatingWorldCommandBuffer ) {
-			materialSystem.AddTexture( image->texture );
-			return image->texture->bindlessTextureHandle;
-		}
-
 		return tr.textureManager.BindTexture( 0, image->texture );
 	}
 

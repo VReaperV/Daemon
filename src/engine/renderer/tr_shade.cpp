@@ -529,8 +529,6 @@ Tess_DrawElements
 */
 void Tess_DrawElements()
 {
-	int i;
-
 	if ( ( tess.numIndexes == 0 || tess.numVertexes == 0 ) && tess.multiDrawPrimitives == 0 )
 	{
 		return;
@@ -541,9 +539,7 @@ void Tess_DrawElements()
 	{
 		if ( tess.multiDrawPrimitives )
 		{
-			if ( !materialSystem.generatingWorldCommandBuffer ) {
-				glMultiDrawElements( GL_TRIANGLES, tess.multiDrawCounts, GL_INDEX_TYPE, ( const GLvoid** ) tess.multiDrawIndexes, tess.multiDrawPrimitives );
-			}
+			glMultiDrawElements( GL_TRIANGLES, tess.multiDrawCounts, GL_INDEX_TYPE, ( const GLvoid** ) tess.multiDrawIndexes, tess.multiDrawPrimitives );
 
 			backEnd.pc.c_multiDrawElements++;
 			backEnd.pc.c_multiDrawPrimitives += tess.multiDrawPrimitives;
@@ -930,7 +926,7 @@ void Render_lightMapping( shaderStage_t *pStage )
 
 	lightMode_t lightMode;
 	deluxeMode_t deluxeMode;
-	SetLightDeluxeMode( &tess, pStage->type, lightMode, deluxeMode );
+	SetLightDeluxeMode( &tess, tess.surfaceShader, pStage->type, lightMode, deluxeMode );
 
 	// u_Map, u_DeluxeMap
 	image_t *lightmap = SetLightMap( &tess, lightMode );
@@ -2103,7 +2099,7 @@ void Render_liquid( shaderStage_t *pStage )
 
 	lightMode_t lightMode;
 	deluxeMode_t deluxeMode;
-	SetLightDeluxeMode( &tess, pStage->type, lightMode, deluxeMode );
+	SetLightDeluxeMode( &tess, tess.surfaceShader, pStage->type, lightMode, deluxeMode );
 
 	// choose right shader program
 	gl_liquidShader->SetHeightMapInNormalMap( pStage->hasHeightMapInNormalMap );

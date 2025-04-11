@@ -2537,10 +2537,43 @@ static void R_CreateWorldVBO() {
 		// HACK: portals: don't use VBO because when adding a portal we have to read back the verts CPU-side
 		// Autosprite: don't use VBO because verts are rewritten each time based on view origin
 		if ( surface->shader->isPortal || surface->shader->autoSpriteMode != 0 ) {
+			if( glConfig2.usingMaterialSystem ) {
+				if ( surface->shader->isPortal ) {
+					MaterialSurface srf{};
+
+					srf.shader = surface->shader;
+					srf.surface = surface->data;
+					srf.bspSurface = true;
+					srf.lightMapNum = surface->lightmapNum;
+					srf.fog = surface->fogIndex;
+					srf.portalNum = surface->portalNum;
+
+					srf.firstIndex = ( ( srfGeneric_t* ) surface->data )->firstIndex;
+					srf.count = ( ( srfGeneric_t* ) surface->data )->numTriangles * 3;
+					srf.verts = ( ( srfGeneric_t* ) surface->data )->verts;
+					srf.tris = ( ( srfGeneric_t* ) surface->data )->triangles;
+
+					VectorCopy( ( ( srfGeneric_t* ) surface->data )->origin, srf.origin );
+					srf.radius = ( ( srfGeneric_t* ) surface->data )->radius;
+
+					materialSystem.portalSurfaces.emplace_back( srf );
+				}
+
+				if ( surface->shader->autoSpriteMode ) {
+					materialSystem.autospriteSurfaces.push_back( surface );
+				}
+			}
+
 			if ( surface->shader->isPortal ) {
 				numPortals++;
 			}
 			continue;
+		}
+
+		if ( glConfig2.usingMaterialSystem && surface->shader->isSky
+			&& std::find( materialSystem.skyShaders.begin(), materialSystem.skyShaders.end(), surface->shader )
+			== materialSystem.skyShaders.end() ) {
+			materialSystem.skyShaders.emplace_back( surface->shader );
 		}
 
 		if ( *surface->data == surfaceType_t::SF_FACE || *surface->data == surfaceType_t::SF_GRID
@@ -4440,10 +4473,8 @@ void RE_LoadWorldMap( const char *name )
 	}
 
 	s_worldData.dataSize = ( byte * ) ri.Hunk_Alloc( 0, ha_pref::h_low ) - startMarker;
-
 	// only set tr.world now that we know the entire level has loaded properly
 	tr.world = &s_worldData;
-
 	tr.worldLight = tr.lightMode;
 	tr.modelLight = lightMode_t::FULLBRIGHT;
 	tr.modelDeluxe = deluxeMode_t::NONE;

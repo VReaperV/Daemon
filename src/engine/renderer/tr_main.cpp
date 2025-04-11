@@ -1878,29 +1878,6 @@ int R_AddDrawSurf( surfaceType_t *surface, shader_t *shader, int lightmapNum, in
 
 	tr.refdef.numDrawSurfs++;
 
-	// Portal and sky surfaces are not handled by the material system at all
-	if ( materialSystem.generatingWorldCommandBuffer && ( shader->isPortal || shader->isSky || shader->autoSpriteMode ) ) {
-		if ( shader->isSky && std::find( materialSystem.skyShaders.begin(), materialSystem.skyShaders.end(), shader )
-						   == materialSystem.skyShaders.end() ) {
-			materialSystem.skyShaders.emplace_back( shader );
-		}
-
-		if ( shader->isPortal )
-		{
-			// R_AddWorldSurfaces guarantees not to add surfaces more than once
-			ASSERT_EQ(
-				std::find( materialSystem.portalSurfacesTmp.begin(), materialSystem.portalSurfacesTmp.end(), drawSurf ),
-				materialSystem.portalSurfacesTmp.end() );
-			materialSystem.portalSurfacesTmp.emplace_back( drawSurf );
-		}
-
-		if ( shader->autoSpriteMode ) {
-			materialSystem.autospriteSurfaces.push_back( *drawSurf );
-		}
-
-		return baseIndex;
-	}
-
 	if ( shader->depthShader != nullptr ) {
 		const int depthSurfIndex = R_AddDrawSurf( surface, shader->depthShader, 0, 0, bspSurface );
 		drawSurf->depthSurface = &tr.refdef.drawSurfs[depthSurfIndex];

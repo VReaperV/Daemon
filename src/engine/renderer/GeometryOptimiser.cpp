@@ -390,7 +390,7 @@ std::vector<MaterialSurface> OptimiseMapGeometryMaterial( world_t* world, bspSur
 		srf.portalNum = surface->portalNum;
 
 		srf.firstIndex = ( ( srfGeneric_t* ) surface->data )->firstIndex;
-		srf.count = ( ( srfGeneric_t* ) surface->data )->numTriangles;
+		srf.count = ( ( srfGeneric_t* ) surface->data )->numTriangles * 3;
 		srf.verts = ( ( srfGeneric_t* ) surface->data )->verts;
 		srf.tris = ( ( srfGeneric_t* ) surface->data )->triangles;
 

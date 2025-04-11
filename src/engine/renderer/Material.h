@@ -78,8 +78,9 @@ struct DrawCommand {
 
 struct MaterialSurface {
 	shader_t* shader;
+	surfaceType_t* surface;
 	bool bspSurface;
-	int lightMapNum;
+	int16_t lightMapNum;
 	int fog;
 	int portalNum = -1;
 
@@ -99,6 +100,14 @@ struct MaterialSurface {
 	uint32_t texDataIDs[MAX_SHADER_STAGES];
 	bool texDataDynamic[MAX_SHADER_STAGES];
 	uint32_t shaderVariant[MAX_SHADER_STAGES];
+
+	uint8_t stages = 0;
+	shaderStage_t* shaderStages[MAX_SHADER_STAGES];
+
+	/* bool operator==( const MaterialSurface& other ) {
+		if( shader != other.shader || surface != other.surface || bspSurface != other.bspSurface || lightMapNum != other.lightMapNum
+			|| fog != other.fog || portalNum != other.portalNum || firstIndex != other.firstIndex)
+	} */
 };
 
 struct Material {
@@ -145,8 +154,6 @@ struct Material {
 
 	fog_t* fog = nullptr;
 
-	//std::vector<MaterialSurface*> surfaces;
-	std::vector<DrawCommand> drawCommands;
 	uint32_t drawCommandCount = 0;
 	uint32_t drawCommandCount2 = 0;
 	bool texturesResident = false;
@@ -333,9 +340,8 @@ class MaterialSystem {
 
 	std::vector<DrawCommand> drawCommands;
 
-	std::vector<drawSurf_t*> portalSurfacesTmp;
-	std::vector<drawSurf_t> portalSurfaces;
-	std::vector<drawSurf_t> autospriteSurfaces;
+	std::vector<MaterialSurface> portalSurfaces;
+	std::vector<bspSurface_t*> autospriteSurfaces;
 	std::vector<PortalSurface> portalBounds;
 	uint32_t totalPortals;
 	std::vector<shader_t*> skyShaders;
@@ -364,10 +370,6 @@ class MaterialSystem {
 
 	bool frameStart = false;
 
-	void AddTexture( Texture* texture );
-	void AddDrawCommand( const uint32_t materialID, const uint32_t materialPackID, const uint32_t materialsSSBOOffset,
-						 const GLuint count, const GLuint firstIndex );
-
 	void AddPortalSurfaces();
 	void AddAutospriteSurfaces();
 	void RenderMaterials( const shaderSort_t fromSort, const shaderSort_t toSort, const uint32_t viewID );
@@ -385,11 +387,11 @@ class MaterialSystem {
 	void InitGLBuffers();
 	void FreeGLBuffers();
 
-	void AddStageTextures( MaterialSurface* surface, const uint32_t stage, Material* material );
+	void AddStageTextures( MaterialSurface* surface, shader_t* shader, shaderStage_t* pStage, const uint32_t stage, Material* material );
 	void AddStage( MaterialSurface* surface, shaderStage_t* pStage, uint32_t stage,
 		const bool mayUseVertexOverbright, const bool vertexLit, const bool fullbright );
 	void ProcessStage( MaterialSurface* surface, shaderStage_t* pStage, shader_t* shader, uint32_t* packIDs, uint32_t& stage,
-		uint32_t& previousMaterialID );
+		uint32_t& previousMaterialID, bool skipStageSync = false );
 	void GenerateMaterial( MaterialSurface* surface );
 	void GenerateWorldMaterials();
 	void GenerateWorldMaterialsBuffer();
