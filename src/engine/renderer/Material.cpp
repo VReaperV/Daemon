@@ -38,9 +38,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "BufferBind.h"
 #include "ShadeCommon.h"
 #include "GeometryCache.h"
+#include "GLMemory.h"
 
-GLUBO materialsUBO( "materials", BufferBind::MATERIALS, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
-GLBuffer texDataBuffer( "texData", BufferBind::TEX_DATA, GL_MAP_WRITE_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
+GLUBO materialsUBO( "materials", BufferBind::MATERIALS, 0, 0 );
+GLBuffer texDataBuffer( "texData", BufferBind::TEX_DATA, 0, 0 );
 GLUBO lightMapDataUBO( "lightMapData", BufferBind::LIGHTMAP_DATA, GL_MAP_WRITE_BIT, GL_MAP_FLUSH_EXPLICIT_BIT );
 
 GLSSBO surfaceDescriptorsSSBO( "surfaceDescriptors", BufferBind::SURFACE_DESCRIPTORS, GL_MAP_WRITE_BIT, GL_MAP_INVALIDATE_RANGE_BIT );
@@ -426,10 +427,13 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 	totalStageSize = offset;
 
 	// 4 bytes per component
-	materialsUBO.BufferData( offset, nullptr, GL_DYNAMIC_DRAW );
-	uint32_t* materialsData = materialsUBO.MapBufferRange( offset );
+	materialsUBO.BufferStorage( totalStageSize, 1, nullptr );
 
-	GenerateMaterialsBuffer( materialStages, offset, materialsData );
+	uint32_t* materialsData = stagingBuffer.MapBuffer( totalStageSize );
+
+	GenerateMaterialsBuffer( materialStages, totalStageSize, materialsData );
+
+	stagingBuffer.QueueStagingCopy( &materialsUBO, 0 );
 
 	for ( shaderStage_t* pStage : materialStages ) {
 		if ( pStage->dynamic ) {
@@ -437,7 +441,10 @@ void MaterialSystem::GenerateWorldMaterialsBuffer() {
 		}
 	}
 
-	materialsUBO.UnmapBuffer();
+	stagingBuffer.FlushBuffer();
+	stagingBuffer.FlushStagingCopyQueue();
+
+	GL_CheckErrors();
 }
 
 void MaterialSystem::GenerateMaterialsBuffer( std::vector<shaderStage_t*>& stages, const uint32_t size, uint32_t* materialsData ) {
@@ -550,10 +557,11 @@ void MaterialSystem::GenerateWorldCommandBuffer( std::vector<MaterialSurface>& s
 		texDataBindingPoint = BufferBind::TEX_DATA_STORAGE;
 	}
 
-	texDataBuffer.BufferStorage( ( texData.size() + dynamicTexData.size() ) * TEX_BUNDLE_SIZE, 1, nullptr );
-	texDataBuffer.MapAll();
-	TexBundle* textureBundles = ( TexBundle* ) texDataBuffer.GetData();
-	memset( textureBundles, 0, ( texData.size() + dynamicTexData.size() ) * TEX_BUNDLE_SIZE * sizeof( uint32_t ) );
+	const uint32_t texDataSize = ( texData.size() + dynamicTexData.size() ) * TEX_BUNDLE_SIZE;
+	texDataBuffer.BufferStorage( texDataSize, 1, nullptr );
+
+	TexBundle* textureBundles = ( TexBundle* ) stagingBuffer.MapBuffer( texDataSize );
+	memset( textureBundles, 0, texDataSize * sizeof( uint32_t ) );
 
 	GenerateTexturesBuffer( texData, textureBundles );
 
@@ -561,11 +569,13 @@ void MaterialSystem::GenerateWorldCommandBuffer( std::vector<MaterialSurface>& s
 
 	GenerateTexturesBuffer( dynamicTexData, textureBundles );
 
+	stagingBuffer.QueueStagingCopy( &texDataBuffer, 0 );
+
 	dynamicTexDataOffset = texData.size() * TEX_BUNDLE_SIZE;
 	dynamicTexDataSize = dynamicTexData.size() * TEX_BUNDLE_SIZE;
 
-	texDataBuffer.FlushAll();
-	texDataBuffer.UnmapBuffer();
+	stagingBuffer.FlushBuffer();
+	stagingBuffer.FlushStagingCopyQueue();
 
 	lightMapDataUBO.BufferStorage( MAX_LIGHTMAPS * LIGHTMAP_SIZE, 1, nullptr );
 	lightMapDataUBO.MapAll();
@@ -1471,24 +1481,27 @@ void MaterialSystem::AddStageTextures( MaterialSurface* surface, shader_t* shade
 	}
 }
 
-// Dynamic surfaces are those whose values in the SSBO can be updated
+// Dynamic surfaces are those whose values in the UBOs/SSBO might require updating
 void MaterialSystem::UpdateDynamicSurfaces() {
 	if ( dynamicStagesSize > 0 ) {
-		uint32_t* materialsData = materialsUBO.MapBufferRange( dynamicStagesOffset, dynamicStagesSize );
+		uint32_t* materialsData = stagingBuffer.MapBuffer( dynamicStagesSize );
 
 		GenerateMaterialsBuffer( dynamicStages, dynamicStagesSize, materialsData );
 
-		materialsUBO.UnmapBuffer();
+		stagingBuffer.QueueStagingCopy( &materialsUBO, dynamicStagesOffset );
 	}
 
 	if ( dynamicTexDataSize > 0 ) {
 		TexBundle* textureBundles =
-			( TexBundle* ) texDataBuffer.MapBufferRange( dynamicTexDataOffset, dynamicTexDataSize );
+			( TexBundle* ) stagingBuffer.MapBuffer( dynamicTexDataSize );
 
 		GenerateTexturesBuffer( dynamicTexData, textureBundles );
 
-		texDataBuffer.UnmapBuffer();
+		stagingBuffer.QueueStagingCopy( &texDataBuffer, dynamicTexDataOffset );
 	}
+
+	stagingBuffer.FlushBuffer();
+	stagingBuffer.FlushStagingCopyQueue();
 
 	GL_CheckErrors();
 }

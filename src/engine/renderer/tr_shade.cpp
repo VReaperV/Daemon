@@ -232,6 +232,9 @@ static void GLSL_InitGPUShadersOrError()
 		gl_depthReductionShader->MarkProgramForBuilding( 0 );
 	}
 
+	gl_shaderManager.LoadShader( gl_glMemoryShader );
+	gl_glMemoryShader->MarkProgramForBuilding( 0 );
+
 	if ( tr.world ) // this only happens with /glsl_restart
 	{
 		GLSL_InitWorldShaders();
@@ -458,6 +461,7 @@ void GLSL_ShutdownGPUShaders()
 	gl_depthReductionShader = nullptr;
 	gl_clearSurfacesShader = nullptr;
 	gl_processSurfacesShader = nullptr;
+	gl_glMemoryShader = nullptr;
 	gl_lightMappingShader = nullptr;
 	gl_lightMappingShaderMaterial = nullptr;
 	gl_reflectionShader = nullptr;

@@ -31,41 +31,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ===========================================================================
 */
-// BufferBind.h
 
-#ifndef BUFFERBIND_H
-#define BUFFERBIND_H
+/* glMemory_cp.glsl */
 
-namespace BufferBind {
-	enum : uint32_t {
-		// UBO
-		MATERIALS = 0,
-		TEX_DATA = 1,
-		LIGHTMAP_DATA = 2,
-		GLOBAL_DATA = 3,
-		LIGHTS = 4,
+#insert common_cp
 
-		SURFACE_BATCHES = 5,
+// Keep this to 64 because we don't want extra shared mem etc. to be allocated, and to minimize wasted lanes
+layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-		// SSBO
-		SURFACE_DESCRIPTORS = 0,
-		SURFACE_COMMANDS = 1,
-		CULLED_COMMANDS = 2,
-		PORTAL_SURFACES = 4,
-
-		GEOMETRY_CACHE_INPUT_VBO = 5,
-		GEOMETRY_CACHE_VBO = 6,
-		GEOMETRY_CACHE_IBO = 7,
-
-		COMMAND_COUNTERS_STORAGE = 9,
-		TEX_DATA_STORAGE = 11,
-		STAGING = 12,
-
-		DEBUG = 10,
-		
-		// Atomic
-		COMMAND_COUNTERS_ATOMIC = 0
-	};
-};
-
-#endif // BUFFERBIND_H
+void main() {
+	const uint globalGroupID = GLOBAL_GROUP_ID;
+	const uint globalInvocationID = GLOBAL_INVOCATION_ID;
+}
