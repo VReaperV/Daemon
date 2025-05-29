@@ -14,6 +14,8 @@
 #include "depthReduction_cp.glsl.h"
 #include "processSurfaces_cp.glsl.h"
 
+#include "glMemory_cp.glsl.h"
+
 #include "screenSpace_vp.glsl.h"
 #include "blur_fp.glsl.h"
 #include "cameraEffects_fp.glsl.h"
@@ -71,6 +73,9 @@ std::unordered_map<std::string, std::string> shadermap({
 	{ "cull_cp.glsl", std::string( reinterpret_cast< const char* >( cull_cp_glsl ), sizeof( cull_cp_glsl ) ) },
 	{ "depthReduction_cp.glsl", std::string( reinterpret_cast< const char* >( depthReduction_cp_glsl ), sizeof( depthReduction_cp_glsl ) ) },
 	{ "processSurfaces_cp.glsl", std::string( reinterpret_cast< const char* >( processSurfaces_cp_glsl ), sizeof( processSurfaces_cp_glsl ) ) },
+
+	// Memory shaders
+	{ "glMemory_cp.glsl", std::string( reinterpret_cast< const char* >( glMemory_cp_glsl ), sizeof( glMemory_cp_glsl ) ) },
 
 	//  Screen-space shaders
 	{ "screenSpace_vp.glsl", std::string( reinterpret_cast< const char* >( screenSpace_vp_glsl ), sizeof( screenSpace_vp_glsl ) ) },

@@ -1,4 +1,4 @@
-/*
+﻿/*
 ===========================================================================
 
 Daemon BSD Source Code
@@ -31,41 +31,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ===========================================================================
 */
-// BufferBind.h
+// GLMemory.cpp
 
-#ifndef BUFFERBIND_H
-#define BUFFERBIND_H
+#include "common/Common.h"
 
-namespace BufferBind {
-	enum : uint32_t {
-		// UBO
-		MATERIALS = 0,
-		TEX_DATA = 1,
-		LIGHTMAP_DATA = 2,
-		GLOBAL_DATA = 3,
-		LIGHTS = 4,
-
-		SURFACE_BATCHES = 5,
-
-		// SSBO
-		SURFACE_DESCRIPTORS = 0,
-		SURFACE_COMMANDS = 1,
-		CULLED_COMMANDS = 2,
-		PORTAL_SURFACES = 4,
-
-		GEOMETRY_CACHE_INPUT_VBO = 5,
-		GEOMETRY_CACHE_VBO = 6,
-
-		COMMAND_COUNTERS_STORAGE = 9,
-		TEX_DATA_STORAGE = 11,
-
-		DEBUG = 10,
-		
-		// Atomic
-		COMMAND_COUNTERS_ATOMIC = 0,
-		
-		UNUSED = INT32_MAX
-	};
-};
-
-#endif // BUFFERBIND_H
+#include "GLMemory.h"

@@ -1471,7 +1471,7 @@ void MaterialSystem::AddStageTextures( MaterialSurface* surface, shader_t* shade
 	}
 }
 
-// Dynamic surfaces are those whose values in the SSBO can be updated
+// Dynamic surfaces are those whose values in the UBOs/SSBO might require updating
 void MaterialSystem::UpdateDynamicSurfaces() {
 	if ( dynamicStagesSize > 0 ) {
 		uint32_t* materialsData = materialsUBO.MapBufferRange( dynamicStagesOffset, dynamicStagesSize );

@@ -31,41 +31,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ===========================================================================
 */
-// BufferBind.h
+// GLMemory.h
 
-#ifndef BUFFERBIND_H
-#define BUFFERBIND_H
+#ifndef GLMEMORY_H
+#define GLMEMORY_H
 
-namespace BufferBind {
-	enum : uint32_t {
-		// UBO
-		MATERIALS = 0,
-		TEX_DATA = 1,
-		LIGHTMAP_DATA = 2,
-		GLOBAL_DATA = 3,
-		LIGHTS = 4,
+#include "gl_shader.h"
 
-		SURFACE_BATCHES = 5,
+void GLMapStagingBuffer( const uint32_t size );
+void GLBufferCopy( GLBuffer* dst,  );
 
-		// SSBO
-		SURFACE_DESCRIPTORS = 0,
-		SURFACE_COMMANDS = 1,
-		CULLED_COMMANDS = 2,
-		PORTAL_SURFACES = 4,
 
-		GEOMETRY_CACHE_INPUT_VBO = 5,
-		GEOMETRY_CACHE_VBO = 6,
-
-		COMMAND_COUNTERS_STORAGE = 9,
-		TEX_DATA_STORAGE = 11,
-
-		DEBUG = 10,
-		
-		// Atomic
-		COMMAND_COUNTERS_ATOMIC = 0,
-		
-		UNUSED = INT32_MAX
-	};
-};
-
-#endif // BUFFERBIND_H
+#endif // GLMEMORY_H

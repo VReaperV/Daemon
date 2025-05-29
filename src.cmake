@@ -97,6 +97,8 @@ set(RENDERERLIST
     ${ENGINE_DIR}/renderer/GeometryCache.h
     ${ENGINE_DIR}/renderer/GeometryOptimiser.cpp
     ${ENGINE_DIR}/renderer/GeometryOptimiser.h
+    ${ENGINE_DIR}/renderer/GLMemory.cpp
+    ${ENGINE_DIR}/renderer/GLMemory.h
     ${ENGINE_DIR}/renderer/InternalImage.cpp
     ${ENGINE_DIR}/renderer/InternalImage.h
     ${ENGINE_DIR}/renderer/Material.cpp
@@ -156,6 +158,9 @@ set(GLSLSOURCELIST
     ${ENGINE_DIR}/renderer/glsl_source/cull_cp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/depthReduction_cp.glsl
     ${ENGINE_DIR}/renderer/glsl_source/processSurfaces_cp.glsl
+    
+    # Memory shaders
+    ${ENGINE_DIR}/renderer/glsl_source/glMemory_cp.glsl
     
     # Screen-space shaders
     ${ENGINE_DIR}/renderer/glsl_source/screenSpace_vp.glsl

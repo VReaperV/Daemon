@@ -4189,6 +4189,12 @@ class GLShader_processSurfaces :
 	GLShader_processSurfaces();
 };
 
+class GLShader_glMemory :
+	public GLShader {
+	public:
+	GLShader_glMemory();
+};
+
 
 std::string GetShaderPath();
 
@@ -4198,6 +4204,8 @@ extern GLShader_cull                            *gl_cullShader;
 extern GLShader_depthReduction                  *gl_depthReductionShader;
 extern GLShader_clearSurfaces                   *gl_clearSurfacesShader;
 extern GLShader_processSurfaces                 *gl_processSurfacesShader;
+
+extern GLShader_glMemory                        *gl_glMemoryShader;
 
 extern GLShader_blur                            *gl_blurShader;
 extern GLShader_cameraEffects                   *gl_cameraEffectsShader;

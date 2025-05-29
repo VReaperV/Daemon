@@ -48,6 +48,9 @@ GLShader_depthReduction                  *gl_depthReductionShader = nullptr;
 GLShader_clearSurfaces                   *gl_clearSurfacesShader = nullptr;
 GLShader_processSurfaces                 *gl_processSurfacesShader = nullptr;
 
+
+GLShader_glMemory                        *gl_glMemoryShader = nullptr;
+
 GLShader_blur                            *gl_blurShader = nullptr;
 GLShader_cameraEffects                   *gl_cameraEffectsShader = nullptr;
 GLShader_contrast                        *gl_contrastShader = nullptr;
@@ -3067,4 +3070,9 @@ GLShader_processSurfaces::GLShader_processSurfaces() :
 	u_Frame( this ),
 	u_ViewID( this ),
 	u_SurfaceCommandsOffset( this ) {
+}
+
+GLShader_glMemory::GLShader_glMemory() :
+	GLShader( "glMemory",
+		false, "glMemory" ) {
 }
