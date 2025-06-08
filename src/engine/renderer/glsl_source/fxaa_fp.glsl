@@ -33,6 +33,8 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 
 /* fxaa_fp.glsl */
 
+#define COLORMAP_ONLY_GLSL
+
 // The FXAA parameters are put directly in fxaa3_11_fp.glsl
 // because we cannot #include in the middle of a shader
 // ^This is no longer true, but I'm not touching that mess
@@ -49,6 +51,8 @@ out vec4 outputColor;
 
 void	main()
 {
+	#insert material_fp
+
 	outputColor = FxaaPixelShader(
 		gl_FragCoord.xy / r_FBufSize, //pos
 		vec4(0.0), //not used

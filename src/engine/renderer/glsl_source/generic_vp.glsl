@@ -72,6 +72,7 @@ void main() {
 	gl_Position = u_ModelViewProjectionMatrix * position;
 
 	// transform texcoords
+	// mat3x2 u_TextureMatrix1 = mat3x2( 1, 0, 0, 1, 0, 0 );
 	#if defined(USE_TCGEN_ENVIRONMENT)
 		// TODO: Explain why only the rotational part of u_ModelMatrix is relevant
 		position.xyz = mat3( u_ModelMatrix ) * position.xyz;

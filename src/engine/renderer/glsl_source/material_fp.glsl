@@ -46,21 +46,51 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    in the beginning of main() once
    Any texture samplers should be passed to functions from main() or other functions */
 
+#ifdef HAVE_ARB_bindless_texture
+
 #if defined(USE_MATERIAL_SYSTEM)
 
-	#ifdef HAVE_ARB_bindless_texture
-
-	#if defined(COMPUTELIGHT_GLSL)
-		// TODO: Source this from an entity buffer once entities are supported by the material system
-		/* #if defined(USE_REFLECTIVE_SPECULAR)
-			samplerCube u_EnvironmentMap0 = samplerCube( u_EnvironmentMap0_initial );
-			samplerCube u_EnvironmentMap1 = samplerCube( u_EnvironmentMap1_initial );
-		#endif // !USE_REFLECTIVE_SPECULAR */
-	#endif // !COMPUTELIGHT_GLSL
-
 	#if defined(GENERIC_GLSL)
-		sampler2D u_ColorMap = sampler2D( u_DiffuseMap_initial );
+		#if defined(USE_MATERIAL_SYSTEM)
+			sampler2D u_ColorMap = sampler2D( u_DiffuseMap_initial );
+		#else // !USE_MATERIAL_SYSTEM
+			sampler2D u_ColorMap = sampler2D( u_ColorMap_initial );
+		#endif // !USE_MATERIAL_SYSTEM
+		
+		#if defined(USE_DEPTH_FADE)
+			sampler2D u_DepthMap = sampler2D( u_DepthMap_initial );
+		#endif
 	#endif // !GENERIC_GLSL
+
+	#if defined(FOGQUAKE3_GLSL)
+		sampler2D u_FogMap = sampler2D( u_FogMap_initial );
+	#endif // !FOGQUAKE3_GLSL
+	
+	#if defined(COLORMAP_ONLY_GLSL)
+		sampler2D u_ColorMap = sampler2D( u_ColorMap_initial );
+	#endif // !COLORMAP_ONLY_GLSL
+	
+	#if defined(DEPTHMAP_ONLY_GLSL)
+		sampler2D u_DepthMap = sampler2D( u_DepthMap_initial );
+	#endif // !DEPTHMAP_ONLY_GLSL
+	
+	#if defined(COLORMAP_AND_DEPTHMAP_GLSL)
+		sampler2D u_ColorMap = sampler2D( u_ColorMap_initial );
+		sampler2D u_DepthMap = sampler2D( u_DepthMap_initial );
+	#endif // !COLORMAP_AND_DEPTHMAP_GLSL
+	
+	#if defined(DEPTHREDUCTION_GLSL)
+		sampler2D depthTextureInitial = sampler2D( depthTextureInitial_initial );
+	#endif // !DEPTHREDUCTION_GLSL
+	
+	#if defined(CURRENTMAP_ONLY_GLSL)
+		sampler2D u_CurrentMap = sampler2D( u_CurrentMap_initial );
+	#endif // !CURRENTMAP_ONLY_GLSL
+	
+	#if defined(CAMERAEFFECTS_GLSL)
+		sampler2D u_CurrentMap = sampler2D( u_CurrentMap_initial );
+		sampler3D u_ColorMap3D = sampler3D( u_ColorMap3D_initial );
+	#endif // !CAMERAEFFECTS_GLSL
 
 	#if defined(LIGHTMAPPING_GLSL)
 		sampler2D u_DiffuseMap = sampler2D( u_DiffuseMap_initial );
@@ -68,11 +98,22 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 		sampler2D u_GlowMap = sampler2D( u_GlowMap_initial );
 		sampler2D u_LightMap = sampler2D( u_LightMap_initial );
 		sampler2D u_DeluxeMap = sampler2D( u_DeluxeMap_initial );
+		
+		// sampler3D u_LightGrid1 = sampler3D( u_LightGrid1_initial );
+		// sampler3D u_LightGrid2 = sampler3D( u_LightGrid2_initial );
 	#endif // !LIGHTMAPPING_GLSL
 
-	#if defined(REFLECTION_CB_GLSL)
-		samplerCube u_ColorMapCube = samplerCube( u_DiffuseMap_initial );
-	#endif // !REFLECTION_CB_GLSL
+	#if defined(COMPUTELIGHT_GLSL)
+		// TODO: Source this from an entity buffer once entities are supported by the material system
+		#if defined(USE_REFLECTIVE_SPECULAR)
+			samplerCube u_EnvironmentMap0 = samplerCube( u_EnvironmentMap0_initial );
+			samplerCube u_EnvironmentMap1 = samplerCube( u_EnvironmentMap1_initial );
+		#endif // !USE_REFLECTIVE_SPECULAR
+		
+		#if defined(r_realtimeLighting)
+			usampler3D u_LightTiles = usampler3D( u_LightTiles_initial );
+		#endif // defined(r_realtimeLighting)
+	#endif // !COMPUTELIGHT_GLSL
 
 	#if defined(RELIEFMAPPING_GLSL)
 		#if defined(r_normalMapping) || defined(USE_HEIGHTMAP_IN_NORMALMAP)
@@ -81,17 +122,34 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 		#if defined(USE_RELIEF_MAPPING)
 			#if !defined(USE_HEIGHTMAP_IN_NORMALMAP)
-					sampler2D u_HeightMap = sampler2D( u_HeightMap_initial );
-				#else
-					sampler2D u_HeightMap = sampler2D( u_NormalMap_initial );
-				#endif // !USE_HEIGHTMAP_IN_NORMALMAP
-			#endif // USE_RELIEF_MAPPING
-		#endif // !RELIEFMAPPING_GLSL
+				sampler2D u_HeightMap = sampler2D( u_HeightMap_initial );
+			#else
+				sampler2D u_HeightMap = sampler2D( u_NormalMap_initial );
+			#endif // !USE_HEIGHTMAP_IN_NORMALMAP
+		#endif // USE_RELIEF_MAPPING
+	#endif // !RELIEFMAPPING_GLSL
+
+	#if defined(REFLECTION_CB_GLSL)
+		samplerCube u_ColorMapCube = samplerCube( u_DiffuseMap_initial );
+	#endif // !REFLECTION_CB_GLSL
 
 	#if defined(SKYBOX_GLSL)
-		samplerCube u_ColorMapCube = samplerCube( u_DiffuseMap_initial );
-		sampler2D u_CloudMap = sampler2D( u_NormalMap_initial );
+		#if defined(USE_MATERIAL_SYSTEM)
+			samplerCube u_ColorMapCube = samplerCube( u_DiffuseMap_initial );
+			sampler2D u_CloudMap = sampler2D( u_NormalMap_initial );
+		#else // !USE_MATERIAL_SYSTEM
+			samplerCube u_ColorMapCube = samplerCube( u_ColorMapCube_initial );
+			sampler2D u_CloudMap = sampler2D( u_CloudMap_initial );
+		#endif // !USE_MATERIAL_SYSTEM
 	#endif // !SKYBOX_GLSL
+
+#endif // !USE_MATERIAL_SYSTEM
+
+#endif // !HAVE_ARB_bindless_texture
+
+#if defined(USE_MATERIAL_SYSTEM)
+
+	#ifdef HAVE_ARB_bindless_texture
 
 	#else // !HAVE_ARB_bindless_texture
 	#endif

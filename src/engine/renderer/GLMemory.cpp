@@ -35,12 +35,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "common/Common.h"
 
+#include "gl_shader.h"
 #include "GLMemory.h"
 
 // 128 MB, should be enough to fit anything in BAR without going overboard
 const GLsizeiptr GLStagingBuffer::SIZE = 128 * 1024 * 1024 / sizeof( uint32_t );
 
 GLStagingBuffer stagingBuffer;
+PushUBO pushUBO;
 
 void GLBufferCopy( GLBuffer* src, GLBuffer* dst, GLintptr srcOffset, GLintptr dstOffset, GLsizeiptr size ) {
 	glCopyNamedBufferSubData( src->id, dst->id,
@@ -125,4 +127,33 @@ void GLStagingBuffer::InitGLBuffer() {
 
 void GLStagingBuffer::FreeGLBuffer() {
 	buffer.DelBuffer();
+
+	pointer = 0;
+	current = 0;
+	last = 0;
+}
+
+uint32_t* PushUBO::GetPushUniformData() {
+	return buffer.GetCurrentAreaData();
+}
+
+void PushUBO::PushUniforms() {
+	if ( pushEnd > pushStart ) {
+		buffer.FlushRange( pushStart + buffer.GetAreaSize() * buffer.GetArea(), pushEnd - pushStart );
+		buffer.AreaIncr();
+
+		// GLsync sync = glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
+		// glWaitSync( sync, 0, GL_TIMEOUT_IGNORED );
+
+		pushEnd = 0;
+		pushStart = UINT32_MAX;
+
+		// sector++;
+
+		if ( sector == MAX_SECTORS ) {
+			// sector = 0;
+		}
+
+		// glMemoryBarrier( GL_ALL_BARRIER_BITS );
+	}
 }

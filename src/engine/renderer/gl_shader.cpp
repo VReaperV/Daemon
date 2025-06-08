@@ -79,6 +79,9 @@ GLShader_skybox                          *gl_skyboxShader = nullptr;
 GLShader_skyboxMaterial                  *gl_skyboxShaderMaterial = nullptr;
 GLShaderManager                           gl_shaderManager;
 
+std::unordered_multimap<std::string, GLUniform*> allUniforms;
+std::vector<GLUniform*> globalUniforms;
+
 namespace // Implementation details
 {
 	NORETURN inline void ThrowShaderError(Str::StringRef msg)
@@ -267,6 +270,13 @@ void GLShaderManager::FreeAll() {
 	{
 		_shaderBuildQueue.pop();
 	}
+
+	globalUniforms.clear();
+	allUniforms.clear();
+
+	pushUBO.buffer.DelBuffer();
+	pushUBO.pushStart = UINT32_MAX;
+	pushUBO.pushEnd = 0;
 }
 
 void GLShaderManager::UpdateShaderProgramUniformLocations( GLShader* shader, ShaderProgramDescriptor* shaderProgram ) const {
@@ -1240,6 +1250,302 @@ ShaderDescriptor* GLShaderManager::FindShader( const std::string& name, const st
 	return &shaderDescriptors.back();
 }
 
+void GLShaderManager::RegisterUniform( GLUniform* uniform ) {
+	switch ( uniform->GetUpdateType() ) {
+		case GLUniform::CONST:
+		case GLUniform::PUSH:
+			break;
+		case GLUniform::MATERIAL_OR_PUSH:
+		case GLUniform::TEXDATA_OR_PUSH:
+			if ( glConfig2.usingMaterialSystem ) {
+				return;
+			}
+
+			break;
+		case GLUniform::LEGACY:
+			return;
+		default:
+			break;
+	}
+
+	if ( std::find_if(  globalUniforms.begin(),  globalUniforms.end(),
+		[&]( const GLUniform* other ) {
+			return uniform->GetName() == other->GetName();
+		} ) == globalUniforms.end() ) {
+		globalUniforms.push_back( uniform );
+	}
+}
+
+void GLShaderManager::PostProcessGlobalUniforms() {
+	std::string uniformStruct = "\nstruct GlobalUniforms {\n";
+	std::string uniformBlock = "layout(std140, binding = "
+		+ std::to_string( BufferBind::GLOBAL_DATA )
+		+ ") uniform globalUBO {\n"
+		+ "GlobalUniforms globalUniforms[" + Str::Format( "%u", pushUBO.MAX_SECTORS ) + "];\n"
+		+ "};\n\n";
+	std::string uniformDefines;
+
+	/* Generate the struct and defines in the form of:
+	* struct GlobalUniforms {
+	*   type uniform0;
+	*   type uniform1;
+	*   ..
+	*   type uniformn;
+	* }
+	*
+	* #define uniformx globalUniforms.uniformx
+	*/
+
+	GLuint size;
+	GLuint padding;
+	globalUniforms = ProcessUniforms( GLUniform::CONST, GLUniform::TEXDATA_OR_PUSH, false, globalUniforms, size, padding, true );
+
+	for ( GLUniform* uniform : globalUniforms ) {
+		uniformStruct += "	" + ( uniform->IsTexture() ? "uvec2" : uniform->GetType() ) + " " + uniform->GetName() + "G";
+
+		if ( uniform->GetComponentSize() ) {
+			uniformStruct += "[ " + std::to_string( uniform->GetComponentSize() ) + " ]";
+		}
+		uniformStruct += ";\n";
+	}
+
+	// Array of structs is aligned to the largest member of the struct
+	for ( uint i = 0; i < padding; i++ ) {
+		uniformStruct += "	int uniform_padding" + std::to_string( i );
+		uniformStruct += ";\n";
+	}
+
+	uniformStruct += "};\n\n";
+
+	globalUniformBlock = uniformStruct + uniformBlock;
+
+	pushUBO.buffer.GenBuffer();
+
+	pushUBO.buffer.BufferStorage( size + padding, pushUBO.MAX_SECTORS, nullptr );
+	pushUBO.buffer.MapAll();
+
+	uint32_t* data = pushUBO.buffer.GetData();
+	memset( data, 0, ( size + padding ) * pushUBO.MAX_SECTORS * sizeof( uint32_t ) );
+
+	pushUBO.buffer.FlushAll();
+
+	pushUBO.buffer.BindBufferBase();
+}
+
+std::string GLShaderManager::ShaderPostProcessGlobal( GLShader* shader, const std::string& shaderText, const uint32_t offset ) {
+	std::istringstream shaderTextStream( shaderText );
+	std::string shaderMain;
+	std::string uniformDefines;
+
+	std::string line;
+
+	for ( GLUniform* uniform : shader->_pushUniforms ) {
+		if ( uniform->GetUpdateType() == GLUniform::LEGACY || uniform->IsTexture() || !uniform->pass ) {
+			continue;
+		}
+
+		if ( shader->_useMaterialSystem && uniform->GetUpdateType() >= GLUniform::MATERIAL_OR_PUSH ) {
+			continue;
+		}
+
+		if ( shader->_useMaterialSystem && uniform->GetUpdateType() <= GLUniform::PUSH
+			|| !shader->_useMaterialSystem && ( !uniform->IsTexture() || glConfig2.usingBindlessTextures ) ) {
+			uniformDefines += "#define ";
+			uniformDefines += uniform->GetName();
+
+			if ( uniform->IsTexture() ) {
+				uniformDefines += "_initial";
+			}
+
+			if ( shader->_useMaterialSystem || shader->hasComputeShader ) {
+				uniformDefines += " globalUniforms[u_PushUBOArea].";
+			} else {
+				uniformDefines += " globalUniforms[baseInstance].";
+			}
+			uniformDefines += uniform->GetName();
+
+			uniformDefines += "G\n";
+		}
+	}
+
+	uniformDefines += "\n";
+
+	/* Remove local uniform declarations, but avoid removing uniform / storage blocks;
+	*  their values will be sourced from a buffer instead
+	*  Global uniforms (like u_ViewOrigin) will still be set as regular uniforms */
+	while ( std::getline( shaderTextStream, line, '\n' ) ) {
+		bool skip = false;
+		if ( line.find( "uniform" ) < line.find( "//" ) && line.find( ";" ) != std::string::npos ) {
+			for ( GLUniform* uniform : shader->_uniforms ) {
+				bool test = shader->_useMaterialSystem // && uniform->GetUpdateType() >= GLUniform::MATERIAL_OR_PUSH
+					|| glConfig2.usingBindlessTextures || !uniform->IsTexture();
+				if ( !uniform->IsTexture() && uniform->pass && uniform->GetUpdateType() != GLUniform::SKIP ) {
+					const size_t pos = line.find( uniform->GetName() );
+					if ( pos != std::string::npos && !Str::cisalpha( line[pos + strlen( uniform->GetName() )] ) ) {
+						skip = true;
+						break;
+					}
+				}
+			}
+		}
+
+		if ( skip ) {
+			continue;
+		}
+
+		shaderMain += line + "\n";
+	}
+
+	if ( !shader->_useMaterialSystem ) {
+		uniformDefines += "uniform uint u_PushUBOArea;\n";
+	}
+	shaderMain.insert( offset, globalUniformBlock + uniformDefines );
+	return shaderMain;
+}
+
+// This will generate all the extra code for material system shaders
+std::string GLShaderManager::ShaderPostProcess( GLShader* shader, const std::string& shaderText, const uint32_t offset ) {
+	if ( !shader->std430Size ) {
+		return shaderText;
+	}
+
+	std::string newShaderText;
+	std::string materialStruct = "\nstruct Material {\n";
+	// 6 kb for materials
+	const uint32_t count = ( 4096 + 2048 ) / shader->GetPaddedSize();
+	std::string materialBlock = "layout(std140, binding = "
+		+ std::to_string( BufferBind::MATERIALS )
+		+ ") uniform materialsUBO {\n"
+		"	Material materials[" + std::to_string( count ) + "]; \n"
+		"};\n\n";
+
+	std::string texBuf = glConfig2.maxUniformBlockSize >= MIN_MATERIAL_UBO_SIZE ?
+		"layout(std140, binding = "
+		+ std::to_string( BufferBind::TEX_DATA )
+		+ ") uniform texDataUBO {\n"
+		"	TexData texData[" + std::to_string( MAX_TEX_BUNDLES ) + "]; \n"
+		"};\n\n"
+		: "layout(std430, binding = "
+		+ std::to_string( BufferBind::TEX_DATA )
+		+ ") restrict readonly buffer texDataSSBO {\n"
+		"	TexData texData[];\n"
+		"};\n\n";
+	// We have to store u_TextureMatrix as vec4 + vec2 because otherwise it would be aligned to a vec4 under std140
+	std::string texDataBlock = "struct TexData {\n"
+		"	vec4 u_TextureMatrix;\n"
+		"	vec2 u_TextureMatrix2;\n"
+		"	uvec2 u_DiffuseMap;\n"
+		"	uvec2 u_NormalMap;\n"
+		"	uvec2 u_HeightMap;\n"
+		"	uvec2 u_MaterialMap;\n"
+		"	uvec2 u_GlowMap;\n"
+		"};\n\n"
+		+ texBuf +
+		"#define u_TextureMatrix mat3x2( texData[( baseInstance >> 12 ) & 0xFFF].u_TextureMatrix.xy, texData[( baseInstance >> 12 ) & 0xFFF].u_TextureMatrix.zw, texData[( baseInstance >> 12 ) & 0xFFF].u_TextureMatrix2 )\n"
+		"#define u_DiffuseMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_DiffuseMap\n"
+		"#define u_NormalMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_NormalMap\n"
+		"#define u_HeightMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_HeightMap\n"
+		"#define u_MaterialMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_MaterialMap\n"
+		"#define u_GlowMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_GlowMap\n\n"
+		"struct LightMapData {\n"
+		"	uvec2 u_LightMap;\n"
+		"	uvec2 u_DeluxeMap;\n"
+		"};\n\n"
+		"layout(std140, binding = "
+		+ std::to_string( BufferBind::LIGHTMAP_DATA )
+		+ ") uniform lightMapDataUBO {\n"
+		"	LightMapData lightMapData[256];\n"
+		"};\n\n"
+		"#define u_LightMap_initial lightMapData[( baseInstance >> 24 ) & 0xFF].u_LightMap\n"
+		"#define u_DeluxeMap_initial lightMapData[( baseInstance >> 24 ) & 0xFF].u_DeluxeMap\n\n";
+	std::string materialDefines;
+
+	/* Generate the struct and defines in the form of:
+	* struct Material {
+	*   type uniform0;
+	*   type uniform1;
+	*   ..
+	*   type uniformn;
+	* }
+	*
+	* #define uniformx materials[baseInstance].uniformx
+	*/
+
+	for ( GLUniform* uniform : shader->_materialSystemUniforms ) {
+		if ( uniform->GetUpdateType() != GLUniform::MATERIAL_OR_PUSH ) {
+			continue;
+		}
+
+		materialStruct += "	" + uniform->GetType() + " " + uniform->GetName();
+
+		if ( uniform->GetComponentSize() ) {
+			materialStruct += "[ " + std::to_string( uniform->GetComponentSize() ) + " ]";
+		}
+		materialStruct += ";\n";
+
+		// vec3 is aligned to 4 components, so just pad it with int
+		// TODO: Try to move 1 component uniforms here to avoid wasting memory
+		if ( false && uniform->GetSTD430Size() == 3 ) {
+			materialStruct += "	int ";
+			materialStruct += uniform->GetName();
+			materialStruct += "_padding;\n";
+		}
+
+		materialDefines += "#define ";
+		materialDefines += uniform->GetName();
+
+		materialDefines += " materials[baseInstance & 0xFFF].";
+		materialDefines += uniform->GetName();
+
+		materialDefines += "\n";
+	}
+
+	// Array of structs is aligned to the largest member of the struct
+	for ( uint i = 0; i < shader->padding; i++ ) {
+		materialStruct += "	int material_padding" + std::to_string( i );
+		materialStruct += ";\n";
+	}
+
+	materialStruct += "};\n\n";
+	materialDefines += "\n";
+
+	std::istringstream shaderTextStream( shaderText );
+	std::string shaderMain;
+
+	std::string line;
+
+	/* Remove local uniform declarations, but avoid removing uniform / storage blocks;
+	*  their values will be sourced from a buffer instead
+	*  Global uniforms (like u_ViewOrigin) will still be set as regular uniforms */
+	while ( std::getline( shaderTextStream, line, '\n' ) ) {
+		bool skip = false;
+		if ( line.find( "uniform" ) < line.find( "//" ) && line.find( ";" ) != std::string::npos ) {
+			for ( GLUniform* uniform : shader->_uniforms ) {
+				if ( uniform->GetUpdateType() == GLUniform::MATERIAL_OR_PUSH ) {
+					const size_t pos = line.find( uniform->GetName() );
+					if ( pos != std::string::npos && !Str::cisalpha( line[pos + strlen( uniform->GetName() )] ) ) {
+						skip = true;
+						break;
+					}
+				}
+			}
+		}
+
+		if ( skip ) {
+			continue;
+		}
+
+		shaderMain += line + "\n";
+	}
+
+	materialDefines += "\n";
+
+	newShaderText = "#define USE_MATERIAL_SYSTEM\n" + materialStruct + materialBlock + texDataBlock + materialDefines; // + shaderMain;
+	newShaderText += "uniform uint u_PushUBOArea;\n";
+	shaderMain.insert( offset, newShaderText );
+	return shaderMain;
+}
+
 std::string GLShaderManager::BuildShaderText( const std::string& mainShaderText, const std::vector<GLHeader*>& headers,
 	const std::string& macros ) {
 	std::string combinedText;
@@ -1345,6 +1651,10 @@ void GLShaderManager::InitShader( GLShader* shader ) {
 
 			ShaderDescriptor* desc = FindShader( shader->_name, shaderType.mainText, shaderType.GLType, shaderType.headers,
 				uniqueMacros, compileMacros, true );
+
+			if ( desc && glConfig2.globalUBOAvailable ) {
+				desc->shaderSource = ShaderPostProcessGlobal( shader, desc->shaderSource, shaderType.offset );
+			}
 
 			if ( desc && glConfig2.usingMaterialSystem && shader->_useMaterialSystem ) {
 				desc->shaderSource = ShaderPostProcess( shader, desc->shaderSource, shaderType.offset );
@@ -1512,162 +1822,6 @@ void GLShaderManager::SaveShaderBinary( ShaderProgramDescriptor* descriptor ) {
 
 	cacheSaveTime += Sys::Milliseconds() - start;
 	cacheSaveCount++;
-}
-
-// This will generate all the extra code for material system shaders
-std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::string& shaderText, const uint32_t offset ) {
-	if ( !shader->std430Size ) {
-		return shaderText;
-	}
-
-	std::string newShaderText;
-	std::string materialStruct = "\nstruct Material {\n";
-	// 6 kb for materials
-	const uint32_t count = ( 4096 + 2048 ) / shader->GetPaddedSize();
-	std::string materialBlock = "layout(std140, binding = "
-		                        + std::to_string( BufferBind::MATERIALS )
-		                        + ") uniform materialsUBO {\n"
-	                            "	Material materials[" + std::to_string( count ) + "]; \n"
-	                            "};\n\n";
-
-	std::string texBuf = glConfig2.maxUniformBlockSize >= MIN_MATERIAL_UBO_SIZE ?
-		"layout(std140, binding = "
-		+ std::to_string( BufferBind::TEX_DATA )
-		+ ") uniform texDataUBO {\n"
-		"	TexData texData[" + std::to_string( MAX_TEX_BUNDLES ) + "]; \n"
-		"};\n\n"
-		: "layout(std430, binding = "
-		+ std::to_string( BufferBind::TEX_DATA )
-		+ ") restrict readonly buffer texDataSSBO {\n"
-		"	TexData texData[];\n"
-		"};\n\n";
-	// We have to store u_TextureMatrix as vec4 + vec2 because otherwise it would be aligned to a vec4 under std140
-	std::string texDataBlock = "struct TexData {\n"
-		                       "	vec4 u_TextureMatrix;\n"
-	                           "	vec2 u_TextureMatrix2;\n"
-	                           "	uvec2 u_DiffuseMap;\n"
-	                           "	uvec2 u_NormalMap;\n"
-	                           "	uvec2 u_HeightMap;\n"
-	                           "	uvec2 u_MaterialMap;\n"
-	                           "	uvec2 u_GlowMap;\n"
-	                           "};\n\n"
-	                           + texBuf +
-		                       "#define u_TextureMatrix mat3x2( texData[( baseInstance >> 12 ) & 0xFFF].u_TextureMatrix.xy, texData[( baseInstance >> 12 ) & 0xFFF].u_TextureMatrix.zw, texData[( baseInstance >> 12 ) & 0xFFF].u_TextureMatrix2 )\n"
-		                       "#define u_DiffuseMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_DiffuseMap\n"
-		                       "#define u_NormalMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_NormalMap\n"
-		                       "#define u_HeightMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_HeightMap\n"
-		                       "#define u_MaterialMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_MaterialMap\n"
-		                       "#define u_GlowMap_initial texData[( baseInstance >> 12 ) & 0xFFF].u_GlowMap\n\n"
-		                       "struct LightMapData {\n"
-	                           "	uvec2 u_LightMap;\n"
-	                           "	uvec2 u_DeluxeMap;\n"
-	                           "};\n\n"
-	                           "layout(std140, binding = "
-		                       + std::to_string( BufferBind::LIGHTMAP_DATA )
-		                       + ") uniform lightMapDataUBO {\n"
-	                           "	LightMapData lightMapData[256];\n"
-	                           "};\n\n"
-		                       "#define u_LightMap_initial lightMapData[( baseInstance >> 24 ) & 0xFF].u_LightMap\n"
-		                       "#define u_DeluxeMap_initial lightMapData[( baseInstance >> 24 ) & 0xFF].u_DeluxeMap\n\n";
-	std::string materialDefines;
-
-	/* Generate the struct and defines in the form of:
-	* struct Material {
-	*   type uniform0;
-	*   type uniform1;
-	*   ..
-	*   type uniformn;
-	* }
-	* 
-	* #define uniformx materials[baseInstance].uniformx
-	*/
-
-	for( GLUniform* uniform : shader->_uniforms ) {
-		if ( uniform->IsGlobal() ) {
-			continue;
-		}
-
-		if ( !uniform->IsTexture() ) {
-			materialStruct += "	" + uniform->GetType() + " " + uniform->GetName();
-
-			if ( uniform->GetComponentSize() ) {
-				materialStruct += "[ " + std::to_string( uniform->GetComponentSize() ) + " ]";
-			}
-			materialStruct += ";\n";
-
-			// vec3 is aligned to 4 components, so just pad it with int
-			// TODO: Try to move 1 component uniforms here to avoid wasting memory
-			if ( uniform->GetSTD430Size() == 3 ) {
-				materialStruct += "	int ";
-				materialStruct += uniform->GetName();
-				materialStruct += "_padding;\n";
-			}
-		}
-
-		if ( uniform->IsTexture() ) {
-			continue;
-		}
-
-		materialDefines += "#define ";
-		materialDefines += uniform->GetName();
-
-		if ( uniform->IsTexture() ) { // Driver bug: AMD compiler crashes when using the SSBO value directly
-			materialDefines += "_initial uvec2("; // We'll need this to create sampler objects later
-		}
-
-		materialDefines += " materials[baseInstance & 0xFFF].";
-		materialDefines += uniform->GetName();
-		
-		if ( uniform->IsTexture() ) {
-			materialDefines += " )";
-		}
-
-		materialDefines += "\n";
-	}
-
-	// Array of structs is aligned to the largest member of the struct
-	for ( uint i = 0; i < shader->padding; i++ ) {
-		materialStruct += "	int material_padding" + std::to_string( i );
-		materialStruct += ";\n";
-	}
-
-	materialStruct += "};\n\n";
-	materialDefines += "\n";
-
-	std::istringstream shaderTextStream( shaderText );
-	std::string shaderMain;
-
-	std::string line;
-	
-	/* Remove local uniform declarations, but avoid removing uniform / storage blocks;
-	*  their values will be sourced from a buffer instead
-	*  Global uniforms (like u_ViewOrigin) will still be set as regular uniforms */
-	while( std::getline( shaderTextStream, line, '\n' ) ) {
-		bool skip = false;
-		if ( line.find( "uniform" ) < line.find( "//" ) && line.find( ";" ) != std::string::npos ) {
-			for ( GLUniform* uniform : shader->_uniforms ) {
-				if ( !uniform->IsGlobal() ) {
-					const size_t pos = line.find( uniform->GetName() );
-					if ( pos != std::string::npos && !Str::cisalpha( line[pos + strlen( uniform->GetName() )] ) ) {
-						skip = true;
-						break;
-					}
-				}
-			}
-		}
-
-		if ( skip ) {
-			continue;
-		}
-
-		shaderMain += line + "\n";
-	}
-
-	materialDefines += "\n";
-
-	newShaderText = "#define USE_MATERIAL_SYSTEM\n" + materialStruct + materialBlock + texDataBlock + materialDefines; // + shaderMain;
-	shaderMain.insert( offset, newShaderText );
-	return shaderMain;
 }
 
 void GLShaderManager::PrintShaderSource( Str::StringRef programName, GLuint object, std::vector<InfoLogEntry>& infoLog ) const
@@ -2121,62 +2275,134 @@ GLint GLShader::GetUniformLocation( const GLchar *uniformName ) const {
 	return glGetUniformLocation( p->id, uniformName );
 }
 
-// Compute std430 size/alignment and sort uniforms from highest to lowest alignment
-void GLShader::PostProcessUniforms() {
-	if ( !_useMaterialSystem ) {
-		return;
+static int FindUniformForAlignment( std::vector<GLUniform*>& uniforms, const GLuint alignment ) {
+	for ( int i = 0; i < uniforms.size(); i++ ) {
+		if ( uniforms[i]->GetSTD430Size() == alignment ) {
+			return i;
+		}
 	}
 
+	if ( uniforms[uniforms.size() - 1]->GetSTD430Size() < alignment ) {
+		return uniforms.size() - 1;
+	}
+
+	return -1;
+}
+
+GLuint GLShaderManager::SortUniforms( std::vector<GLUniform*>& uniforms, const bool setOffset ) {
 	std::vector<GLUniform*> tmp;
 
-	std::vector<GLUniform*> globalUniforms;
-	for ( GLUniform* uniform : _uniforms ) {
-		if ( uniform->IsGlobal() || uniform->IsTexture() ) {
-			globalUniforms.emplace_back( uniform );
-		}
-	}
-	for ( GLUniform* uniform : globalUniforms ) {
-		_uniforms.erase( std::remove( _uniforms.begin(), _uniforms.end(), uniform ), _uniforms.end() );
-	}
-
 	// Sort uniforms from highest to lowest alignment so we don't need to pad uniforms (other than vec3s)
-	const uint numUniforms = _uniforms.size();
+	const uint numUniforms = uniforms.size();
 	GLuint structSize = 0;
+	
+	std::sort( uniforms.begin(), uniforms.end(),
+		[]( const GLUniform* lhs, const GLUniform* rhs ) {
+			return lhs->GetSTD430Size() > rhs->GetSTD430Size();
+		}
+	);
+
 	while ( tmp.size() < numUniforms ) {
 		// Higher-alignment uniforms first to avoid wasting memory
-		GLuint highestAlignment = 0;
-		int highestUniform = 0;
-		for( uint i = 0; i < _uniforms.size(); i++ ) {
-			if ( _uniforms[i]->GetSTD430Alignment() > highestAlignment ) {
-				highestAlignment = _uniforms[i]->GetSTD430Alignment();
-				highestUniform = i;
-			}
+		GLuint size = uniforms[0]->GetSTD430Size();
+		GLuint components = uniforms[0]->GetComponentSize();
+		size = components ? 4 * components : size;
+		GLuint alignmentConsume = 4 - size % 4;
 
-			if ( highestAlignment == 4 ) {
-				break; // 4-component is the highest alignment in std430
+		if ( setOffset ) {
+			using iterType = std::unordered_multimap<std::string, GLUniform*>::iterator;
+
+			std::pair<iterType, iterType> range = allUniforms.equal_range( uniforms[0]->GetName() );
+			for ( iterType& it = range.first; it != range.second; it++ ) {
+				it->second->pushOffset = structSize;
 			}
 		}
-			
-		const GLuint size = _uniforms[highestUniform]->GetSTD430Size();
-		if ( _uniforms[highestUniform]->GetComponentSize() != 0 ) {
-			structSize += ( size == 3 ) ? 4 * _uniforms[highestUniform]->GetComponentSize() :
-												size * _uniforms[highestUniform]->GetComponentSize();
-		} else {
-			structSize += ( size == 3 ) ? 4 : size;
+
+		tmp.emplace_back( uniforms[0] );
+		uniforms.erase( uniforms.begin() );
+
+		int uniform;
+		GLuint offset = 4 - alignmentConsume;
+		while ( ( alignmentConsume & 3 ) && uniforms.size()
+			&& ( uniform = FindUniformForAlignment( uniforms, alignmentConsume ) ) != -1 ) {
+			if ( setOffset ) {
+				using iterType = std::unordered_multimap<std::string, GLUniform*>::iterator;
+
+				std::pair<iterType, iterType> range = allUniforms.equal_range( uniforms[uniform]->GetName() );
+				for ( iterType& it = range.first; it != range.second; it++ ) {
+					it->second->pushOffset = structSize + offset;
+				}
+			}
+
+			offset += uniforms[uniform]->GetSTD430Size();
+			alignmentConsume -= uniforms[uniform]->GetSTD430Size();
+
+			tmp.emplace_back( uniforms[uniform] );
+			uniforms.erase( uniforms.begin() + uniform );
 		}
 
-		tmp.emplace_back( _uniforms[highestUniform] );
-		_uniforms.erase( _uniforms.begin() + highestUniform );
+		size = PAD( size, 4 );
+		structSize += size;
 	}
-	_uniforms = tmp;
+
+	uniforms = tmp;
+
+	return structSize;
+}
+
+std::vector<GLUniform*> GLShaderManager::ProcessUniforms( const GLUniform::UpdateType minType, const GLUniform::UpdateType maxType,
+	const bool skipTextures,
+	std::vector<GLUniform*>& uniforms, GLuint& structSize, GLuint& padding, const bool setOffset ) {
+	std::vector<GLUniform*> tmp;
+
+	tmp.reserve( uniforms.size() );
+	for ( GLUniform* uniform : uniforms ) {
+		if ( uniform->GetUpdateType() >= minType && uniform->GetUpdateType() <= maxType
+			&& ( !uniform->IsTexture() || !skipTextures ) && ( !setOffset || uniform->pass ) ) {
+			tmp.emplace_back( uniform );
+		}
+	}
+
+	structSize = SortUniforms( tmp, setOffset );
 
 	const GLuint structAlignment = 4; // Material buffer is now a UBO, so it uses std140 layout, which is aligned to vec4
 	if ( structSize > 0 ) {
 		padding = ( structAlignment - ( structSize % structAlignment ) ) % structAlignment;
 	}
-	std430Size = structSize;
-	for ( GLUniform* uniform : globalUniforms ) {
-		_uniforms.emplace_back( uniform );
+
+	return tmp;
+}
+
+// Compute std140 size/alignment and sort uniforms from highest to lowest alignment
+void GLShader::PostProcessUniforms() {
+	if ( _useMaterialSystem ) {
+		_materialSystemUniforms = gl_shaderManager.ProcessUniforms( GLUniform::MATERIAL_OR_PUSH, GLUniform::MATERIAL_OR_PUSH,
+			true, _uniforms, std430Size, padding );
+	}
+
+	if ( glConfig2.globalUBOAvailable ) {
+		if ( _useMaterialSystem ) {
+			_pushUniforms = gl_shaderManager.ProcessUniforms( GLUniform::CONST, GLUniform::PUSH,
+				false, _uniforms, pushUniformSize, pushUniformPadding );
+		} else {
+			_pushUniforms = gl_shaderManager.ProcessUniforms( GLUniform::CONST, GLUniform::TEXDATA_OR_PUSH,
+				glConfig2.usingBindlessTextures, _uniforms, pushUniformSize, pushUniformPadding );
+		}
+		/* ProcessUniforms( GLUniform::CONST,
+			_useMaterialSystem ? GLUniform::PUSH : GLUniform::MATERIAL_OR_PUSH,
+			true, _uniforms, std430Size, padding ); */
+		/* for ( GLUniform* uniform : _uniforms ) {
+			if ( uniform->GetUpdateType() >= GLUniform::MATERIAL_OR_PUSH && _useMaterialSystem ) {
+				continue;
+			}
+
+			if ( std::find_if( gl_shaderManager.globalUniforms.begin(), gl_shaderManager.globalUniforms.end(),
+				[&]( const GLUniform* other ) {
+					return uniform->GetName() == other->GetName();
+				} ) == gl_shaderManager.globalUniforms.end() ) {
+				gl_shaderManager.globalUniforms.push_back( uniform );
+			}
+		} */
 	}
 }
 
@@ -2361,9 +2587,17 @@ void GLShader::SetRequiredVertexPointers()
 
 void GLShader::WriteUniformsToBuffer( uint32_t* buffer ) {
 	uint32_t* bufPtr = buffer;
-	for ( GLUniform* uniform : _uniforms ) {
-		if ( !uniform->IsGlobal() && !uniform->IsTexture() ) {
+	for ( GLUniform* uniform : _materialSystemUniforms ) {
+		if ( uniform->GetUpdateType() == GLUniform::MATERIAL_OR_PUSH ) {
 			bufPtr = uniform->WriteToBuffer( bufPtr );
+		}
+	}
+}
+
+void GLShader::WriteGlobalUniformsToBuffer( uint32_t* buffer ) {
+	for ( GLUniform* uniform : _pushUniforms ) {
+		if ( true || uniform->GetUpdateType() <= GLUniform::PUSH || !glConfig2.usingMaterialSystem ) {
+			uniform->WriteToBuffer( buffer + uniform->pushOffset );
 		}
 	}
 }
@@ -2419,6 +2653,7 @@ GLShader_genericMaterial::GLShader_genericMaterial() :
 	u_MaterialColour( this ),
 	u_ProfilerZero( this ),
 	u_ProfilerRenderSubGroups( this ),
+	u_PushUBOArea( this ),
 	GLDeformStage( this ),
 	GLCompileMacro_USE_TCGEN_ENVIRONMENT( this ),
 	GLCompileMacro_USE_TCGEN_LIGHTMAP( this ),
@@ -2533,6 +2768,7 @@ GLShader_lightMappingMaterial::GLShader_lightMappingMaterial() :
 	u_Lights( this ),
 	u_ShowTris( this ),
 	u_MaterialColour( this ),
+	u_PushUBOArea( this ),
 	u_ProfilerZero( this ),
 	u_ProfilerRenderSubGroups( this ),
 	GLDeformStage( this ),
@@ -2607,6 +2843,7 @@ GLShader_reflectionMaterial::GLShader_reflectionMaterial() :
 	u_ReliefOffsetBias( this ),
 	u_NormalScale( this ),
 	u_CameraPosition( this ),
+	u_PushUBOArea( this ),
 	GLDeformStage( this ),
 	GLCompileMacro_USE_HEIGHTMAP_IN_NORMALMAP( this ),
 	GLCompileMacro_USE_RELIEF_MAPPING( this ) {
@@ -2646,6 +2883,7 @@ GLShader_skyboxMaterial::GLShader_skyboxMaterial() :
 	u_CloudHeight( this ),
 	u_UseCloudMap( this ),
 	u_AlphaThreshold( this ),
+	u_PushUBOArea( this ),
 	u_ModelViewProjectionMatrix( this )
 {}
 
@@ -2688,6 +2926,7 @@ GLShader_fogQuake3Material::GLShader_fogQuake3Material() :
 	u_FogDistanceVector( this ),
 	u_FogDepthVector( this ),
 	u_FogEyeT( this ),
+	u_PushUBOArea( this ),
 	GLDeformStage( this ) {
 }
 
@@ -2753,6 +2992,7 @@ GLShader_heatHazeMaterial::GLShader_heatHazeMaterial() :
 	u_ModelViewMatrixTranspose( this ),
 	u_ProjectionMatrixTranspose( this ),
 	u_NormalScale( this ),
+	u_PushUBOArea( this ),
 	GLDeformStage( this )
 {
 }
@@ -2780,6 +3020,7 @@ GLShader_screenMaterial::GLShader_screenMaterial() :
 	GLShader( "screenMaterial", ATTR_POSITION,
 		true, "screen", "screen" ),
 	u_CurrentMap( this ),
+	u_PushUBOArea( this ),
 	u_ModelViewProjectionMatrix( this ) {
 }
 
@@ -2920,6 +3161,7 @@ GLShader_liquidMaterial::GLShader_liquidMaterial() :
 	u_SpecularExponent( this ),
 	u_LightGridOrigin( this ),
 	u_LightGridScale( this ),
+	u_PushUBOArea( this ),
 	GLCompileMacro_USE_GRID_DELUXE_MAPPING( this ),
 	GLCompileMacro_USE_GRID_LIGHTING( this ),
 	GLCompileMacro_USE_HEIGHTMAP_IN_NORMALMAP( this ),
@@ -3025,7 +3267,7 @@ void GLShader_fxaa::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderPro
 
 GLShader_cull::GLShader_cull() :
 	GLShader( "cull",
-		false, "cull" ),
+		false, "cull", true ),
 	u_Frame( this ),
 	u_ViewID( this ),
 	u_SurfaceDescriptorsCount( this ),
@@ -3040,7 +3282,8 @@ GLShader_cull::GLShader_cull() :
 	u_ViewWidth( this ),
 	u_ViewHeight( this ),
 	u_P00( this ),
-	u_P11( this ) {
+	u_P11( this ),
+	u_PushUBOArea( this ) {
 }
 
 GLShader_depthReduction::GLShader_depthReduction() :
@@ -3048,7 +3291,8 @@ GLShader_depthReduction::GLShader_depthReduction() :
 		false, "depthReduction" ),
 	u_ViewWidth( this ),
 	u_ViewHeight( this ),
-	u_InitialDepthLevel( this ) {
+	u_InitialDepthLevel( this ),
+	u_PushUBOArea( this ) {
 }
 
 void GLShader_depthReduction::SetShaderProgramUniforms( ShaderProgramDescriptor* shaderProgram ) {
@@ -3058,7 +3302,8 @@ void GLShader_depthReduction::SetShaderProgramUniforms( ShaderProgramDescriptor*
 GLShader_clearSurfaces::GLShader_clearSurfaces() :
 	GLShader( "clearSurfaces",
 		false, "clearSurfaces" ),
-	u_Frame( this ) {
+	u_Frame( this ),
+	u_PushUBOArea( this ) {
 }
 
 GLShader_processSurfaces::GLShader_processSurfaces() :
@@ -3066,5 +3311,6 @@ GLShader_processSurfaces::GLShader_processSurfaces() :
 		false, "processSurfaces" ),
 	u_Frame( this ),
 	u_ViewID( this ),
-	u_SurfaceCommandsOffset( this ) {
+	u_SurfaceCommandsOffset( this ),
+	u_PushUBOArea( this ) {
 }
