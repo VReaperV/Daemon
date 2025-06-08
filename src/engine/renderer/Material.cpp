@@ -797,6 +797,8 @@ void BindShaderGeneric3D( Material* material ) {
 	// u_DeformGen
 	gl_genericShaderMaterial->SetUniform_Time( backEnd.refdef.floatTime - backEnd.currentEntity->e.shaderTime );
 
+	gl_genericShaderMaterial->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
+
 	if ( r_profilerRenderSubGroups.Get() ) {
 		gl_genericShaderMaterial->SetUniform_ProfilerZero();
 		gl_genericShaderMaterial->SetUniform_ProfilerRenderSubGroups( GetShaderProfilerRenderSubGroupsMode( material->stateBits ) );
@@ -890,6 +892,8 @@ void BindShaderLightMapping( Material* material ) {
 		gl_lightMappingShaderMaterial->SetUniform_EnvironmentInterpolation( interpolation );
 	}
 
+	gl_lightMappingShaderMaterial->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
+
 	if ( r_profilerRenderSubGroups.Get() ) {
 		gl_lightMappingShaderMaterial->SetUniform_ProfilerZero();
 		gl_lightMappingShaderMaterial->SetUniform_ProfilerRenderSubGroups( GetShaderProfilerRenderSubGroupsMode( material->stateBits ) );
@@ -908,6 +912,8 @@ void BindShaderReflection( Material* material ) {
 	gl_reflectionShaderMaterial->SetUniform_ViewOrigin( backEnd.viewParms.orientation.origin );
 	gl_reflectionShaderMaterial->SetUniform_ModelMatrix( backEnd.orientation.transformMatrix );
 	gl_reflectionShaderMaterial->SetUniform_ModelViewProjectionMatrix( glState.modelViewProjectionMatrix[glState.stackIndex] );
+
+	gl_reflectionShaderMaterial->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
 }
 
 void BindShaderSkybox( Material* material ) {
@@ -916,6 +922,8 @@ void BindShaderSkybox( Material* material ) {
 
 	// Set shader uniforms.
 	gl_skyboxShaderMaterial->SetUniform_ModelViewProjectionMatrix( glState.modelViewProjectionMatrix[glState.stackIndex] );
+
+	gl_skyboxShaderMaterial->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
 }
 
 void BindShaderScreen( Material* material ) {
@@ -924,6 +932,8 @@ void BindShaderScreen( Material* material ) {
 
 	// Set shader uniforms.
 	gl_screenShaderMaterial->SetUniform_ModelViewProjectionMatrix( glState.modelViewProjectionMatrix[glState.stackIndex] );
+
+	gl_screenShaderMaterial->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
 }
 
 void BindShaderHeatHaze( Material* material ) {
@@ -943,6 +953,8 @@ void BindShaderHeatHaze( Material* material ) {
 	);
 
 	gl_heatHazeShaderMaterial->SetUniform_DeformEnable( true );
+
+	gl_heatHazeShaderMaterial->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
 
 	// draw to background image
 	R_BindFBO( tr.mainFBO[1 - backEnd.currentMainFBO] );
@@ -969,6 +981,8 @@ void BindShaderLiquid( Material* material ) {
 
 	// bind u_PortalMap
 	gl_liquidShaderMaterial->SetUniform_PortalMapBindless( GL_BindToTMU( 1, tr.portalRenderImage ) );
+
+	gl_liquidShaderMaterial->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
 }
 
 void BindShaderFog( Material* material ) {
@@ -1023,6 +1037,8 @@ void BindShaderFog( Material* material ) {
 	gl_fogQuake3ShaderMaterial->SetUniform_ModelViewProjectionMatrix( glState.modelViewProjectionMatrix[glState.stackIndex] );
 
 	gl_fogQuake3ShaderMaterial->SetUniform_Time( backEnd.refdef.floatTime - backEnd.currentEntity->e.shaderTime );
+
+	gl_fogQuake3ShaderMaterial->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
 
 	// bind u_ColorMap
 	gl_fogQuake3ShaderMaterial->SetUniform_FogMapBindless(
@@ -1495,9 +1511,26 @@ void MaterialSystem::UpdateDynamicSurfaces() {
 	GL_CheckErrors();
 }
 
+void MaterialSystem::SetConstUniforms() {
+	globalUBOProxy->SetUniform_SurfaceDescriptorsCount( surfaceDescriptorsCount );
+	uint32_t globalWorkGroupX = surfaceDescriptorsCount % MAX_COMMAND_COUNTERS == 0 ?
+		surfaceDescriptorsCount / MAX_COMMAND_COUNTERS : surfaceDescriptorsCount / MAX_COMMAND_COUNTERS + 1;
+	globalUBOProxy->SetUniform_FirstPortalGroup( globalWorkGroupX );
+	globalUBOProxy->SetUniform_TotalPortals( totalPortals );
+}
+
+void MaterialSystem::SetFrameUniforms() {
+	globalUBOProxy->SetUniform_Frame( nextFrame );
+	globalUBOProxy->SetUniform_UseFrustumCulling( r_gpuFrustumCulling.Get() );
+	globalUBOProxy->SetUniform_UseOcclusionCulling( r_gpuOcclusionCulling.Get() );
+}
+
 void MaterialSystem::UpdateFrameData() {
 	gl_clearSurfacesShader->BindProgram( 0 );
 	gl_clearSurfacesShader->SetUniform_Frame( nextFrame );
+
+	gl_clearSurfacesShader->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
+	pushBuffer.PushUniforms();
 	gl_clearSurfacesShader->DispatchCompute( MAX_VIEWS, 1, 1 );
 
 	GL_CheckErrors();
@@ -1532,6 +1565,9 @@ void MaterialSystem::DepthReduction() {
 	gl_depthReductionShader->SetUniform_InitialDepthLevel( true );
 	gl_depthReductionShader->SetUniform_ViewWidth( width );
 	gl_depthReductionShader->SetUniform_ViewHeight( height );
+
+	gl_depthReductionShader->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
+	pushBuffer.PushUniforms();
 	gl_depthReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
 
 	for ( int i = 0; i < depthImageLevels; i++ ) {
@@ -1547,6 +1583,9 @@ void MaterialSystem::DepthReduction() {
 		gl_depthReductionShader->SetUniform_InitialDepthLevel( false );
 		gl_depthReductionShader->SetUniform_ViewWidth( width );
 		gl_depthReductionShader->SetUniform_ViewHeight( height );
+
+		gl_depthReductionShader->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
+		pushBuffer.PushUniforms();
 		gl_depthReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
 
 		glMemoryBarrier( GL_SHADER_IMAGE_ACCESS_BARRIER_BIT );
@@ -1619,12 +1658,18 @@ void MaterialSystem::CullSurfaces() {
 
 		gl_cullShader->SetUniform_Frustum( frustumPlanes );
 
+		gl_cullShader->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
+		pushBuffer.PushUniforms();
+
 		gl_cullShader->DispatchCompute( globalWorkGroupX, 1, 1 );
 
 		gl_processSurfacesShader->BindProgram( 0 );
 		gl_processSurfacesShader->SetUniform_Frame( nextFrame );
 		gl_processSurfacesShader->SetUniform_ViewID( view );
 		gl_processSurfacesShader->SetUniform_SurfaceCommandsOffset( surfaceCommandsCount * ( MAX_VIEWS * nextFrame + view ) );
+
+		gl_processSurfacesShader->SetUniform_PushUBOArea( pushBuffer.buffer.GetArea() );
+		pushBuffer.PushUniforms();
 
 		glMemoryBarrier( GL_SHADER_STORAGE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT );
 		gl_processSurfacesShader->DispatchCompute( totalBatchCount, 1, 1 );
@@ -2090,6 +2135,7 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 		}
 	}
 
+	pushBuffer.PushUniforms();
 	RenderIndirect( material, viewID );
 
 	if( material.shaderBinder == BindShaderHeatHaze ) {
@@ -2103,6 +2149,7 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 		// copy to foreground image
 		R_BindFBO( tr.mainFBO[backEnd.currentMainFBO] );
 
+		pushBuffer.PushUniforms();
 		RenderIndirect( material, viewID );
 	}
 
@@ -2117,6 +2164,7 @@ void MaterialSystem::RenderMaterial( Material& material, const uint32_t viewID )
 		}
 
 		GL_State( GLS_DEPTHTEST_DISABLE );
+		pushBuffer.PushUniforms();
 		RenderIndirect( material, viewID, GL_LINES );
 
 		if ( material.shaderBinder == &BindShaderLightMapping ) {

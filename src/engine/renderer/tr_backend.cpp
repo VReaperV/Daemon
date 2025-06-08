@@ -2697,6 +2697,64 @@ void RE_UploadCinematic( int cols, int rows, const byte *data, int client, bool 
 	GL_CheckErrors();
 }
 
+const RenderCommand* SetupFrameUniformsCommand::ExecuteSelf() const {
+	GLIMP_LOGCOMMENT( "--- SetupFrameUniformsCommand::ExecuteSelf ---" );
+
+	uint32_t* data = pushBuffer.MapGlobalUniformData( GLUniform::FRAME );
+
+	globalUBOProxy->SetUniform_blurVec( tr.refdef.blurVec );
+	globalUBOProxy->SetUniform_numLights( tr.refdef.numLights );
+
+	const bool tonemap = r_toneMapping.Get() && r_highPrecisionRendering.Get() && glConfig2.textureFloatAvailable;
+	if ( tonemap ) {
+		vec4_t tonemapParms{ r_toneMappingContrast.Get(), r_toneMappingHighlightsCompressionSpeed.Get() };
+		ComputeTonemapParams( tonemapParms[0], tonemapParms[1], r_toneMappingHDRMax.Get(),
+			r_toneMappingDarkAreaPointHDR.Get(), r_toneMappingDarkAreaPointLDR.Get(), tonemapParms[2], tonemapParms[3] );
+		globalUBOProxy->SetUniform_TonemapParms( tonemapParms );
+		globalUBOProxy->SetUniform_TonemapExposure( r_toneMappingExposure.Get() );
+	}
+	globalUBOProxy->SetUniform_Tonemap( tonemap );
+
+	if ( glConfig2.usingMaterialSystem ) {
+		materialSystem.SetFrameUniforms();
+	}
+
+	globalUBOProxy->WriteGlobalUniformsToBuffer( data );
+
+	pushBuffer.PushGlobalUniforms();
+
+	return this + 1;
+}
+
+void SetupFrameUniforms() {
+	GLIMP_LOGCOMMENT( "--- SetupFrameUniformsCommand::ExecuteSelf ---" );
+
+	uint32_t* data = pushBuffer.MapGlobalUniformData( GLUniform::FRAME );
+
+	globalUBOProxy->SetUniform_blurVec( tr.refdef.blurVec );
+	globalUBOProxy->SetUniform_numLights( tr.refdef.numLights );
+
+	globalUBOProxy->SetUniform_InverseGamma( 1.0f / r_gamma->value );
+
+	const bool tonemap = r_toneMapping.Get() && r_highPrecisionRendering.Get() && glConfig2.textureFloatAvailable;
+	if ( tonemap ) {
+		vec4_t tonemapParms{ r_toneMappingContrast.Get(), r_toneMappingHighlightsCompressionSpeed.Get() };
+		ComputeTonemapParams( tonemapParms[0], tonemapParms[1], r_toneMappingHDRMax.Get(),
+			r_toneMappingDarkAreaPointHDR.Get(), r_toneMappingDarkAreaPointLDR.Get(), tonemapParms[2], tonemapParms[3] );
+		globalUBOProxy->SetUniform_TonemapParms( tonemapParms );
+		globalUBOProxy->SetUniform_TonemapExposure( r_toneMappingExposure.Get() );
+	}
+	globalUBOProxy->SetUniform_Tonemap( tonemap );
+
+	if ( glConfig2.usingMaterialSystem ) {
+		materialSystem.SetFrameUniforms();
+	}
+
+	globalUBOProxy->WriteGlobalUniformsToBuffer( data );
+
+	pushBuffer.PushGlobalUniforms();
+}
+
 /*
 =============
 RB_SetColor
@@ -3630,6 +3688,7 @@ void RB_ExecuteRenderCommands( const void *data )
 
 
 	materialSystem.frameStart = true;
+	SetupFrameUniforms();
 	while ( cmd != nullptr )
 	{
 		cmd = cmd->ExecuteSelf();

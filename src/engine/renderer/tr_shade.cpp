@@ -190,10 +190,10 @@ void GLSL_InitWorldShaders() {
 
 	// Material system shaders that are always loaded if material system is available
 	if ( glConfig2.usingMaterialSystem ) {
-		gl_shaderManager.LoadShader( gl_cullShader );
-
 		gl_cullShader->MarkProgramForBuilding( 0 );
 	}
+
+	gl_shaderManager.InitWorldShaders();
 }
 
 static void GLSL_InitGPUShadersOrError()
@@ -217,6 +217,8 @@ static void GLSL_InitGPUShadersOrError()
 	// standard light mapping
 	gl_shaderManager.LoadShader( gl_lightMappingShader );
 
+	gl_shaderManager.LoadShader( globalUBOProxy );
+
 	// Material system shaders that are always loaded if material system is available
 	if ( glConfig2.usingMaterialSystem )
 	{
@@ -224,6 +226,9 @@ static void GLSL_InitGPUShadersOrError()
 		gl_shaderManager.LoadShader( gl_lightMappingShaderMaterial );
 
 		gl_shaderManager.LoadShader( gl_clearSurfacesShader );
+		/* Load gl_cullShader so we can post-process it correctly for push buffer,
+		it will only actually be built in GLSL_InitWorldShaders() */
+		gl_shaderManager.LoadShader( gl_cullShader );
 		gl_shaderManager.LoadShader( gl_processSurfacesShader );
 		gl_shaderManager.LoadShader( gl_depthReductionShader );
 
@@ -268,9 +273,9 @@ static void GLSL_InitGPUShadersOrError()
 
 		if ( glConfig2.usingMaterialSystem )
 		{
-			gl_shaderManager.LoadShader( gl_skyboxShaderMaterial );
+			// gl_shaderManager.LoadShader( gl_skyboxShaderMaterial );
 
-			gl_skyboxShaderMaterial->MarkProgramForBuilding( 0 );
+			// gl_skyboxShaderMaterial->MarkProgramForBuilding( 0 );
 		}
 	}
 
@@ -371,6 +376,9 @@ static void GLSL_InitGPUShadersOrError()
 		gl_fxaaShader->MarkProgramForBuilding( 0 );
 	}
 
+	gl_shaderManager.PostProcessGlobalUniforms();
+	gl_shaderManager.InitShaders();
+
 	if ( r_lazyShaders.Get() == 0 )
 	{
 		gl_shaderManager.BuildAll( false );
@@ -454,6 +462,7 @@ void GLSL_ShutdownGPUShaders()
 
 	gl_genericShader = nullptr;
 	gl_genericShaderMaterial = nullptr;
+	globalUBOProxy = nullptr;
 	gl_cullShader = nullptr;
 	gl_depthReductionShader = nullptr;
 	gl_clearSurfacesShader = nullptr;
@@ -506,12 +515,29 @@ void Tess_DrawElements()
 		return;
 	}
 
+	if ( glConfig2.pushBufferAvailable ) {
+		pushBuffer.PushUniforms();
+	}
+
 	// move tess data through the GPU, finally
 	if ( ( glState.currentVBO || tr.skipVBO ) && glState.currentIBO )
 	{
 		if ( tess.multiDrawPrimitives )
 		{
-			glMultiDrawElements( GL_TRIANGLES, tess.multiDrawCounts, GL_INDEX_TYPE, ( const GLvoid** ) tess.multiDrawIndexes, tess.multiDrawPrimitives );
+			if( glConfig2.pushBufferAvailable ) {
+				for ( int i = 0; i < tess.multiDrawPrimitives; i++ ) {
+					backEnd.pc.c_multiVboIndexes += tess.multiDrawCounts[i];
+					backEnd.pc.c_indexes += tess.multiDrawCounts[i];
+
+					const GLuint area = pushBuffer.sector ? pushBuffer.sector - 1 : pushBuffer.MAX_SECTORS - 1;
+					glDrawElementsInstancedBaseInstance( GL_TRIANGLES,
+						( GLuint ) tess.multiDrawCounts[i], GL_INDEX_TYPE, tess.multiDrawIndexes[i],
+						1, area );
+				}
+			} else {
+				glMultiDrawElements( GL_TRIANGLES,
+					tess.multiDrawCounts, GL_INDEX_TYPE, ( const GLvoid** ) tess.multiDrawIndexes, tess.multiDrawPrimitives );
+			}
 
 			backEnd.pc.c_multiDrawElements++;
 			backEnd.pc.c_multiDrawPrimitives += tess.multiDrawPrimitives;
@@ -526,7 +552,13 @@ void Tess_DrawElements()
 				base = tess.indexBase * sizeof( glIndex_t );
 			}
 
-			glDrawRangeElements( GL_TRIANGLES, 0, tess.numVertexes, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ) );
+			if ( glConfig2.pushBufferAvailable ) {
+				const GLuint area = pushBuffer.sector ? pushBuffer.sector - 1 : pushBuffer.MAX_SECTORS - 1;
+				glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ),
+					1, area );
+			} else {
+				glDrawRangeElements( GL_TRIANGLES, 0, tess.numVertexes, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ) );
+			}
 
 			backEnd.pc.c_drawElements++;
 
@@ -539,6 +571,11 @@ void Tess_DrawElements()
 	}
 	else
 	{
+		if( glConfig2.pushBufferAvailable ) {
+			const GLuint area = pushBuffer.sector ? pushBuffer.sector - 1 : pushBuffer.MAX_SECTORS - 1;
+			glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, tess.indexes,
+				1, area );
+		}
 		glDrawElements( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, tess.indexes );
 
 		backEnd.pc.c_drawElements++;
@@ -572,6 +609,14 @@ void Tess_DrawArrays( GLenum elementType )
 	> Using a dummy shader instead.
 
 	See https://github.com/DaemonEngine/Daemon/issues/344 */
+
+	if( glConfig2.pushBufferAvailable ) {
+		pushBuffer.PushUniforms();
+
+		const GLuint area = pushBuffer.sector ? pushBuffer.sector - 1 : pushBuffer.MAX_SECTORS - 1;
+
+		glDrawArraysInstancedBaseInstance( GL_TRIANGLES, 0, tess.numVertexes, 1, area );
+	}
 
 	glDrawArrays( elementType, 0, tess.numVertexes );
 

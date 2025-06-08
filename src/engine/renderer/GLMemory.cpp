@@ -35,12 +35,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "common/Common.h"
 
+#include "gl_shader.h"
 #include "GLMemory.h"
 
 // 128 MB, should be enough to fit anything in BAR without going overboard
 const GLsizeiptr GLStagingBuffer::SIZE = 128 * 1024 * 1024 / sizeof( uint32_t );
 
 GLStagingBuffer stagingBuffer;
+PushBuffer pushBuffer;
 
 void GLBufferCopy( GLBuffer* src, GLBuffer* dst, GLintptr srcOffset, GLintptr dstOffset, GLsizeiptr size ) {
 	glCopyNamedBufferSubData( src->id, dst->id,
@@ -129,4 +131,56 @@ void GLStagingBuffer::FreeGLBuffer() {
 	pointer = 0;
 	current = 0;
 	last = 0;
+}
+
+uint32_t* PushBuffer::MapGlobalUniformData( const int updateType ) {
+	switch ( updateType ) {
+		case GLUniform::CONST:
+			globalUBOData = stagingBuffer.MapBuffer( constUniformsSize );
+			stagingBuffer.QueueStagingCopy( &globalUBO, 0 );
+			break;
+		case GLUniform::FRAME:
+			globalUBOData = stagingBuffer.MapBuffer( frameUniformsSize );
+			stagingBuffer.QueueStagingCopy( &globalUBO, constUniformsSize );
+			break;
+		default:
+			ASSERT_UNREACHABLE();
+	}
+
+	return globalUBOData;
+}
+
+uint32_t* PushBuffer::GetGlobalUniformData() {
+	return globalUBOData;
+}
+
+void PushBuffer::PushGlobalUniforms() {
+	stagingBuffer.FlushAll();
+}
+
+uint32_t* PushBuffer::GetPushUniformData() {
+	return buffer.GetCurrentAreaData();
+}
+
+void PushBuffer::PushUniforms() {
+	if ( pushEnd > pushStart ) {
+		buffer.FlushRange( pushStart + buffer.GetAreaSize() * buffer.GetArea(), pushEnd - pushStart );
+		buffer.AreaIncr();
+
+		// GLsync sync = glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
+		// glWaitSync( sync, 0, GL_TIMEOUT_IGNORED );
+
+		pushEnd = 0;
+		pushStart = UINT32_MAX;
+
+		sector = buffer.GetArea();
+
+		// sector++;
+
+		if ( sector == MAX_SECTORS ) {
+			// sector = 0;
+		}
+
+		// glMemoryBarrier( GL_ALL_BARRIER_BITS );
+	}
 }

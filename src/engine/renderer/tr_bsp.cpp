@@ -4465,6 +4465,17 @@ static void SetWorldLight() {
 	}
 }
 
+static void SetConstUniforms() {
+	if ( !glConfig2.pushBufferAvailable ) {
+		return;
+	}
+
+	globalUBOProxy->SetUniform_LightGridOrigin( tr.world->lightGridGLOrigin );
+	globalUBOProxy->SetUniform_LightGridScale( tr.world->lightGridGLScale );
+	globalUBOProxy->SetUniform_GlobalLightFactor( 1.0f / tr.identityLight );
+	globalUBOProxy->SetUniform_ProfilerZero();
+}
+
 /*
 =================
 RE_LoadWorldMap

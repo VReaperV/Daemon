@@ -623,6 +623,8 @@ void RE_RenderScene( const refdef_t *fd )
 	R_AddClearBufferCmd();
 	R_AddSetupLightsCmd();
 
+	// R_AddSetupFrameUniformsCmd();
+
 	if ( glConfig2.usingMaterialSystem ) {
 		materialSystem.StartFrame();
 	}

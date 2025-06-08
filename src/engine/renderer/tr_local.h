@@ -3564,6 +3564,12 @@ void GLimp_LogComment_( std::string comment );
 		virtual const RenderCommand *ExecuteSelf() const = 0;
 	};
 
+	struct SetupFrameUniformsCommand : public RenderCommand {
+		const RenderCommand* ExecuteSelf() const override;
+
+		trRefdef_t  refdef;
+	};
+
 	struct SetColorCommand : public RenderCommand {
 		const RenderCommand *ExecuteSelf() const override;
 
@@ -3738,6 +3744,7 @@ void GLimp_LogComment_( std::string comment );
 
 	void                                R_SyncRenderThread();
 
+	void                                R_AddSetupFrameUniformsCmd();
 	void                                R_AddSetupLightsCmd();
 	void                                R_AddDrawViewCmd( bool depthPass );
 	void                                R_AddClearBufferCmd();

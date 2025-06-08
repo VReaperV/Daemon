@@ -216,6 +216,20 @@ void           *R_GetCommandBuffer( size_t bytes )
 	return cmdList->cmds + cmdList->used - bytes;
 }
 
+void R_AddSetupFrameUniformsCmd() {
+	if ( !glConfig2.pushBufferAvailable ) {
+		return;
+	}
+
+	SetupFrameUniformsCommand* cmd;
+
+	cmd = R_GetRenderCommand<SetupFrameUniformsCommand>();
+
+	if ( !cmd ) {
+		return;
+	}
+}
+
 /*
 =============
 R_AddSetupLightsCmd
