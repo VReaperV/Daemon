@@ -106,12 +106,12 @@ private:
 	uint32_t textureCount = 0;
 protected:
 	int _activeMacros = 0;
-	ShaderProgramDescriptor* currentProgram;
+	GLuint currentPipeline;
 	uint32_t _vertexAttribs = 0; // can be set by uniforms
 
-	std::vector<ShaderProgramDescriptor> shaderPrograms;
+	// std::vector<ShaderProgramDescriptor> shaderPrograms;
 	std::vector<bool> shaderProgramsToBuild;
-	std::vector<ShaderPipelineDescriptor> shaderPipelines;
+	std::vector<GLuint> shaderPipelines;
 
 	std::vector<int> vertexShaderDescriptors;
 	std::vector<int> fragmentShaderDescriptors;
@@ -172,8 +172,8 @@ public:
 
 	GLint GetUniformLocation( const GLchar *uniformName ) const;
 
-	ShaderProgramDescriptor* GetProgram() const {
-		return currentProgram;
+	GLuint GetProgram() const {
+		return currentPipeline;
 	}
 
 	const std::string &GetName() const {
@@ -419,11 +419,14 @@ private:
 
 	void BuildShader( ShaderDescriptor* descriptor );
 	void BuildShaderProgram( ShaderProgramDescriptor* descriptor );
-	ShaderProgramDescriptor* FindShaderProgram( std::vector<ShaderEntry>& shaders, GLShader* mainShader );
+	ShaderProgramDescriptor* FindShaderProgram( std::vector<ShaderEntry>& shaders, GLShader* mainShader,
+		GLShader::UniformData* uniformData );
+	void AttachShaderProgramToPipeline( ShaderPipelineDescriptor* pipeline, std::vector<ShaderEntry>& shaders,
+		GLShader* mainShader, GLenum type, uint32_t permutation );
 	ShaderPipelineDescriptor* FindShaderPipelines(
 		std::vector<ShaderEntry>& vertexShaders, std::vector<ShaderEntry>& fragmentShaders,
 		std::vector<ShaderEntry>& computeShaders,
-		GLShader* mainShader );
+		GLShader* mainShader, uint32_t permutation );
 
 	void BindAttribLocations( GLuint program ) const;
 	void UpdateShaderProgramUniformLocations( GLShader* shader, ShaderProgramDescriptor* shaderProgram ) const;
@@ -540,10 +543,10 @@ class GLUniformSampler : protected GLUniform {
 	}
 
 	inline GLint GetLocation() {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		return p->uniformLocations[_locationIndex];
@@ -594,10 +597,10 @@ class GLUniformSampler1D : protected GLUniformSampler {
 	}
 
 	inline GLint GetLocation() {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		return p->uniformLocations[_locationIndex];
@@ -616,10 +619,10 @@ class GLUniformSampler2D : protected GLUniformSampler {
 	}
 
 	inline GLint GetLocation() {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		return p->uniformLocations[_locationIndex];
@@ -638,10 +641,10 @@ class GLUniformSampler3D : protected GLUniformSampler {
 	}
 
 	inline GLint GetLocation() {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		return p->uniformLocations[_locationIndex];
@@ -660,10 +663,10 @@ class GLUniformUSampler3D : protected GLUniformSampler {
 	}
 
 	inline GLint GetLocation() {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		return p->uniformLocations[_locationIndex];
@@ -682,10 +685,10 @@ class GLUniformSamplerCube : protected GLUniformSampler {
 	}
 
 	inline GLint GetLocation() {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		return p->uniformLocations[_locationIndex];
@@ -710,7 +713,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -752,10 +755,10 @@ class GLUniform1ui : protected GLUniform {
 	}
 
 	inline void SetValue( uint value ) {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -796,10 +799,10 @@ class GLUniform1Bool : protected GLUniform {
 	}
 
 	inline void SetValue( int value ) {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -846,7 +849,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -895,7 +898,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -930,7 +933,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -982,7 +985,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -1034,7 +1037,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -1083,7 +1086,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -1118,7 +1121,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -1160,10 +1163,10 @@ class GLUniformMatrix32f : protected GLUniform {
 	}
 
 	inline void SetValue( GLboolean transpose, const vec_t* m ) {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -1201,7 +1204,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -1235,7 +1238,7 @@ protected:
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
 		if ( _global || !_shader->UseMaterialSystem() ) {
-			ASSERT_EQ( p, glState.currentProgram );
+			ASSERT_EQ( p, glState.currentPipeline );
 		}
 
 		if ( _shader->UseMaterialSystem() && !_global ) {
@@ -1293,10 +1296,10 @@ public:
 			return;
 		}
 
-		ShaderProgramDescriptor *p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 		GLuint blockIndex = p->uniformBlockIndexes[_locationIndex];
 
-		ASSERT_EQ( p, glState.currentProgram );
+		ASSERT_EQ( p, glState.currentPipeline );
 
 		if( blockIndex != GL_INVALID_INDEX ) {
 			glBindBufferBase( GL_UNIFORM_BUFFER, blockIndex, buffer );

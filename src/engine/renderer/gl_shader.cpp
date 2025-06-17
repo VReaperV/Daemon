@@ -1003,7 +1003,8 @@ void GLShaderManager::BuildShaderProgram( ShaderProgramDescriptor* descriptor ) 
 	Log::Debug( "Program creation + linking: %i", time );
 }
 
-ShaderProgramDescriptor* GLShaderManager::FindShaderProgram( std::vector<ShaderEntry>& shaders, GLShader* mainShader ) {
+ShaderProgramDescriptor* GLShaderManager::FindShaderProgram( std::vector<ShaderEntry>& shaders, GLShader* mainShader,
+	GLShader::UniformData* uniformData ) {
 	std::vector<ShaderProgramDescriptor>::iterator it = std::find_if( shaderProgramDescriptors.begin(), shaderProgramDescriptors.end(),
 		[&]( const ShaderProgramDescriptor& program ) {
 			for ( const ShaderEntry& shader : shaders ) {
@@ -1057,9 +1058,14 @@ ShaderProgramDescriptor* GLShaderManager::FindShaderProgram( std::vector<ShaderE
 		}
 
 		UpdateShaderProgramUniformLocations( mainShader, &desc );
-		GL_BindProgram( &desc );
+
+		uniformData->uniformLocations = desc.uniformLocations;
+		uniformData->uniformBlockIndexes = desc.uniformBlockIndexes;
+		uniformData->uniformFirewall = desc.uniformFirewall;
+
+		GL_BindProgram( desc.id, true );
 		mainShader->SetShaderProgramUniforms( &desc );
-		GL_BindNullProgram();
+		GL_BindNullProgram( true );
 
 		shaderProgramDescriptors.emplace_back( desc );
 
@@ -1069,10 +1075,57 @@ ShaderProgramDescriptor* GLShaderManager::FindShaderProgram( std::vector<ShaderE
 	return &*it;
 }
 
+void GLShaderManager::AttachShaderProgramToPipeline( ShaderPipelineDescriptor* pipeline, std::vector<ShaderEntry>& shaders,
+	GLShader* mainShader, GLenum type, uint32_t permutation ) {
+	uint32_t offset;
+	switch ( type ) {
+		case GL_VERTEX_SHADER_BIT:
+			offset = 0;
+			break;
+		case GL_FRAGMENT_SHADER_BIT:
+			offset = 1;
+			break;
+		case GL_COMPUTE_SHADER_BIT:
+			offset = 2;
+			break;
+		default:
+			ASSERT_UNREACHABLE();
+	}
+
+	ShaderProgramDescriptor* program =
+		FindShaderProgram( shaders, mainShader, &mainShader->uniformsData[permutation * 3 + offset] );
+
+	mainShader->uniformsData[permutation * 3 + offset].program = program->id;
+	mainShader->uniformsData[permutation * 3 + offset].uniformLocations = program->uniformLocations;
+	mainShader->uniformsData[permutation * 3 + offset].uniformBlockIndexes = program->uniformBlockIndexes;
+	mainShader->uniformsData[permutation * 3 + offset].uniformFirewall = program->uniformFirewall;
+
+	pipeline->AttachProgram( program );
+
+	switch ( type ) {
+		case GL_VERTEX_SHADER_BIT:
+			pipeline->VSProgram = *program;
+			glUseProgramStages( pipeline->id, GL_VERTEX_SHADER_BIT, program->id );
+			break;
+		case GL_FRAGMENT_SHADER_BIT:
+			pipeline->FSProgram = *program;
+			glUseProgramStages( pipeline->id, GL_FRAGMENT_SHADER_BIT, program->id );
+			break;
+		case GL_COMPUTE_SHADER_BIT:
+			pipeline->CSProgram = *program;
+			glUseProgramStages( pipeline->id, GL_COMPUTE_SHADER_BIT, program->id );
+			break;
+		default:
+			ASSERT_UNREACHABLE();
+	}
+
+	GL_CheckErrors();
+}
+
 ShaderPipelineDescriptor* GLShaderManager::FindShaderPipelines(
 	std::vector<ShaderEntry>& vertexShaders, std::vector<ShaderEntry>& fragmentShaders,
 	std::vector<ShaderEntry>& computeShaders,
-	GLShader* mainShader ) {
+	GLShader* mainShader, uint32_t permutation ) {
 	std::vector<ShaderPipelineDescriptor>::iterator it = std::find_if( shaderPipelineDescriptors.begin(), shaderPipelineDescriptors.end(),
 		[&]( const ShaderPipelineDescriptor& pipeline ) {
 			for ( const ShaderEntry& shader : vertexShaders ) {
@@ -1105,19 +1158,13 @@ ShaderPipelineDescriptor* GLShaderManager::FindShaderPipelines(
 		glGenProgramPipelines( 1, &descriptor.id );
 
 		if ( vertexShaders.size() ) {
-			ShaderProgramDescriptor* program = FindShaderProgram( vertexShaders, mainShader );
-			descriptor.AttachProgram( program );
-			descriptor.VSProgram = *program;
+			AttachShaderProgramToPipeline( &descriptor, vertexShaders, mainShader, GL_VERTEX_SHADER_BIT, permutation );
 		}
 		if ( fragmentShaders.size() ) {
-			ShaderProgramDescriptor* program = FindShaderProgram( fragmentShaders, mainShader );
-			descriptor.AttachProgram( program );
-			descriptor.FSProgram = *program;
+			AttachShaderProgramToPipeline( &descriptor, vertexShaders, mainShader, GL_FRAGMENT_SHADER_BIT, permutation );
 		}
 		if ( computeShaders.size() ) {
-			ShaderProgramDescriptor* program = FindShaderProgram( computeShaders, mainShader );
-			descriptor.AttachProgram( program );
-			descriptor.CSProgram = *program;
+			AttachShaderProgramToPipeline( &descriptor, vertexShaders, mainShader, GL_COMPUTE_SHADER_BIT, permutation );
 		}
 
 		shaderPipelineDescriptors.emplace_back( descriptor );
@@ -1140,13 +1187,8 @@ bool GLShaderManager::BuildPermutation( GLShader* shader, int macroIndex, int de
 	}
 
 	// Program already exists
-	if ( glConfig2.separateShaderObjectsAvailable ) {
-		if ( i < shader->shaderPipelines.size() &&
-			shader->shaderPipelines[i].id ) {
-			return false;
-		}
-	} else if ( i < shader->shaderPrograms.size() &&
-		shader->shaderPrograms[i].id ) {
+	if ( i < shader->shaderPipelines.size() &&
+		shader->shaderPipelines[i] ) {
 		return false;
 	}
 
@@ -1168,12 +1210,8 @@ bool GLShaderManager::BuildPermutation( GLShader* shader, int macroIndex, int de
 
 	const int start = Sys::Milliseconds();
 
-	if ( glConfig2.separateShaderObjectsAvailable ) {
-		if ( i >= shader->shaderPipelines.size() ) {
-			shader->shaderPipelines.resize( ( deformIndex + 1 ) << shader->_compileMacros.size() );
-		}
-	} else if ( i >= shader->shaderPrograms.size() ) {
-		shader->shaderPrograms.resize( ( deformIndex + 1 ) << shader->_compileMacros.size() );
+	if ( i >= shader->shaderPipelines.size() ) {
+		shader->shaderPipelines.resize( ( deformIndex + 1 ) << shader->_compileMacros.size() );
 	}
 
 	std::vector<ShaderEntry> vertexShaders;
@@ -1196,17 +1234,17 @@ bool GLShaderManager::BuildPermutation( GLShader* shader, int macroIndex, int de
 		ShaderPipelineDescriptor* pipeline = FindShaderPipelines( vertexShaders, fragmentShaders, computeShaders, shader );
 
 		// Copy this for a fast look-up, but the values held in program aren't supposed to change after
-		shader->shaderPipelines[i] = *pipeline;
+		shader->shaderPipelines[i] = pipeline->id;
 	} else {
 		std::vector<ShaderEntry> shaders;
 		shaders.reserve( vertexShaders.size() + fragmentShaders.size() + computeShaders.size() );
 		shaders.insert( shaders.end(), vertexShaders.begin(), vertexShaders.end() );
 		shaders.insert( shaders.end(), fragmentShaders.begin(), fragmentShaders.end() );
 		shaders.insert( shaders.end(), computeShaders.begin(), computeShaders.end() );
-		ShaderProgramDescriptor* program = FindShaderProgram( shaders, shader );
+		ShaderProgramDescriptor* program = FindShaderProgram( shaders, shader, shader, &shader->uniformsData[i * 3] );
 
 		// Copy this for a fast look-up, but the values held in program aren't supposed to change after
-		shader->shaderPrograms[i] = *program;
+		shader->shaderPipelines[i] = program->id;
 	}
 
 	GL_CheckErrors();
@@ -2334,12 +2372,12 @@ GLuint GLShader::GetProgram( int deformIndex, const bool buildOneShader ) {
 
 	// program may not be loaded yet because the shader manager hasn't yet gotten to it
 	// so try to load it now
-	if ( index >= shaderPrograms.size() || !shaderPrograms[index].id ) {
+	if ( index >= shaderPipelines.size() || !shaderPipelines[index] ) {
 		gl_shaderManager.BuildPermutation( this, macroIndex, deformIndex, buildOneShader );
 	}
 
 	// program is still not loaded
-	if ( index >= shaderPrograms.size() || !shaderPrograms[index].id ) {
+	if ( index >= shaderPipelines.size() || !shaderPipelines[index] ) {
 		std::string activeMacros;
 		size_t numMacros = _compileMacros.size();
 
@@ -2357,7 +2395,7 @@ GLuint GLShader::GetProgram( int deformIndex, const bool buildOneShader ) {
 		ThrowShaderError( Str::Format( "Invalid shader configuration: shader = '%s', macros = '%s'", _name, activeMacros ) );
 	}
 
-	return shaderPrograms[index].id;
+	return shaderPipelines[index];
 }
 
 void GLShader::BindProgram( int deformIndex ) {
@@ -2366,13 +2404,13 @@ void GLShader::BindProgram( int deformIndex ) {
 
 	// program may not be loaded yet because the shader manager hasn't yet gotten to it
 	// so try to load it now
-	if ( index >= shaderPrograms.size() || !shaderPrograms[index].id )
+	if ( index >= shaderPipelines.size() || !shaderPipelines[index] )
 	{
 		gl_shaderManager.BuildPermutation( this, macroIndex, deformIndex, true );
 	}
 
 	// program is still not loaded
-	if ( index >= shaderPrograms.size() || !shaderPrograms[index].id )
+	if ( index >= shaderPipelines.size() || !shaderPipelines[index] )
 	{
 		std::string activeMacros;
 
@@ -2388,7 +2426,7 @@ void GLShader::BindProgram( int deformIndex ) {
 		ThrowShaderError(Str::Format("Invalid shader configuration: shader = '%s', macros = '%s'", _name, activeMacros ));
 	}
 
-	currentProgram = &shaderPrograms[index];
+	currentPipeline = shaderPipelines[index];
 
 	if ( GLimp_isLogging() )
 	{
@@ -2400,17 +2438,23 @@ void GLShader::BindProgram( int deformIndex ) {
 			this->GetName(), macros );
 	}
 
-	GL_BindProgram( &shaderPrograms[index] );
+	GL_BindProgram( shaderPipelines[index] );
 }
 
 void GLShader::DispatchCompute( const GLuint globalWorkgroupX, const GLuint globalWorkgroupY, const GLuint globalWorkgroupZ ) {
-	ASSERT_EQ( currentProgram, glState.currentProgram );
+	if ( !glConfig2.separateShaderObjectsAvailable ) {
+		ASSERT_EQ( currentPipeline, glState.currentPipeline );
+	}
+
 	ASSERT( hasComputeShader );
 	glDispatchCompute( globalWorkgroupX, globalWorkgroupY, globalWorkgroupZ );
 }
 
 void GLShader::DispatchComputeIndirect( const GLintptr indirectBuffer ) {
-	ASSERT_EQ( currentProgram, glState.currentProgram );
+	if ( !glConfig2.separateShaderObjectsAvailable ) {
+		ASSERT_EQ( currentPipeline, glState.currentPipeline );
+	}
+
 	ASSERT( hasComputeShader );
 	glDispatchComputeIndirect( indirectBuffer );
 }
