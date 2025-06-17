@@ -107,12 +107,12 @@ private:
 	const bool pushSkip;
 protected:
 	int _activeMacros = 0;
-	ShaderProgramDescriptor* currentProgram;
+	GLuint currentPipeline;
 	uint32_t _vertexAttribs = 0; // can be set by uniforms
 
-	std::vector<ShaderProgramDescriptor> shaderPrograms;
+	// std::vector<ShaderProgramDescriptor> shaderPrograms;
 	std::vector<bool> shaderProgramsToBuild;
-	std::vector<ShaderPipelineDescriptor> shaderPipelines;
+	std::vector<GLuint> shaderPipelines;
 
 	std::vector<int> vertexShaderDescriptors;
 	std::vector<int> fragmentShaderDescriptors;
@@ -181,8 +181,8 @@ public:
 
 	GLint GetUniformLocation( const GLchar *uniformName ) const;
 
-	ShaderProgramDescriptor* GetProgram() const {
-		return currentProgram;
+	GLuint GetProgram() const {
+		return currentPipeline;
 	}
 
 protected:
@@ -553,11 +553,14 @@ private:
 
 	void BuildShader( ShaderDescriptor* descriptor );
 	void BuildShaderProgram( ShaderProgramDescriptor* descriptor );
-	ShaderProgramDescriptor* FindShaderProgram( std::vector<ShaderEntry>& shaders, GLShader* mainShader );
+	ShaderProgramDescriptor* FindShaderProgram( std::vector<ShaderEntry>& shaders, GLShader* mainShader,
+		GLShader::UniformData* uniformData );
+	void AttachShaderProgramToPipeline( ShaderPipelineDescriptor* pipeline, std::vector<ShaderEntry>& shaders,
+		GLShader* mainShader, GLenum type, uint32_t permutation );
 	ShaderPipelineDescriptor* FindShaderPipelines(
 		std::vector<ShaderEntry>& vertexShaders, std::vector<ShaderEntry>& fragmentShaders,
 		std::vector<ShaderEntry>& computeShaders,
-		GLShader* mainShader );
+		GLShader* mainShader, uint32_t permutation );
 
 	void BindAttribLocations( GLuint program ) const;
 	void UpdateShaderProgramUniformLocations( GLShader* shader, ShaderProgramDescriptor* shaderProgram ) const;
@@ -598,7 +601,7 @@ class GLUniformSampler : protected GLUniform {
 	}
 
 	inline GLint GetLocation() {
-		ShaderProgramDescriptor* p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 
 		return p->uniformLocations[_locationIndex];
 	}
@@ -916,10 +919,10 @@ public:
 			return;
 		}
 
-		ShaderProgramDescriptor *p = _shader->GetProgram();
+		GLuint p = _shader->GetProgram();
 		GLuint blockIndex = p->uniformBlockIndexes[_locationIndex];
 
-		ASSERT_EQ( p, glState.currentProgram );
+		ASSERT_EQ( p, glState.currentPipeline );
 
 		if( blockIndex != GL_INVALID_INDEX ) {
 			glBindBufferBase( GL_UNIFORM_BUFFER, blockIndex, buffer );
