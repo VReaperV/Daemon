@@ -822,6 +822,14 @@ void GLShaderManager::GenerateWorldHeaders() {
 	GLWorldHeader = GLHeader( "GLWorldHeader", GenWorldHeader() );
 }
 
+void GLShaderManager::InitShaders() {
+	for ( const std::unique_ptr<GLShader>& shader : _shaders ) {
+		if ( !shader.get()->worldShader ) {
+			InitShader( shader.get() );
+		}
+	}
+}
+
 std::string GLShaderManager::GetDeformShaderName( const int index ) {
 	if ( ( !tr.world && !tr.loadingMap.size() ) || !index ) {
 		return Str::Format( "deformVertexes_%i", index );
@@ -2992,7 +3000,7 @@ void GLShader_fxaa::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderPro
 
 GLShader_cull::GLShader_cull() :
 	GLShader( "cull",
-		false, "cull" ),
+		false, "cull", true ),
 	u_Frame( this ),
 	u_ViewID( this ),
 	u_SurfaceDescriptorsCount( this ),
