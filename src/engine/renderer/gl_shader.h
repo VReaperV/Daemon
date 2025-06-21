@@ -105,6 +105,7 @@ private:
 	uint32_t padding = 0;
 
 	const bool worldShader;
+	const bool pushSkip;
 protected:
 	int _activeMacros = 0;
 	ShaderProgramDescriptor* currentProgram;
@@ -126,7 +127,8 @@ protected:
 
 	GLShader( const std::string& name, uint32_t vertexAttribsRequired,
 		const bool useMaterialSystem,
-		const std::string newVertexShaderName, const std::string newFragmentShaderName ) :
+		const std::string newVertexShaderName, const std::string newFragmentShaderName,
+		const bool newPushSkip = false ) :
 		_name( name ),
 		_vertexAttribsRequired( vertexAttribsRequired ),
 		_useMaterialSystem( useMaterialSystem ),
@@ -135,7 +137,8 @@ protected:
 		hasVertexShader( true ),
 		hasFragmentShader( true ),
 		hasComputeShader( false ),
-		worldShader( false ) {
+		worldShader( false ),
+		pushSkip( newPushSkip ) {
 	}
 
 	GLShader( const std::string& name,
@@ -148,7 +151,8 @@ protected:
 		hasVertexShader( false ),
 		hasFragmentShader( false ),
 		hasComputeShader( true ),
-		worldShader( newWorldShader ) {
+		worldShader( newWorldShader ),
+		pushSkip( false ) {
 	}
 
 public:
@@ -226,7 +230,7 @@ public:
 		return _useMaterialSystem;
 	}
 
-	void WriteUniformsToBuffer( uint32_t* buffer );
+	void WriteUniformsToBuffer( uint32_t* buffer, const bool all = false );
 };
 
 struct ShaderEntry {
@@ -3855,6 +3859,7 @@ class GLShader_depthReduction :
 	public GLShader,
 	public u_ViewWidth,
 	public u_ViewHeight,
+	public u_DepthMap,
 	public u_InitialDepthLevel {
 	public:
 	GLShader_depthReduction();

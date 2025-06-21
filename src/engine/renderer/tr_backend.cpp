@@ -2652,7 +2652,7 @@ static void RB_RenderPostProcess()
 	GL_CheckErrors();
 }
 
-void SetFrameUniforms() {
+static void SetFrameUniforms() {
 	GLIMP_LOGCOMMENT( "--- SetupFrameUniformsCommand::ExecuteSelf ---" );
 
 	uint32_t* data = pushBuffer.MapGlobalUniformData( GLUniform::FRAME );
@@ -2677,7 +2677,7 @@ void SetFrameUniforms() {
 		materialSystem.SetFrameUniforms();
 	}
 
-	globalUBOProxy->WriteUniformsToBuffer( data );
+	globalUBOProxy->WriteUniformsToBuffer( data, true );
 
 	pushBuffer.PushGlobalUniforms();
 }
