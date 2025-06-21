@@ -4465,6 +4465,17 @@ static void SetWorldLight() {
 	}
 }
 
+static void SetConstUniforms() {
+	globalUBOProxy->SetUniform_LightGridOrigin( tr.world->lightGridGLOrigin );
+	globalUBOProxy->SetUniform_LightGridScale( tr.world->lightGridGLScale );
+	globalUBOProxy->SetUniform_GlobalLightFactor( 1.0f / tr.identityLight );
+	globalUBOProxy->SetUniform_ProfilerZero();
+
+	if ( glConfig2.usingMaterialSystem ) {
+		materialSystem.SetConstUniforms();
+	}
+}
+
 /*
 =================
 RE_LoadWorldMap
@@ -4607,6 +4618,10 @@ void RE_LoadWorldMap( const char *name )
 	tr.worldLoaded = true;
 	tr.loadingMap = "";
 	GLSL_InitWorldShaders();
+
+	if ( glConfig2.pushBufferAvailable ) {
+		SetConstUniforms();
+	}
 
 	if ( glConfig2.reflectionMappingAvailable ) {
 		tr.cubeProbeSpacing = r_cubeProbeSpacing.Get();

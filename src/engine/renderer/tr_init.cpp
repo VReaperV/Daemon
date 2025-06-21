@@ -1447,6 +1447,8 @@ ScreenshotCmd screenshotPNGRegistration("screenshotPNG", ssFormat_t::SSF_PNG, "p
 		// print info
 		GfxInfo_f();
 
+		tr.initialised = true;
+
 		Log::Debug("----- finished R_Init -----" );
 
 		return true;

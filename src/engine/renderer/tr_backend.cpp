@@ -2652,6 +2652,36 @@ static void RB_RenderPostProcess()
 	GL_CheckErrors();
 }
 
+void SetFrameUniforms() {
+	GLIMP_LOGCOMMENT( "--- SetupFrameUniformsCommand::ExecuteSelf ---" );
+
+	uint32_t* data = pushBuffer.MapGlobalUniformData( GLUniform::FRAME );
+
+	globalUBOProxy->SetUniform_blurVec( backEnd.refdef.blurVec );
+	globalUBOProxy->SetUniform_numLights( backEnd.refdef.numLights );
+
+	globalUBOProxy->SetUniform_ColorModulate( backEnd.viewParms.gradingWeights );
+	globalUBOProxy->SetUniform_InverseGamma( 1.0f / r_gamma->value );
+
+	const bool tonemap = r_toneMapping.Get() && r_highPrecisionRendering.Get() && glConfig2.textureFloatAvailable;
+	if ( tonemap ) {
+		vec4_t tonemapParms{ r_toneMappingContrast.Get(), r_toneMappingHighlightsCompressionSpeed.Get() };
+		ComputeTonemapParams( tonemapParms[0], tonemapParms[1], r_toneMappingHDRMax.Get(),
+			r_toneMappingDarkAreaPointHDR.Get(), r_toneMappingDarkAreaPointLDR.Get(), tonemapParms[2], tonemapParms[3] );
+		globalUBOProxy->SetUniform_TonemapParms( tonemapParms );
+		globalUBOProxy->SetUniform_TonemapExposure( r_toneMappingExposure.Get() );
+	}
+	globalUBOProxy->SetUniform_Tonemap( tonemap );
+
+	if ( glConfig2.usingMaterialSystem ) {
+		materialSystem.SetFrameUniforms();
+	}
+
+	globalUBOProxy->WriteUniformsToBuffer( data );
+
+	pushBuffer.PushGlobalUniforms();
+}
+
 /*
 ============================================================================
 
@@ -3630,6 +3660,11 @@ void RB_ExecuteRenderCommands( const void *data )
 
 
 	materialSystem.frameStart = true;
+
+	if ( tr.registered && glConfig2.pushBufferAvailable ) {
+		SetFrameUniforms();
+	}
+
 	while ( cmd != nullptr )
 	{
 		cmd = cmd->ExecuteSelf();

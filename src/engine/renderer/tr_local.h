@@ -2496,6 +2496,7 @@ enum class ssaoMode {
 	struct trGlobals_t
 	{
 		bool registered; // cleared at shutdown, set at beginRegistration
+		bool initialised;
 
 		int      visIndex;
 		int      visClusters[ MAX_VISCOUNTS ];
