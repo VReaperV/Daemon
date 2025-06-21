@@ -230,7 +230,7 @@ public:
 		return _useMaterialSystem;
 	}
 
-	void WriteUniformsToBuffer( uint32_t* buffer, const bool all = false );
+	void WriteUniformsToBuffer( uint32_t* buffer, const int filter = 3 );
 };
 
 struct ShaderEntry {

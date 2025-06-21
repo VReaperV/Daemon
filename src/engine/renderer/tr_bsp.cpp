@@ -4473,11 +4473,27 @@ static void SetConstUniforms() {
 	globalUBOProxy->SetUniform_GlobalLightFactor( 1.0f / tr.identityLight );
 	globalUBOProxy->SetUniform_ProfilerZero();
 
+	if ( glConfig2.colorGrading ) {
+		globalUBOProxy->SetUniform_ColorMap3DBindless( GL_BindToTMU( 3, tr.colorGradeImage ) );
+	}
+	globalUBOProxy->SetUniform_DepthMapBindless( GL_BindToTMU( 1, tr.currentDepthImage ) );
+	globalUBOProxy->SetUniform_PortalMapBindless( GL_BindToTMU( 1, tr.portalRenderImage ) );
+	globalUBOProxy->SetUniform_FogMapBindless(
+		GL_BindToTMU( 0, tr.fogImage )
+	);
+	if ( glConfig2.realtimeLighting ) {
+		globalUBOProxy->SetUniform_LightTilesBindless(
+			GL_BindToTMU( BIND_LIGHTTILES, tr.lighttileRenderImage )
+		);
+	}
+	globalUBOProxy->SetUniform_LightGrid1Bindless( GL_BindToTMU( BIND_LIGHTGRID1, tr.lightGrid1Image ) );
+	globalUBOProxy->SetUniform_LightGrid2Bindless( GL_BindToTMU( BIND_LIGHTGRID2, tr.lightGrid2Image ) );
+
 	if ( glConfig2.usingMaterialSystem ) {
 		materialSystem.SetConstUniforms();
 	}
 
-	globalUBOProxy->WriteUniformsToBuffer( data, true );
+	globalUBOProxy->WriteUniformsToBuffer( data, GLUniform::CONST );
 
 	pushBuffer.PushGlobalUniforms();
 }

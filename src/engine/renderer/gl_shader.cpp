@@ -1578,7 +1578,7 @@ void GLShaderManager::PostProcessGlobalUniforms() {
 	GLuint padding;
 	std::vector<GLUniform*>& uniforms = ( ( GLShader* ) globalUBOProxy )->_uniforms;
 	std::vector<GLUniform*> constUniforms =
-		ProcessUniforms( GLUniform::CONST, GLUniform::CONST, false, globalUniforms, size, padding );
+		ProcessUniforms( GLUniform::CONST, GLUniform::CONST, false, uniforms, size, padding );
 
 	for ( GLUniform* uniform : constUniforms ) {
 		uniformStruct += "	" + ( uniform->_isTexture ? "uvec2" : uniform->_type ) + " " + uniform->_name;
@@ -1600,7 +1600,7 @@ void GLShaderManager::PostProcessGlobalUniforms() {
 	pushBuffer.constUniformsSize = size + padding;
 
 	std::vector<GLUniform*> frameUniforms =
-		ProcessUniforms( GLUniform::FRAME, GLUniform::FRAME, false, globalUniforms, size, padding );
+		ProcessUniforms( GLUniform::FRAME, GLUniform::FRAME, false, uniforms, size, padding );
 
 	for ( GLUniform* uniform : frameUniforms ) {
 		uniformStruct += "	" + ( uniform->_isTexture ? "uvec2" : uniform->_type ) + " " + uniform->_name;
@@ -2532,10 +2532,12 @@ void GLShader::SetRequiredVertexPointers()
 	GL_VertexAttribsState( attribs );
 }
 
-void GLShader::WriteUniformsToBuffer( uint32_t* buffer, const bool all ) {
+void GLShader::WriteUniformsToBuffer( uint32_t* buffer, const int filter ) {
 	uint32_t* bufPtr = buffer;
-	for ( GLUniform* uniform : ( all ? _uniforms : _materialSystemUniforms ) ) {
-		bufPtr = uniform->WriteToBuffer( bufPtr );
+	for ( GLUniform* uniform : _uniforms ) {
+		if ( uniform->_updateType == filter ) {
+			bufPtr = uniform->WriteToBuffer( bufPtr );
+		}
 	}
 }
 

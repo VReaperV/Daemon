@@ -2677,7 +2677,7 @@ static void SetFrameUniforms() {
 		materialSystem.SetFrameUniforms();
 	}
 
-	globalUBOProxy->WriteUniformsToBuffer( data, true );
+	globalUBOProxy->WriteUniformsToBuffer( data, GLUniform::FRAME );
 
 	pushBuffer.PushGlobalUniforms();
 }
