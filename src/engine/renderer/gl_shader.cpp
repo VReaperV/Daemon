@@ -1641,7 +1641,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	materialStruct += "};\n\n";
 
 	// 6 kb for materials
-	const uint32_t count = ( 4096 + 2048 ) / shader->GetSTD430Size();
+	const uint32_t count = ( 4096 + 2048 ) / shader->GetSTD430PaddedSize();
 	std::string materialBlock = "layout(std140, binding = "
 		+ std::to_string( BufferBind::MATERIALS )
 		+ ") uniform materialsUBO {\n"
@@ -2107,12 +2107,7 @@ static auto FindUniformForOffset( std::vector<GLUniform*>& uniforms, const GLuin
 	return uniforms.end();
 }
 
-// Compute std430 size/alignment and sort uniforms from highest to lowest alignment
-void GLShader::PostProcessUniforms() {
-	if ( !_useMaterialSystem ) {
-		return;
-	}
-
+GLuint GLShaderManager::SortUniforms( std::vector<GLUniform*>& uniforms ) {
 	std::vector<GLUniform*> uniformQueue;
 	for ( GLUniform* uniform : _uniforms ) {
 		if ( !uniform->_global ) {
@@ -2128,22 +2123,23 @@ void GLShader::PostProcessUniforms() {
 
 	// Sort uniforms from highest to lowest alignment so we don't need to pad uniforms (other than vec3s)
 	GLuint align = 1;
-	std430Size = 0;
-	_materialSystemUniforms.clear();
-	while ( !uniformQueue.empty() || std430Size & ( align - 1 ) ) {
-		auto iterNext = FindUniformForOffset( uniformQueue, std430Size );
+	GLuint structSize = 0;
+	uniforms.clear();
+	while ( !uniformQueue.empty() || structSize & ( align - 1 ) ) {
+		auto iterNext = FindUniformForOffset( uniformQueue, structSize );
 		if ( iterNext == uniformQueue.end() ) {
 			// add 1 unit of padding
-			++std430Size;
-			++_materialSystemUniforms.back()->_std430Size;
+			++structSize;
+			++uniforms.back()->_std430Size;
 		} else {
-			( *iterNext )->_std430Size = ( *iterNext )->_std430BaseSize;
-			std430Size += ( *iterNext )->_std430Size;
+			( *iterNext )->structSize = ( *iterNext )->_std430BaseSize;
+			structSize += ( *iterNext )->_std430Size;
 			align = std::max( align, ( *iterNext )->_std430Alignment );
-			_materialSystemUniforms.push_back( *iterNext );
+			uniforms.push_back( *iterNext );
 			uniformQueue.erase( iterNext );
 		}
 	}
+	return structSize;
 }
 
 uint32_t GLShader::GetUniqueCompileMacros( size_t permutation, const int type ) const {
