@@ -274,6 +274,11 @@ protected:
 	virtual void SetShaderProgramUniforms( ShaderProgramDescriptor* /*shaderProgram*/ ) { };
 	int SelectProgram();
 public:
+	enum Mode {
+		MATERIAL,
+		PUSH
+	};
+
 	void MarkProgramForBuilding( int deformIndex );
 	GLuint GetProgram( int deformIndex, const bool buildOneShader );
 	void BindProgram( int deformIndex );
@@ -313,11 +318,23 @@ public:
 		return _useMaterialSystem;
 	}
 
-	void WriteUniformsToBuffer( uint32_t* buffer );
+	void WriteUniformsToBuffer( uint32_t* buffer, const Mode mode, const int filter = -1 );
 };
 
 class GLUniform {
 	public:
+	enum UpdateType {
+		CONST, // Set once at map load
+		FRAME, // Set at the start of a frame
+		PUSH, // Set based on the surface/shader/etc.
+		// Set based on the surface/shader/etc. If the material system is enabled, will go into the materials UBO instead
+		MATERIAL_OR_PUSH,
+		// Set based on the surface/shader/etc. If the material system is enabled, will go into the texbundles buffer instead
+		TEXDATA_OR_PUSH,
+		LEGACY, // These won't actually go into the buffer, it's only to skip uniforms used as fallbacks for older devices
+		SKIP
+	};
+
 	const std::string _name;
 	const std::string _type;
 
@@ -326,7 +343,7 @@ class GLUniform {
 	GLuint _std430Size; // includes padding that depends on the other uniforms in the struct
 	const GLuint _std430Alignment;
 
-	const bool _global; // This uniform won't go into the materials UBO if true
+	const UpdateType _updateType;
 	const int _components;
 	const bool _isTexture;
 
@@ -336,14 +353,14 @@ class GLUniform {
 	size_t _locationIndex;
 
 	GLUniform( GLShader* shader, const char* name, const char* type, const GLuint std430Size, const GLuint std430Alignment,
-		const bool global, const int components = 0,
+		const UpdateType updateType, const int components = 0,
 		const bool isTexture = false ) :
 		_name( name ),
 		_type( type ),
 		_std430BaseSize( std430Size ),
 		_std430Size( std430Size ),
 		_std430Alignment( std430Alignment ),
-		_global( global ),
+		_updateType( updateType ),
 		_components( components ),
 		_isTexture( isTexture ),
 		_shader( shader ) {
@@ -504,16 +521,16 @@ private:
 
 class GLUniformSampler : protected GLUniform {
 	protected:
-	GLUniformSampler( GLShader* shader, const char* name, const char* type ) :
+	GLUniformSampler( GLShader* shader, const char* name, const char* type, const UpdateType updateType ) :
 		GLUniform( shader, name, type, glConfig.bindlessTexturesAvailable ? 2 : 1,
-		                               glConfig.bindlessTexturesAvailable ? 2 : 1, true, 0, true ) {
+		                               glConfig.bindlessTexturesAvailable ? 2 : 1, updateType, 0, true ) {
 	}
 
 	inline GLint GetLocation() {
 		ShaderProgramDescriptor* p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
+		if ( !_shader->UseMaterialSystem() ) {
+			ASSERT_EQ( p, glState.currentProgram );
 		}
 
 		return p->uniformLocations[_locationIndex];
@@ -531,7 +548,15 @@ class GLUniformSampler : protected GLUniform {
 	void SetValueBindless( GLint64 value ) {
 		currentValueBindless = value;
 
-		if ( glConfig.usingBindlessTextures && ( !_shader->UseMaterialSystem() || _global ) ) {
+		if ( glConfig.usingBindlessTextures ) {
+			if ( _shader->UseMaterialSystem() && _updateType == TEXDATA_OR_PUSH ) {
+				return;
+			}
+
+			if ( glConfig.pushBufferAvailable && _updateType <= FRAME ) {
+				return;
+			}
+
 			glUniformHandleui64ARB( GetLocation(), currentValueBindless );
 		}
 	}
@@ -553,37 +578,37 @@ class GLUniformSampler : protected GLUniform {
 
 class GLUniformSampler2D : protected GLUniformSampler {
 	protected:
-	GLUniformSampler2D( GLShader* shader, const char* name ) :
-		GLUniformSampler( shader, name, "sampler2D" ) {
+	GLUniformSampler2D( GLShader* shader, const char* name, const UpdateType updateType ) :
+		GLUniformSampler( shader, name, "sampler2D", updateType ) {
 	}
 };
 
 class GLUniformSampler3D : protected GLUniformSampler {
 	protected:
-	GLUniformSampler3D( GLShader* shader, const char* name ) :
-		GLUniformSampler( shader, name, "sampler3D" ) {
+	GLUniformSampler3D( GLShader* shader, const char* name, const UpdateType updateType ) :
+		GLUniformSampler( shader, name, "sampler3D", updateType ) {
 	}
 };
 
 class GLUniformUSampler3D : protected GLUniformSampler {
 	protected:
-	GLUniformUSampler3D( GLShader* shader, const char* name ) :
-		GLUniformSampler( shader, name, "usampler3D" ) {
+	GLUniformUSampler3D( GLShader* shader, const char* name, const UpdateType updateType ) :
+		GLUniformSampler( shader, name, "usampler3D", updateType ) {
 	}
 };
 
 class GLUniformSamplerCube : protected GLUniformSampler {
 	protected:
-	GLUniformSamplerCube( GLShader* shader, const char* name ) :
-		GLUniformSampler( shader, name, "samplerCube" ) {
+	GLUniformSamplerCube( GLShader* shader, const char* name, const UpdateType updateType ) :
+		GLUniformSampler( shader, name, "samplerCube", updateType ) {
 	}
 };
 
 class GLUniform1i : protected GLUniform
 {
 protected:
-	GLUniform1i( GLShader *shader, const char *name, const bool global = false ) :
-	GLUniform( shader, name, "int", 1, 1, global )
+	GLUniform1i( GLShader *shader, const char *name, const UpdateType updateType ) :
+	GLUniform( shader, name, "int", 1, 1, updateType )
 	{
 	}
 
@@ -591,14 +616,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			currentValue = value;
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 #if defined( USE_UNIFORM_FIREWALL )
 		int *firewall = ( int * ) &p->uniformFirewall[ _firewallIndex ];
@@ -629,21 +653,20 @@ public:
 
 class GLUniform1ui : protected GLUniform {
 	protected:
-	GLUniform1ui( GLShader* shader, const char* name, const bool global = false ) :
-		GLUniform( shader, name, "uint", 1, 1, global ) {
+	GLUniform1ui( GLShader* shader, const char* name, const UpdateType updateType ) :
+		GLUniform( shader, name, "uint", 1, 1, updateType ) {
 	}
 
 	inline void SetValue( uint value ) {
 		ShaderProgramDescriptor* p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			currentValue = value;
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 #if defined( USE_UNIFORM_FIREWALL )
 		uint* firewall = ( uint* ) &p->uniformFirewall[_firewallIndex];
@@ -673,21 +696,20 @@ class GLUniform1ui : protected GLUniform {
 class GLUniform1Bool : protected GLUniform {
 	protected:
 	// GLSL std430 bool is always 4 bytes, which might not correspond to C++ bool
-	GLUniform1Bool( GLShader* shader, const char* name, const bool global ) :
-		GLUniform( shader, name, "bool", 1, 1, global ) {
+	GLUniform1Bool( GLShader* shader, const char* name, const UpdateType updateType ) :
+		GLUniform( shader, name, "bool", 1, 1, updateType ) {
 	}
 
 	inline void SetValue( int value ) {
 		ShaderProgramDescriptor* p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			currentValue = value;
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 #if defined( USE_UNIFORM_FIREWALL )
 		int* firewall = ( int* ) &p->uniformFirewall[_firewallIndex];
@@ -707,7 +729,7 @@ class GLUniform1Bool : protected GLUniform {
 	}
 
 	uint32_t* WriteToBuffer( uint32_t *buffer ) override {
-		memcpy( buffer, &currentValue, sizeof( bool ) );
+		memcpy( buffer, &currentValue, sizeof( int ) );
 		return buffer + _std430Size;
 	}
 
@@ -718,8 +740,8 @@ class GLUniform1Bool : protected GLUniform {
 class GLUniform1f : protected GLUniform
 {
 protected:
-	GLUniform1f( GLShader *shader, const char *name, const bool global = false ) :
-	GLUniform( shader, name, "float", 1, 1, global )
+	GLUniform1f( GLShader *shader, const char *name, const UpdateType updateType ) :
+	GLUniform( shader, name, "float", 1, 1, updateType )
 	{
 	}
 
@@ -727,14 +749,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			currentValue = value;
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 #if defined( USE_UNIFORM_FIREWALL )
 		float *firewall = ( float * ) &p->uniformFirewall[ _firewallIndex ];
@@ -766,8 +787,8 @@ public:
 class GLUniform1fv : protected GLUniform
 {
 protected:
-	GLUniform1fv( GLShader *shader, const char *name, const int size ) :
-	GLUniform( shader, name, "float", 1, 1, false, size )
+	GLUniform1fv( GLShader *shader, const char *name, const int size, const UpdateType updateType ) :
+	GLUniform( shader, name, "float", 1, 1, updateType, size )
 	{
 		currentValue.reserve( size );
 	}
@@ -776,14 +797,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			memcpy( currentValue.data(), f, numFloats * sizeof( float ) );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 		glUniform1fv( p->uniformLocations[ _locationIndex ], numFloats, f );
 	}
@@ -800,8 +820,8 @@ protected:
 class GLUniform2f : protected GLUniform
 {
 protected:
-	GLUniform2f( GLShader *shader, const char *name ) :
-	GLUniform( shader, name, "vec2", 2, 2, false )
+	GLUniform2f( GLShader *shader, const char *name, const UpdateType updateType ) :
+	GLUniform( shader, name, "vec2", 2, 2, updateType )
 	{
 		currentValue[0] = 0.0;
 		currentValue[1] = 0.0;
@@ -811,14 +831,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			Vector2Copy( v, currentValue );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 #if defined( USE_UNIFORM_FIREWALL )
 		vec2_t *firewall = ( vec2_t * ) &p->uniformFirewall[ _firewallIndex ];
@@ -851,8 +870,8 @@ protected:
 class GLUniform3f : protected GLUniform
 {
 protected:
-	GLUniform3f( GLShader *shader, const char *name, const bool global = false ) :
-	GLUniform( shader, name, "vec3", 3, 4, global )
+	GLUniform3f( GLShader *shader, const char *name, const UpdateType updateType ) :
+	GLUniform( shader, name, "vec3", 3, 4, updateType )
 	{
 		currentValue[0] = 0.0;
 		currentValue[1] = 0.0;
@@ -863,14 +882,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			VectorCopy( v, currentValue );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 #if defined( USE_UNIFORM_FIREWALL )
 		vec3_t *firewall = ( vec3_t * ) &p->uniformFirewall[ _firewallIndex ];
@@ -902,8 +920,8 @@ public:
 class GLUniform4f : protected GLUniform
 {
 protected:
-	GLUniform4f( GLShader *shader, const char *name, const bool global = false ) :
-	GLUniform( shader, name, "vec4", 4, 4, global )
+	GLUniform4f( GLShader *shader, const char *name, const UpdateType updateType ) :
+	GLUniform( shader, name, "vec4", 4, 4, updateType )
 	{
 		currentValue[0] = 0.0;
 		currentValue[1] = 0.0;
@@ -915,14 +933,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			Vector4Copy( v, currentValue );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 #if defined( USE_UNIFORM_FIREWALL )
 		vec4_t *firewall = ( vec4_t * ) &p->uniformFirewall[ _firewallIndex ];
@@ -954,8 +971,8 @@ public:
 class GLUniform4fv : protected GLUniform
 {
 protected:
-	GLUniform4fv( GLShader *shader, const char *name, const int size ) :
-	GLUniform( shader, name, "vec4", 4, 4, false, size )
+	GLUniform4fv( GLShader *shader, const char *name, const int size, const UpdateType updateType ) :
+	GLUniform( shader, name, "vec4", 4, 4, updateType, size )
 	{
 		currentValue.reserve( size );
 	}
@@ -964,14 +981,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			memcpy( currentValue.data(), v, numV * sizeof( vec4_t ) );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 		glUniform4fv( p->uniformLocations[ _locationIndex ], numV, &v[ 0 ][ 0 ] );
 	}
@@ -989,8 +1005,8 @@ protected:
 class GLUniformMatrix4f : protected GLUniform
 {
 protected:
-	GLUniformMatrix4f( GLShader *shader, const char *name, const bool global = false ) :
-	GLUniform( shader, name, "mat4", 16, 4, global )
+	GLUniformMatrix4f( GLShader *shader, const char *name, const UpdateType updateType ) :
+	GLUniform( shader, name, "mat4", 16, 4, updateType )
 	{
 		MatrixIdentity( currentValue );
 	}
@@ -999,14 +1015,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			MatrixCopy( m, currentValue );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 #if defined( USE_UNIFORM_FIREWALL )
 		matrix_t *firewall = ( matrix_t * ) &p->uniformFirewall[ _firewallIndex ];
@@ -1037,21 +1052,20 @@ public:
 
 class GLUniformMatrix32f : protected GLUniform {
 	protected:
-	GLUniformMatrix32f( GLShader* shader, const char* name, const bool global = false ) :
-		GLUniform( shader, name, "mat3x2", 6, 2, global ) {
+	GLUniformMatrix32f( GLShader* shader, const char* name, const UpdateType updateType ) :
+		GLUniform( shader, name, "mat3x2", 12, 4, updateType ) {
 	}
 
 	inline void SetValue( GLboolean transpose, const vec_t* m ) {
 		ShaderProgramDescriptor* p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			memcpy( currentValue, m, 6 * sizeof( float ) );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 		glUniformMatrix3x2fv( p->uniformLocations[_locationIndex], 1, transpose, m );
 	}
@@ -1072,8 +1086,8 @@ class GLUniformMatrix32f : protected GLUniform {
 class GLUniformMatrix4fv : protected GLUniform
 {
 protected:
-	GLUniformMatrix4fv( GLShader *shader, const char *name, const int size ) :
-	GLUniform( shader, name, "mat4", 16, 4, false, size )
+	GLUniformMatrix4fv( GLShader *shader, const char *name, const int size, const UpdateType updateType ) :
+	GLUniform( shader, name, "mat4", 16, 4, updateType, size )
 	{
 		currentValue.reserve( size * 16 );
 	}
@@ -1082,14 +1096,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			memcpy( currentValue.data(), m, numMatrices * sizeof( matrix_t ) );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 		glUniformMatrix4fv( p->uniformLocations[ _locationIndex ], numMatrices, transpose, &m[ 0 ][ 0 ] );
 	}
@@ -1107,8 +1120,8 @@ protected:
 class GLUniformMatrix34fv : protected GLUniform
 {
 protected:
-	GLUniformMatrix34fv( GLShader *shader, const char *name, const int size ) :
-	GLUniform( shader, name, "mat3x4", 12, 4, false, size )
+	GLUniformMatrix34fv( GLShader *shader, const char *name, const int size, const UpdateType updateType ) :
+	GLUniform( shader, name, "mat3x4", 12, 4, updateType, size )
 	{
 	}
 
@@ -1116,14 +1129,13 @@ protected:
 	{
 		ShaderProgramDescriptor *p = _shader->GetProgram();
 
-		if ( _global || !_shader->UseMaterialSystem() ) {
-			DAEMON_ASSERT_EQ( p, glState.currentProgram );
-		}
-
-		if ( _shader->UseMaterialSystem() && !_global ) {
+		if ( ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
+			|| ( glConfig.pushBufferAvailable && _updateType <= FRAME ) ) {
 			memcpy( currentValue.data(), m, numMatrices * sizeof( matrix_t ) );
 			return;
 		}
+
+		ASSERT_EQ( p, glState.currentProgram );
 
 		glUniformMatrix3x4fv( p->uniformLocations[ _locationIndex ], numMatrices, transpose, m );
 	}
@@ -1704,7 +1716,7 @@ class u_ColorMap :
 	GLUniformSampler2D {
 	public:
 	u_ColorMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_ColorMap" ) {
+		GLUniformSampler2D( shader, "u_ColorMap", PUSH ) {
 	}
 
 	void SetUniform_ColorMapBindless( GLuint64 bindlessHandle ) {
@@ -1716,7 +1728,7 @@ class u_ColorMap3D :
 	GLUniformSampler3D {
 	public:
 	u_ColorMap3D( GLShader* shader ) :
-		GLUniformSampler3D( shader, "u_ColorMap3D" ) {
+		GLUniformSampler3D( shader, "u_ColorMap3D", CONST ) {
 	}
 
 	void SetUniform_ColorMap3DBindless( GLuint64 bindlessHandle ) {
@@ -1728,7 +1740,7 @@ class u_ColorMapCube :
 	GLUniformSamplerCube {
 	public:
 	u_ColorMapCube( GLShader* shader ) :
-		GLUniformSamplerCube( shader, "u_ColorMapCube" ) {
+		GLUniformSamplerCube( shader, "u_ColorMapCube", TEXDATA_OR_PUSH ) {
 	}
 
 	void SetUniform_ColorMapCubeBindless( GLuint64 bindlessHandle ) {
@@ -1740,7 +1752,7 @@ class u_DepthMap :
 	GLUniformSampler2D {
 	public:
 	u_DepthMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_DepthMap" ) {
+		GLUniformSampler2D( shader, "u_DepthMap", CONST ) {
 	}
 
 	void SetUniform_DepthMapBindless( GLuint64 bindlessHandle ) {
@@ -1752,7 +1764,7 @@ class u_DiffuseMap :
 	GLUniformSampler2D {
 	public:
 	u_DiffuseMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_DiffuseMap" ) {
+		GLUniformSampler2D( shader, "u_DiffuseMap", TEXDATA_OR_PUSH ) {
 	}
 
 	void SetUniform_DiffuseMapBindless( GLuint64 bindlessHandle ) {
@@ -1764,7 +1776,7 @@ class u_HeightMap :
 	GLUniformSampler2D {
 	public:
 	u_HeightMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_HeightMap" ) {
+		GLUniformSampler2D( shader, "u_HeightMap", TEXDATA_OR_PUSH ) {
 	}
 
 	void SetUniform_HeightMapBindless( GLuint64 bindlessHandle ) {
@@ -1776,7 +1788,7 @@ class u_NormalMap :
 	GLUniformSampler2D {
 	public:
 	u_NormalMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_NormalMap" ) {
+		GLUniformSampler2D( shader, "u_NormalMap", TEXDATA_OR_PUSH ) {
 	}
 
 	void SetUniform_NormalMapBindless( GLuint64 bindlessHandle ) {
@@ -1788,7 +1800,7 @@ class u_MaterialMap :
 	GLUniformSampler2D {
 	public:
 	u_MaterialMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_MaterialMap" ) {
+		GLUniformSampler2D( shader, "u_MaterialMap", TEXDATA_OR_PUSH ) {
 	}
 
 	void SetUniform_MaterialMapBindless( GLuint64 bindlessHandle ) {
@@ -1800,7 +1812,7 @@ class u_LightMap :
 	GLUniformSampler {
 	public:
 	u_LightMap( GLShader* shader ) :
-		GLUniformSampler( shader, "u_LightMap", "sampler2D" ) {
+		GLUniformSampler( shader, "u_LightMap", "sampler2D", TEXDATA_OR_PUSH ) {
 	}
 
 	void SetUniform_LightMapBindless( GLuint64 bindlessHandle ) {
@@ -1812,7 +1824,7 @@ class u_DeluxeMap :
 	GLUniformSampler {
 	public:
 	u_DeluxeMap( GLShader* shader ) :
-		GLUniformSampler( shader, "u_DeluxeMap", "sampler2D" ) {
+		GLUniformSampler( shader, "u_DeluxeMap", "sampler2D", TEXDATA_OR_PUSH ) {
 	}
 
 	void SetUniform_DeluxeMapBindless( GLuint64 bindlessHandle ) {
@@ -1824,7 +1836,7 @@ class u_GlowMap :
 	GLUniformSampler2D {
 	public:
 	u_GlowMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_GlowMap" ) {
+		GLUniformSampler2D( shader, "u_GlowMap", TEXDATA_OR_PUSH ) {
 	}
 
 	void SetUniform_GlowMapBindless( GLuint64 bindlessHandle ) {
@@ -1836,7 +1848,7 @@ class u_PortalMap :
 	GLUniformSampler2D {
 	public:
 	u_PortalMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_PortalMap" ) {
+		GLUniformSampler2D( shader, "u_PortalMap", CONST ) {
 	}
 
 	void SetUniform_PortalMapBindless( GLuint64 bindlessHandle ) {
@@ -1848,7 +1860,7 @@ class u_CloudMap :
 	GLUniformSampler2D {
 	public:
 	u_CloudMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_CloudMap" ) {
+		GLUniformSampler2D( shader, "u_CloudMap", PUSH ) {
 	}
 
 	void SetUniform_CloudMapBindless( GLuint64 bindlessHandle ) {
@@ -1860,7 +1872,7 @@ class u_FogMap :
 	GLUniformSampler2D {
 	public:
 	u_FogMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_FogMap" ) {
+		GLUniformSampler2D( shader, "u_FogMap", CONST ) {
 	}
 
 	void SetUniform_FogMapBindless( GLuint64 bindlessHandle ) {
@@ -1872,7 +1884,7 @@ class u_DepthTile1 :
 	GLUniformSampler2D {
 	public:
 	u_DepthTile1( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_DepthTile1" ) {
+		GLUniformSampler2D( shader, "u_DepthTile1", CONST ) {
 	}
 
 	void SetUniform_DepthTile1Bindless( GLuint64 bindlessHandle ) {
@@ -1884,7 +1896,7 @@ class u_DepthTile2 :
 	GLUniformSampler2D {
 	public:
 	u_DepthTile2( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_DepthTile2" ) {
+		GLUniformSampler2D( shader, "u_DepthTile2", CONST ) {
 	}
 
 	void SetUniform_DepthTile2Bindless( GLuint64 bindlessHandle ) {
@@ -1896,7 +1908,7 @@ class u_LightTiles :
 	GLUniformSampler3D {
 	public:
 	u_LightTiles( GLShader* shader ) :
-		GLUniformSampler3D( shader, "u_LightTiles" ) {
+		GLUniformSampler3D( shader, "u_LightTiles", CONST ) {
 	}
 
 	void SetUniform_LightTilesBindless( GLuint64 bindlessHandle ) {
@@ -1908,7 +1920,7 @@ class u_LightGrid1 :
 	GLUniformSampler3D {
 	public:
 	u_LightGrid1( GLShader* shader ) :
-		GLUniformSampler3D( shader, "u_LightGrid1" ) {
+		GLUniformSampler3D( shader, "u_LightGrid1", CONST ) {
 	}
 
 	void SetUniform_LightGrid1Bindless( GLuint64 bindlessHandle ) {
@@ -1920,7 +1932,7 @@ class u_LightGrid2 :
 	GLUniformSampler3D {
 	public:
 	u_LightGrid2( GLShader* shader ) :
-		GLUniformSampler3D( shader, "u_LightGrid2" ) {
+		GLUniformSampler3D( shader, "u_LightGrid2", CONST ) {
 	}
 
 	void SetUniform_LightGrid2Bindless( GLuint64 bindlessHandle ) {
@@ -1932,7 +1944,7 @@ class u_EnvironmentMap0 :
 	GLUniformSamplerCube {
 	public:
 	u_EnvironmentMap0( GLShader* shader ) :
-		GLUniformSamplerCube( shader, "u_EnvironmentMap0" ) {
+		GLUniformSamplerCube( shader, "u_EnvironmentMap0", PUSH ) {
 	}
 
 	void SetUniform_EnvironmentMap0Bindless( GLuint64 bindlessHandle ) {
@@ -1944,7 +1956,7 @@ class u_EnvironmentMap1 :
 	GLUniformSamplerCube {
 	public:
 	u_EnvironmentMap1( GLShader* shader ) :
-		GLUniformSamplerCube( shader, "u_EnvironmentMap1" ) {
+		GLUniformSamplerCube( shader, "u_EnvironmentMap1", PUSH ) {
 	}
 
 	void SetUniform_EnvironmentMap1Bindless( GLuint64 bindlessHandle ) {
@@ -1956,7 +1968,7 @@ class u_CurrentMap :
 	GLUniformSampler2D {
 	public:
 	u_CurrentMap( GLShader* shader ) :
-		GLUniformSampler2D( shader, "u_CurrentMap" ) {
+		GLUniformSampler2D( shader, "u_CurrentMap", PUSH ) {
 	}
 
 	void SetUniform_CurrentMapBindless( GLuint64 bindlessHandle ) {
@@ -1969,7 +1981,7 @@ class u_TextureMatrix :
 {
 public:
 	u_TextureMatrix( GLShader *shader ) :
-		GLUniformMatrix32f( shader, "u_TextureMatrix", true )
+		GLUniformMatrix32f( shader, "u_TextureMatrix", TEXDATA_OR_PUSH )
 	{
 	}
 
@@ -1993,7 +2005,7 @@ class u_AlphaThreshold :
 {
 public:
 	u_AlphaThreshold( GLShader *shader ) :
-		GLUniform1f( shader, "u_AlphaThreshold" )
+		GLUniform1f( shader, "u_AlphaThreshold", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2051,7 +2063,7 @@ class u_ViewOrigin :
 {
 public:
 	u_ViewOrigin( GLShader *shader ) :
-		GLUniform3f( shader, "u_ViewOrigin", true )
+		GLUniform3f( shader, "u_ViewOrigin", PUSH )
 	{
 	}
 
@@ -2066,7 +2078,7 @@ class u_RefractionIndex :
 {
 public:
 	u_RefractionIndex( GLShader *shader ) :
-		GLUniform1f( shader, "u_RefractionIndex" )
+		GLUniform1f( shader, "u_RefractionIndex", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2081,7 +2093,7 @@ class u_FresnelPower :
 {
 public:
 	u_FresnelPower( GLShader *shader ) :
-		GLUniform1f( shader, "u_FresnelPower" )
+		GLUniform1f( shader, "u_FresnelPower", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2096,7 +2108,7 @@ class u_FresnelScale :
 {
 public:
 	u_FresnelScale( GLShader *shader ) :
-		GLUniform1f( shader, "u_FresnelScale" )
+		GLUniform1f( shader, "u_FresnelScale", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2111,7 +2123,7 @@ class u_FresnelBias :
 {
 public:
 	u_FresnelBias( GLShader *shader ) :
-		GLUniform1f( shader, "u_FresnelBias" )
+		GLUniform1f( shader, "u_FresnelBias", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2126,7 +2138,7 @@ class u_NormalScale :
 {
 public:
 	u_NormalScale( GLShader *shader ) :
-		GLUniform3f( shader, "u_NormalScale" )
+		GLUniform3f( shader, "u_NormalScale", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2142,7 +2154,7 @@ class u_FogDensity :
 {
 public:
 	u_FogDensity( GLShader *shader ) :
-		GLUniform1f( shader, "u_FogDensity" )
+		GLUniform1f( shader, "u_FogDensity", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2157,7 +2169,7 @@ class u_FogColor :
 {
 public:
 	u_FogColor( GLShader *shader ) :
-		GLUniform3f( shader, "u_FogColor" )
+		GLUniform3f( shader, "u_FogColor", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2172,7 +2184,7 @@ class u_CloudHeight :
 	GLUniform1f {
 	public:
 	u_CloudHeight( GLShader* shader ) :
-		GLUniform1f( shader, "u_CloudHeight" ) {
+		GLUniform1f( shader, "u_CloudHeight", PUSH ) {
 	}
 
 	void SetUniform_CloudHeight( const float cloudHeight ) {
@@ -2185,7 +2197,7 @@ class u_Color_Float :
 {
 public:
 	u_Color_Float( GLShader *shader ) :
-		GLUniform4f( shader, "u_Color" )
+		GLUniform4f( shader, "u_Color", LEGACY )
 	{
 	}
 
@@ -2200,7 +2212,7 @@ class u_Color_Uint :
 {
 public:
 	u_Color_Uint( GLShader *shader ) :
-		GLUniform1ui( shader, "u_Color" )
+		GLUniform1ui( shader, "u_Color", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2227,7 +2239,7 @@ class u_ColorGlobal_Float :
 {
 public:
 	u_ColorGlobal_Float( GLShader *shader ) :
-		GLUniform4f( shader, "u_ColorGlobal", true )
+		GLUniform4f( shader, "u_ColorGlobal", LEGACY )
 	{
 	}
 
@@ -2241,7 +2253,7 @@ class u_ColorGlobal_Uint :
 	GLUniform1ui {
 	public:
 	u_ColorGlobal_Uint( GLShader* shader ) :
-		GLUniform1ui( shader, "u_ColorGlobal", true ) {
+		GLUniform1ui( shader, "u_ColorGlobal", MATERIAL_OR_PUSH ) {
 	}
 
 	void SetUniform_ColorGlobal_Uint( const Color::Color& color ) {
@@ -2265,7 +2277,7 @@ class u_Frame :
 	GLUniform1ui {
 	public:
 	u_Frame( GLShader* shader ) :
-		GLUniform1ui( shader, "u_Frame" ) {
+		GLUniform1ui( shader, "u_Frame", FRAME ) {
 	}
 
 	void SetUniform_Frame( const uint frame ) {
@@ -2277,7 +2289,7 @@ class u_ViewID :
 	GLUniform1ui {
 	public:
 	u_ViewID( GLShader* shader ) :
-		GLUniform1ui( shader, "u_ViewID" ) {
+		GLUniform1ui( shader, "u_ViewID", PUSH ) {
 	}
 
 	void SetUniform_ViewID( const uint viewID ) {
@@ -2289,7 +2301,7 @@ class u_FirstPortalGroup :
 	GLUniform1ui {
 	public:
 	u_FirstPortalGroup( GLShader* shader ) :
-		GLUniform1ui( shader, "u_FirstPortalGroup" ) {
+		GLUniform1ui( shader, "u_FirstPortalGroup", CONST ) {
 	}
 
 	void SetUniform_FirstPortalGroup( const uint firstPortalGroup ) {
@@ -2301,7 +2313,7 @@ class u_TotalPortals :
 	GLUniform1ui {
 	public:
 	u_TotalPortals( GLShader* shader ) :
-		GLUniform1ui( shader, "u_TotalPortals" ) {
+		GLUniform1ui( shader, "u_TotalPortals", CONST ) {
 	}
 
 	void SetUniform_TotalPortals( const uint totalPortals ) {
@@ -2313,7 +2325,7 @@ class u_ViewWidth :
 	GLUniform1ui {
 	public:
 	u_ViewWidth( GLShader* shader ) :
-		GLUniform1ui( shader, "u_ViewWidth" ) {
+		GLUniform1ui( shader, "u_ViewWidth", PUSH ) {
 	}
 
 	void SetUniform_ViewWidth( const uint viewWidth ) {
@@ -2325,7 +2337,7 @@ class u_ViewHeight :
 	GLUniform1ui {
 	public:
 	u_ViewHeight( GLShader* shader ) :
-		GLUniform1ui( shader, "u_ViewHeight" ) {
+		GLUniform1ui( shader, "u_ViewHeight", PUSH ) {
 	}
 
 	void SetUniform_ViewHeight( const uint viewHeight ) {
@@ -2337,7 +2349,7 @@ class u_InitialDepthLevel :
 	GLUniform1Bool {
 	public:
 	u_InitialDepthLevel( GLShader* shader ) :
-		GLUniform1Bool( shader, "u_InitialDepthLevel", true ) {
+		GLUniform1Bool( shader, "u_InitialDepthLevel", PUSH ) {
 	}
 
 	void SetUniform_InitialDepthLevel( const int initialDepthLevel ) {
@@ -2349,7 +2361,7 @@ class u_P00 :
 	GLUniform1f {
 	public:
 	u_P00( GLShader* shader ) :
-		GLUniform1f( shader, "u_P00" ) {
+		GLUniform1f( shader, "u_P00", PUSH ) {
 	}
 
 	void SetUniform_P00( const float P00 ) {
@@ -2361,7 +2373,7 @@ class u_P11 :
 	GLUniform1f {
 	public:
 	u_P11( GLShader* shader ) :
-		GLUniform1f( shader, "u_P11" ) {
+		GLUniform1f( shader, "u_P11", PUSH ) {
 	}
 
 	void SetUniform_P11( const float P11 ) {
@@ -2373,7 +2385,7 @@ class u_SurfaceDescriptorsCount :
 	GLUniform1ui {
 	public:
 	u_SurfaceDescriptorsCount( GLShader* shader ) :
-		GLUniform1ui( shader, "u_SurfaceDescriptorsCount", true ) {
+		GLUniform1ui( shader, "u_SurfaceDescriptorsCount", CONST ) {
 	}
 
 	void SetUniform_SurfaceDescriptorsCount( const uint SurfaceDescriptorsCount ) {
@@ -2385,7 +2397,7 @@ class u_UseFrustumCulling :
 	GLUniform1Bool {
 	public:
 	u_UseFrustumCulling( GLShader* shader ) :
-		GLUniform1Bool( shader, "u_UseFrustumCulling", true ) {
+		GLUniform1Bool( shader, "u_UseFrustumCulling", FRAME ) {
 	}
 
 	void SetUniform_UseFrustumCulling( const int useFrustumCulling ) {
@@ -2397,7 +2409,7 @@ class u_UseOcclusionCulling :
 	GLUniform1Bool {
 	public:
 	u_UseOcclusionCulling( GLShader* shader ) :
-		GLUniform1Bool( shader, "u_UseOcclusionCulling", true ) {
+		GLUniform1Bool( shader, "u_UseOcclusionCulling", FRAME ) {
 	}
 
 	void SetUniform_UseOcclusionCulling( const int useOcclusionCulling ) {
@@ -2409,7 +2421,7 @@ class u_ShowTris :
 	GLUniform1Bool {
 	public:
 	u_ShowTris( GLShader* shader ) :
-		GLUniform1Bool( shader, "u_ShowTris", true ) {
+		GLUniform1Bool( shader, "u_ShowTris", PUSH ) {
 	}
 
 	void SetUniform_ShowTris( const int showTris ) {
@@ -2421,7 +2433,7 @@ class u_CameraPosition :
 	GLUniform3f {
 	public:
 	u_CameraPosition( GLShader* shader ) :
-		GLUniform3f( shader, "u_CameraPosition" ) {
+		GLUniform3f( shader, "u_CameraPosition", PUSH ) {
 	}
 
 	void SetUniform_CameraPosition( const vec3_t cameraPosition ) {
@@ -2433,7 +2445,7 @@ class u_Frustum :
 	GLUniform4fv {
 	public:
 	u_Frustum( GLShader* shader ) :
-		GLUniform4fv( shader, "u_Frustum", 6 ) {
+		GLUniform4fv( shader, "u_Frustum", 6, PUSH ) {
 	}
 
 	void SetUniform_Frustum( vec4_t frustum[6] ) {
@@ -2445,7 +2457,7 @@ class u_SurfaceCommandsOffset :
 	GLUniform1ui {
 	public:
 	u_SurfaceCommandsOffset( GLShader* shader ) :
-		GLUniform1ui( shader, "u_SurfaceCommandsOffset" ) {
+		GLUniform1ui( shader, "u_SurfaceCommandsOffset", PUSH ) {
 	}
 
 	void SetUniform_SurfaceCommandsOffset( const uint surfaceCommandsOffset ) {
@@ -2457,7 +2469,7 @@ class u_MaterialColour :
 	GLUniform3f {
 	public:
 	u_MaterialColour( GLShader* shader ) :
-		GLUniform3f( shader, "u_MaterialColour", true ) {
+		GLUniform3f( shader, "u_MaterialColour", PUSH ) {
 	}
 
 	void SetUniform_MaterialColour( const vec3_t materialColour ) {
@@ -2471,7 +2483,7 @@ class u_ProfilerZero :
 	GLUniform1f {
 	public:
 	u_ProfilerZero( GLShader* shader ) :
-		GLUniform1f( shader, "u_ProfilerZero", true ) {
+		GLUniform1f( shader, "u_ProfilerZero", CONST ) {
 	}
 
 	void SetUniform_ProfilerZero() {
@@ -2483,7 +2495,7 @@ class u_ProfilerRenderSubGroups :
 	GLUniform1ui {
 	public:
 	u_ProfilerRenderSubGroups( GLShader* shader ) :
-		GLUniform1ui( shader, "u_ProfilerRenderSubGroups", true ) {
+		GLUniform1ui( shader, "u_ProfilerRenderSubGroups", PUSH ) {
 	}
 
 	void SetUniform_ProfilerRenderSubGroups( const uint renderSubGroups ) {
@@ -2496,7 +2508,7 @@ class u_ModelMatrix :
 {
 public:
 	u_ModelMatrix( GLShader *shader ) :
-		GLUniformMatrix4f( shader, "u_ModelMatrix", true )
+		GLUniformMatrix4f( shader, "u_ModelMatrix", PUSH )
 	{
 	}
 
@@ -2511,7 +2523,7 @@ class u_ViewMatrix :
 {
 public:
 	u_ViewMatrix( GLShader *shader ) :
-		GLUniformMatrix4f( shader, "u_ViewMatrix" )
+		GLUniformMatrix4f( shader, "u_ViewMatrix", PUSH )
 	{
 	}
 
@@ -2526,7 +2538,7 @@ class u_ModelViewMatrix :
 {
 public:
 	u_ModelViewMatrix( GLShader *shader ) :
-		GLUniformMatrix4f( shader, "u_ModelViewMatrix" )
+		GLUniformMatrix4f( shader, "u_ModelViewMatrix", PUSH )
 	{
 	}
 
@@ -2541,7 +2553,7 @@ class u_ModelViewMatrixTranspose :
 {
 public:
 	u_ModelViewMatrixTranspose( GLShader *shader ) :
-		GLUniformMatrix4f( shader, "u_ModelViewMatrixTranspose", true )
+		GLUniformMatrix4f( shader, "u_ModelViewMatrixTranspose", PUSH )
 	{
 	}
 
@@ -2556,7 +2568,7 @@ class u_ProjectionMatrixTranspose :
 {
 public:
 	u_ProjectionMatrixTranspose( GLShader *shader ) :
-		GLUniformMatrix4f( shader, "u_ProjectionMatrixTranspose", true )
+		GLUniformMatrix4f( shader, "u_ProjectionMatrixTranspose", PUSH )
 	{
 	}
 
@@ -2571,7 +2583,7 @@ class u_ModelViewProjectionMatrix :
 {
 public:
 	u_ModelViewProjectionMatrix( GLShader *shader ) :
-		GLUniformMatrix4f( shader, "u_ModelViewProjectionMatrix", true )
+		GLUniformMatrix4f( shader, "u_ModelViewProjectionMatrix", PUSH )
 	{
 	}
 
@@ -2586,7 +2598,7 @@ class u_UnprojectMatrix :
 {
 public:
 	u_UnprojectMatrix( GLShader *shader ) :
-		GLUniformMatrix4f( shader, "u_UnprojectMatrix", true )
+		GLUniformMatrix4f( shader, "u_UnprojectMatrix", PUSH )
 	{
 	}
 
@@ -2600,7 +2612,7 @@ class u_UseCloudMap :
 	GLUniform1Bool {
 	public:
 	u_UseCloudMap( GLShader* shader ) :
-		GLUniform1Bool( shader, "u_UseCloudMap", true ) {
+		GLUniform1Bool( shader, "u_UseCloudMap", PUSH ) {
 	}
 
 	void SetUniform_UseCloudMap( const bool useCloudMap ) {
@@ -2613,7 +2625,7 @@ class u_Bones :
 {
 public:
 	u_Bones( GLShader *shader ) :
-		GLUniform4fv( shader, "u_Bones", MAX_BONES )
+		GLUniform4fv( shader, "u_Bones", MAX_BONES, PUSH )
 	{
 	}
 
@@ -2628,7 +2640,7 @@ class u_VertexInterpolation :
 {
 public:
 	u_VertexInterpolation( GLShader *shader ) :
-		GLUniform1f( shader, "u_VertexInterpolation" )
+		GLUniform1f( shader, "u_VertexInterpolation", PUSH )
 	{
 	}
 
@@ -2643,7 +2655,7 @@ class u_InversePortalRange :
 {
 public:
 	u_InversePortalRange( GLShader *shader ) :
-		GLUniform1f( shader, "u_InversePortalRange" )
+		GLUniform1f( shader, "u_InversePortalRange", PUSH )
 	{
 	}
 
@@ -2658,7 +2670,7 @@ class u_DepthScale :
 {
 public:
 	u_DepthScale( GLShader *shader ) :
-		GLUniform1f( shader, "u_DepthScale" )
+		GLUniform1f( shader, "u_DepthScale", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2673,7 +2685,7 @@ class u_ReliefDepthScale :
 {
 public:
 	u_ReliefDepthScale( GLShader *shader ) :
-		GLUniform1f( shader, "u_ReliefDepthScale" )
+		GLUniform1f( shader, "u_ReliefDepthScale", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2688,7 +2700,7 @@ class u_ReliefOffsetBias :
 {
 public:
 	u_ReliefOffsetBias( GLShader *shader ) :
-		GLUniform1f( shader, "u_ReliefOffsetBias" )
+		GLUniform1f( shader, "u_ReliefOffsetBias", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -2703,7 +2715,7 @@ class u_EnvironmentInterpolation :
 {
 public:
 	u_EnvironmentInterpolation( GLShader *shader ) :
-		GLUniform1f( shader, "u_EnvironmentInterpolation", true )
+		GLUniform1f( shader, "u_EnvironmentInterpolation", PUSH )
 	{
 	}
 
@@ -2718,7 +2730,7 @@ class u_Time :
 {
 public:
 	u_Time( GLShader *shader ) :
-		GLUniform1f( shader, "u_Time", true ) // Source this from a buffer when entity support is added to the material system
+		GLUniform1f( shader, "u_Time", PUSH )
 	{
 	}
 
@@ -2733,7 +2745,7 @@ class u_GlobalLightFactor :
 {
 public:
 	u_GlobalLightFactor( GLShader *shader ) :
-		GLUniform1f( shader, "u_GlobalLightFactor" )
+		GLUniform1f( shader, "u_GlobalLightFactor", CONST )
 	{
 	}
 
@@ -2758,7 +2770,7 @@ class u_ColorModulate :
 {
 public:
 	u_ColorModulate( GLShader *shader ) :
-		GLUniform4f( shader, "u_ColorModulate" )
+		GLUniform4f( shader, "u_ColorModulate", FRAME )
 	{
 	}
 
@@ -2841,7 +2853,7 @@ class u_ColorModulateColorGen_Float :
 {
 public:
 	u_ColorModulateColorGen_Float( GLShader* shader ) :
-		GLUniform4f( shader, "u_ColorModulateColorGen" )
+		GLUniform4f( shader, "u_ColorModulateColorGen", LEGACY )
 	{
 	}
 
@@ -2873,7 +2885,7 @@ class u_ColorModulateColorGen_Uint :
 	GLUniform1ui {
 	public:
 	u_ColorModulateColorGen_Uint( GLShader* shader ) :
-		GLUniform1ui( shader, "u_ColorModulateColorGen" ) {
+		GLUniform1ui( shader, "u_ColorModulateColorGen", MATERIAL_OR_PUSH ) {
 	}
 
 	void SetUniform_ColorModulateColorGen_Uint(
@@ -2947,7 +2959,7 @@ class u_FogDistanceVector :
 {
 public:
 	u_FogDistanceVector( GLShader *shader ) :
-		GLUniform4f( shader, "u_FogDistanceVector", true )
+		GLUniform4f( shader, "u_FogDistanceVector", PUSH )
 	{
 	}
 
@@ -2962,7 +2974,7 @@ class u_FogDepthVector :
 {
 public:
 	u_FogDepthVector( GLShader *shader ) :
-		GLUniform4f( shader, "u_FogDepthVector", true )
+		GLUniform4f( shader, "u_FogDepthVector", PUSH )
 	{
 	}
 
@@ -2977,7 +2989,7 @@ class u_FogEyeT :
 {
 public:
 	u_FogEyeT( GLShader *shader ) :
-		GLUniform1f( shader, "u_FogEyeT", true )
+		GLUniform1f( shader, "u_FogEyeT", PUSH )
 	{
 	}
 
@@ -2991,7 +3003,7 @@ class u_DeformEnable :
 	GLUniform1f {
 	public:
 	u_DeformEnable( GLShader* shader ) :
-		GLUniform1f( shader, "u_DeformEnable", true ) {
+		GLUniform1f( shader, "u_DeformEnable", PUSH ) {
 	}
 
 	void SetUniform_DeformEnable( const bool value ) {
@@ -3004,7 +3016,7 @@ class u_DeformMagnitude :
 {
 public:
 	u_DeformMagnitude( GLShader *shader ) :
-		GLUniform1f( shader, "u_DeformMagnitude" )
+		GLUniform1f( shader, "u_DeformMagnitude", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -3019,7 +3031,7 @@ class u_blurVec :
 {
 public:
 	u_blurVec( GLShader *shader ) :
-		GLUniform3f( shader, "u_blurVec" )
+		GLUniform3f( shader, "u_blurVec", FRAME )
 	{
 	}
 
@@ -3033,7 +3045,7 @@ class u_Horizontal :
 	GLUniform1Bool {
 	public:
 	u_Horizontal( GLShader* shader ) :
-		GLUniform1Bool( shader, "u_Horizontal", true ) {
+		GLUniform1Bool( shader, "u_Horizontal", PUSH ) {
 	}
 
 	void SetUniform_Horizontal( bool horizontal ) {
@@ -3046,7 +3058,7 @@ class u_TexScale :
 {
 public:
 	u_TexScale( GLShader *shader ) :
-		GLUniform2f( shader, "u_TexScale" )
+		GLUniform2f( shader, "u_TexScale", PUSH )
 	{
 	}
 
@@ -3061,7 +3073,7 @@ class u_SpecularExponent :
 {
 public:
 	u_SpecularExponent( GLShader *shader ) :
-		GLUniform2f( shader, "u_SpecularExponent" )
+		GLUniform2f( shader, "u_SpecularExponent", MATERIAL_OR_PUSH )
 	{
 	}
 
@@ -3081,7 +3093,7 @@ class u_InverseGamma :
 {
 public:
 	u_InverseGamma( GLShader *shader ) :
-		GLUniform1f( shader, "u_InverseGamma" )
+		GLUniform1f( shader, "u_InverseGamma", FRAME )
 	{
 	}
 
@@ -3095,7 +3107,7 @@ class u_SRGB :
 	GLUniform1Bool {
 	public:
 	u_SRGB( GLShader* shader ) :
-		GLUniform1Bool( shader, "u_SRGB", true ) {
+		GLUniform1Bool( shader, "u_SRGB", CONST ) {
 	}
 
 	void SetUniform_SRGB( bool tonemap ) {
@@ -3107,7 +3119,7 @@ class u_Tonemap :
 	GLUniform1Bool {
 	public:
 	u_Tonemap( GLShader* shader ) :
-		GLUniform1Bool( shader, "u_Tonemap", true ) {
+		GLUniform1Bool( shader, "u_Tonemap", FRAME ) {
 	}
 
 	void SetUniform_Tonemap( bool tonemap ) {
@@ -3119,7 +3131,7 @@ class u_TonemapParms :
 	GLUniform4f {
 	public:
 	u_TonemapParms( GLShader* shader ) :
-		GLUniform4f( shader, "u_TonemapParms", true ) {
+		GLUniform4f( shader, "u_TonemapParms", FRAME ) {
 	}
 
 	void SetUniform_TonemapParms( vec4_t tonemapParms ) {
@@ -3131,7 +3143,7 @@ class u_TonemapExposure :
 	GLUniform1f {
 	public:
 	u_TonemapExposure( GLShader* shader ) :
-		GLUniform1f( shader, "u_TonemapExposure", true ) {
+		GLUniform1f( shader, "u_TonemapExposure", FRAME ) {
 	}
 
 	void SetUniform_TonemapExposure( float tonemapExposure ) {
@@ -3144,7 +3156,7 @@ class u_LightGridOrigin :
 {
 public:
 	u_LightGridOrigin( GLShader *shader ) :
-		GLUniform3f( shader, "u_LightGridOrigin", true )
+		GLUniform3f( shader, "u_LightGridOrigin", CONST )
 	{
 	}
 
@@ -3159,7 +3171,7 @@ class u_LightGridScale :
 {
 public:
 	u_LightGridScale( GLShader *shader ) :
-		GLUniform3f( shader, "u_LightGridScale", true )
+		GLUniform3f( shader, "u_LightGridScale", CONST )
 	{
 	}
 
@@ -3174,7 +3186,7 @@ class u_zFar :
 {
 public:
 	u_zFar( GLShader *shader ) :
-		GLUniform3f( shader, "u_zFar" )
+		GLUniform3f( shader, "u_zFar", PUSH )
 	{
 	}
 
@@ -3188,7 +3200,7 @@ class u_UnprojectionParams :
 	GLUniform3f {
 	public:
 	u_UnprojectionParams( GLShader* shader ) :
-		GLUniform3f( shader, "u_UnprojectionParams" ) {
+		GLUniform3f( shader, "u_UnprojectionParams", PUSH ) {
 	}
 
 	void SetUniform_UnprojectionParams( const vec3_t value ) {
@@ -3201,7 +3213,7 @@ class u_numLights :
 {
 public:
 	u_numLights( GLShader *shader ) :
-		GLUniform1i( shader, "u_numLights", true )
+		GLUniform1i( shader, "u_numLights", FRAME )
 	{
 	}
 
@@ -3216,7 +3228,7 @@ class u_lightLayer :
 {
 public:
 	u_lightLayer( GLShader *shader ) :
-		GLUniform1i( shader, "u_lightLayer" )
+		GLUniform1i( shader, "u_lightLayer", PUSH )
 	{
 	}
 
