@@ -38,6 +38,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 const vec2 vertices[3] = vec2[3] ( vec2( -1.0f, -1.0f ), vec2( 3.0f, -1.0f ), vec2( -1.0f, 3.0f ) );
 
 void main() {
+	#insert material_vp
+
 	gl_Position = vec4( vertices[gl_VertexID], 0.0f, 1.0f );
 }
 #else

@@ -144,10 +144,18 @@ void PushBuffer::InitGLBuffers() {
 	globalUBO.BufferStorage( pushBuffer.constUniformsSize + pushBuffer.frameUniformsSize, 1, nullptr );
 
 	globalUBO.BindBufferBase();
+
+	pushUBO.GenBuffer();
+
+	pushUBO.BufferStorage( PUSH_SIZE, 1, nullptr );
+	pushUBO.MapAll();
+
+	pushUBO.BindBufferBase();
 }
 
 void PushBuffer::FreeGLBuffers() {
 	globalUBO.DelBuffer();
+	pushUBO.DelBuffer();
 }
 
 uint32_t* PushBuffer::MapGlobalUniformData( const int updateType ) {
@@ -169,4 +177,72 @@ uint32_t* PushBuffer::MapGlobalUniformData( const int updateType ) {
 
 void PushBuffer::PushGlobalUniforms() {
 	stagingBuffer.FlushAll();
+}
+
+uint32_t* PushBuffer::MapPushUniformData( const GLuint size ) {
+	if ( !size ) {
+		return nullptr;
+	}
+
+	if ( size > PUSH_SIZE ) {
+		Sys::Drop( "Couldn't map GL PushBuffer: size too large (%u/%u)", size, PUSH_SIZE );
+	}
+
+	uint32_t padding = pushEnd;
+	pushEnd = ( pushEnd + size - 1 ) / size * size;
+	padding = pushEnd - padding;
+	pushStart += padding;
+	sector = pushEnd / size;
+
+	if ( pushEnd + size > PUSH_SIZE ) {
+		PushUniforms();
+
+		GLsync pushSync = glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
+
+		GLenum syncValue = glClientWaitSync( pushSync, GL_SYNC_FLUSH_COMMANDS_BIT, SYNC_TIMEOUT );
+		while ( syncValue != GL_ALREADY_SIGNALED && syncValue != GL_CONDITION_SATISFIED ) {
+			syncValue = glClientWaitSync( pushSync, 0, SYNC_TIMEOUT );
+		}
+
+		GL_CheckErrors();
+		glDeleteSync( pushSync );
+
+		pushStart = 0;
+		pushEnd = 0;
+		sector = 0;
+
+		GL_CheckErrors();
+	}
+	
+	uint32_t* ret = pushUBO.GetData() + pushEnd;
+	pushEnd += size;
+
+	GL_CheckErrors();
+
+	return ret;
+}
+
+void PushBuffer::PushUniforms() {
+	if ( pushEnd - pushStart ) {
+		pushUBO.FlushRange( pushStart, pushEnd - pushStart );
+	}
+
+	pushStart = pushEnd;
+
+	GL_CheckErrors();
+}
+
+void PushBuffer::WriteCurrentShaderToPushUBO() {
+	if ( glState.currentShader ) {
+		glState.currentShader->WriteUniformsToBuffer(
+			MapPushUniformData( glState.currentShader->pushUniformsSize + glState.currentShader->pushUniformsPadding ),
+			GLShader::PUSH
+		);
+	}
+
+	if( glState.currentMaterialShader ) {
+		glState.currentMaterialShader->SetUniform_PushBufferSector( sector );
+	}
+
+	PushUniforms();
 }

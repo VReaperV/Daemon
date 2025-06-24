@@ -1316,15 +1316,18 @@ void GLShaderManager::InitShader( GLShader* shader ) {
 	ShaderType shaderTypes[] = {
 		{ shader->hasVertexShader, GLCompileMacro::VERTEX, GL_VERTEX_SHADER, "_vp",
 			shader->vertexShaderName,
-			uint32_t( GLVersionDeclaration.text.size() ),
+			uint32_t( GLVersionDeclaration.text.size() + GLCompatHeader.text.size()
+				+ GLEngineConstants.text.size() + GLVertexHeader.text.size() ),
 			{ &GLVersionDeclaration, &GLCompatHeader, &GLEngineConstants, &GLVertexHeader } },
 		{ shader->hasFragmentShader, GLCompileMacro::FRAGMENT, GL_FRAGMENT_SHADER, "_fp",
 			shader->fragmentShaderName,
-			uint32_t( GLVersionDeclaration.text.size() ),
+			uint32_t( GLVersionDeclaration.text.size() + GLCompatHeader.text.size()
+				+ GLEngineConstants.text.size() + GLFragmentHeader.text.size() ),
 			{ &GLVersionDeclaration, &GLCompatHeader, &GLEngineConstants, &GLFragmentHeader } },
 		{ shader->hasComputeShader, GLCompileMacro::COMPUTE, GL_COMPUTE_SHADER, "_cp",
 			shader->computeShaderName,
-			uint32_t( GLComputeVersionDeclaration.text.size() ),
+			uint32_t( GLComputeVersionDeclaration.text.size() + GLCompatHeader.text.size()
+				+ GLEngineConstants.text.size() + GLComputeHeader.text.size() ),
 			{ &GLComputeVersionDeclaration, &GLCompatHeader, &GLEngineConstants, &GLComputeHeader, &GLWorldHeader } }
 	};
 
@@ -1358,7 +1361,10 @@ void GLShaderManager::InitShader( GLShader* shader ) {
 				uniqueMacros, compileMacros, true );
 
 			if ( desc && glConfig2.pushBufferAvailable ) {
-				desc->shaderSource = RemoveUniformsFromShaderText( desc->shaderSource, shader->_pushUniforms );
+				desc->shaderSource = ShaderPostProcessGlobal( shader, desc->shaderSource, shaderType.offset );
+
+				desc->shaderSource =
+					RemoveUniformsFromShaderText( desc->shaderSource, ( ( GLShader* ) globalUBOProxy )->_pushUniforms );
 
 				desc->shaderSource.insert( shaderType.offset, globalUniformBlock );
 			}
@@ -1610,7 +1616,7 @@ void GLShaderManager::PostProcessGlobalUniforms() {
 	std::string uniformBlock = "layout(std140, binding = "
 		+ std::to_string( BufferBind::GLOBAL_DATA )
 		+ ") uniform globalUBO {\n"
-		+ "GlobalUniforms globalUniforms;\n"
+		+ "	GlobalUniforms globalUniforms;\n"
 		+ "};\n\n";
 	std::string uniformDefines;
 
@@ -1647,10 +1653,12 @@ void GLShaderManager::PostProcessGlobalUniforms() {
 	for ( GLUniform* uniform : frameUniforms ) {
 		uniforms->push_back( uniform );
 	}
+
+	pushBuffer.pushSize = maxShaderPaddedSize;
 }
 
 // This will generate all the extra code for material system shaders
-std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::string& shaderText, const uint32_t offset ) {
+std::string GLShaderManager::ShaderPostProcess( GLShader* shader, const std::string& shaderText, const uint32_t offset ) {
 	if ( !shader->std430Size ) {
 		return shaderText;
 	}
@@ -1659,7 +1667,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 		"layout(std140, binding = "
 		+ std::to_string( BufferBind::TEX_DATA )
 		+ ") uniform texDataUBO {\n"
-		"	TexData texData[" + std::to_string( MAX_TEX_BUNDLES ) + "]; \n"
+		"	TexData texData[" + std::to_string( MAX_TEX_BUNDLES ) + "];\n"
 		"};\n\n"
 		: "layout(std430, binding = "
 		+ std::to_string( BufferBind::TEX_DATA )
@@ -1724,6 +1732,50 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	std::string shaderMain = RemoveUniformsFromShaderText( shaderText, shader->_materialSystemUniforms );
 
 	std::string newShaderText = "#define USE_MATERIAL_SYSTEM\n" + materialStruct + materialBlock + texDataBlock + materialDefines;
+	shaderMain.insert( offset, newShaderText );
+	return shaderMain;
+}
+
+std::string GLShaderManager::ShaderPostProcessGlobal( GLShader* shader, const std::string& shaderText, const uint32_t offset ) {
+	if ( !shader->pushUniformsSize ) {
+		return shaderText;
+	}
+
+	std::string pushDataBlock =
+		"layout(std140, binding = "
+		+ std::to_string( BufferBind::PUSH_DATA )
+		+ ") uniform pushDataSSBO {\n"
+		"	PushData pushData[" + std::to_string( 16 * 1024 / ( shader->pushUniformsSize + shader->pushUniformsPadding ) ) + "];\n"
+		"};\n\n";
+
+	/* Generate the struct and defines in the form of:
+	* struct PushData {
+	*   type uniform0;
+	*   type uniform1;
+	*   ..
+	*   type uniformn;
+	* }
+	*
+	* #define uniformx pushData[baseInstance].uniformx
+	*/
+
+	std::string pushDataStruct = "\nstruct PushData {\n";
+	std::string pushDataDefines;
+	GenerateUniformStructDefinesText( shader->_pushUniforms, shader->pushUniformsPadding,
+		0,
+		( shader->_useMaterialSystem || shader->hasComputeShader ) ? "pushData[u_PushBufferSector]" : "pushData[baseInstance]",
+		pushDataStruct, pushDataDefines );
+
+	pushDataStruct += "};\n\n";
+
+	std::string shaderMain = RemoveUniformsFromShaderText( shaderText, shader->_pushUniforms );
+
+	std::string newShaderText = pushDataStruct + pushDataBlock + pushDataDefines;
+
+	if ( shader->_useMaterialSystem || shader->hasComputeShader ) {
+		newShaderText += "uniform uint u_PushBufferSector;\n";
+	}
+
 	shaderMain.insert( offset, newShaderText );
 	return shaderMain;
 }
@@ -2257,9 +2309,12 @@ void GLShader::PostProcessUniforms() {
 	}
 
 	if ( glConfig2.pushBufferAvailable && !pushSkip ) {
-		GLuint unused;
-		_pushUniforms = gl_shaderManager.ProcessUniforms( GLUniform::CONST, GLUniform::FRAME,
-			!glConfig2.usingBindlessTextures, _uniforms, unused, unused );
+		const GLUniform::UpdateType maxType = _useMaterialSystem ? GLUniform::PUSH : GLUniform::TEXDATA_OR_PUSH;
+		_pushUniforms = gl_shaderManager.ProcessUniforms( GLUniform::PUSH, maxType,
+			!glConfig2.usingBindlessTextures, _uniforms, pushUniformsSize, pushUniformsPadding );
+
+		gl_shaderManager.maxShaderPaddedSize =
+			std::max( gl_shaderManager.maxShaderPaddedSize, pushUniformsSize + pushUniformsPadding );
 	}
 }
 
@@ -2400,6 +2455,13 @@ void GLShader::BindProgram( int deformIndex ) {
 	}
 
 	currentProgram = &shaderPrograms[index];
+	glState.currentShader = this;
+
+	if ( _useMaterialSystem || hasComputeShader ) {
+		glState.currentMaterialShader = ( GLShaderMaterial* ) this;
+	} else {
+		glState.currentMaterialShader = nullptr;
+	}
 
 	if ( GLimp_isLogging() )
 	{
@@ -2417,6 +2479,11 @@ void GLShader::BindProgram( int deformIndex ) {
 void GLShader::DispatchCompute( const GLuint globalWorkgroupX, const GLuint globalWorkgroupY, const GLuint globalWorkgroupZ ) {
 	ASSERT_EQ( currentProgram, glState.currentProgram );
 	ASSERT( hasComputeShader );
+
+	if ( glConfig2.pushBufferAvailable ) {
+		pushBuffer.WriteCurrentShaderToPushUBO();
+	}
+
 	glDispatchCompute( globalWorkgroupX, globalWorkgroupY, globalWorkgroupZ );
 }
 
@@ -2465,6 +2532,24 @@ void GLShader::WriteUniformsToBuffer( uint32_t* buffer, const Mode mode, const i
 	uniformsUpdated = false;
 }
 
+GLShaderMaterial::GLShaderMaterial( const std::string& name, uint32_t vertexAttribsRequired,
+	const bool useMaterialSystem,
+	const std::string newVertexShaderName, const std::string newFragmentShaderName ) :
+	GLShader( name, vertexAttribsRequired,
+		 useMaterialSystem,
+		 newVertexShaderName, newFragmentShaderName ),
+	u_PushBufferSector( this ) {
+}
+
+GLShaderMaterial::GLShaderMaterial( const std::string& name,
+	const bool useMaterialSystem,
+	const std::string newComputeShaderName, const bool newWorldShader ) :
+	GLShader( name,
+		useMaterialSystem,
+		newComputeShaderName, newWorldShader ),
+	u_PushBufferSector( this ) {
+}
+
 GLShader_generic::GLShader_generic() :
 	GLShader( "generic", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR,
 		false, "generic", "generic" ),
@@ -2500,7 +2585,7 @@ void GLShader_generic::SetShaderProgramUniforms( ShaderProgramDescriptor *shader
 }
 
 GLShader_genericMaterial::GLShader_genericMaterial() :
-	GLShader( "genericMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR,
+	GLShaderMaterial( "genericMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR,
 		true, "generic", "generic" ),
 	u_ColorMap( this ),
 	u_DepthMap( this ),
@@ -2598,7 +2683,7 @@ void GLShader_lightMapping::SetShaderProgramUniforms( ShaderProgramDescriptor *s
 }
 
 GLShader_lightMappingMaterial::GLShader_lightMappingMaterial() :
-	GLShader( "lightMappingMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR,
+	GLShaderMaterial( "lightMappingMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT | ATTR_COLOR,
 		true, "lightMapping", "lightMapping" ),
 	u_DiffuseMap( this ),
 	u_NormalMap( this ),
@@ -2691,7 +2776,7 @@ void GLShader_reflection::SetShaderProgramUniforms( ShaderProgramDescriptor *sha
 }
 
 GLShader_reflectionMaterial::GLShader_reflectionMaterial() :
-	GLShader( "reflectionMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT,
+	GLShaderMaterial( "reflectionMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT,
 		true, "reflection_CB", "reflection_CB" ),
 	u_ColorMapCube( this ),
 	u_NormalMap( this ),
@@ -2735,7 +2820,7 @@ void GLShader_skybox::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderP
 }
 
 GLShader_skyboxMaterial::GLShader_skyboxMaterial() :
-	GLShader( "skyboxMaterial", ATTR_POSITION,
+	GLShaderMaterial( "skyboxMaterial", ATTR_POSITION,
 		true, "skybox", "skybox" ),
 	u_ColorMapCube( this ),
 	u_CloudMap( this ),
@@ -2743,8 +2828,8 @@ GLShader_skyboxMaterial::GLShader_skyboxMaterial() :
 	u_CloudHeight( this ),
 	u_UseCloudMap( this ),
 	u_AlphaThreshold( this ),
-	u_ModelViewProjectionMatrix( this )
-{}
+	u_ModelViewProjectionMatrix( this ) {
+}
 
 void GLShader_skyboxMaterial::SetShaderProgramUniforms( ShaderProgramDescriptor* shaderProgram ) {
 	glUniform1i( glGetUniformLocation( shaderProgram->id, "u_ColorMap" ), 0 );
@@ -2776,7 +2861,7 @@ void GLShader_fogQuake3::SetShaderProgramUniforms( ShaderProgramDescriptor *shad
 }
 
 GLShader_fogQuake3Material::GLShader_fogQuake3Material() :
-	GLShader( "fogQuake3Material", ATTR_POSITION | ATTR_QTANGENT,
+	GLShaderMaterial( "fogQuake3Material", ATTR_POSITION | ATTR_QTANGENT,
 		true, "fogQuake3", "fogQuake3" ),
 	u_FogMap( this ),
 	u_ModelMatrix( this ),
@@ -2838,7 +2923,7 @@ void GLShader_heatHaze::SetShaderProgramUniforms( ShaderProgramDescriptor *shade
 }
 
 GLShader_heatHazeMaterial::GLShader_heatHazeMaterial() :
-	GLShader( "heatHazeMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT,
+	GLShaderMaterial( "heatHazeMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT,
 		true, "heatHaze", "heatHaze" ),
 	u_CurrentMap( this ),
 	u_NormalMap( this ),
@@ -2874,7 +2959,7 @@ void GLShader_screen::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderP
 }
 
 GLShader_screenMaterial::GLShader_screenMaterial() :
-	GLShader( "screenMaterial", ATTR_POSITION,
+	GLShaderMaterial( "screenMaterial", ATTR_POSITION,
 		true, "screen", "screen" ),
 	u_CurrentMap( this ),
 	u_ModelViewProjectionMatrix( this ) {
@@ -2991,7 +3076,7 @@ void GLShader_liquid::SetShaderProgramUniforms( ShaderProgramDescriptor* shaderP
 }
 
 GLShader_liquidMaterial::GLShader_liquidMaterial() :
-	GLShader( "liquidMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT,
+	GLShaderMaterial( "liquidMaterial", ATTR_POSITION | ATTR_TEXCOORD | ATTR_QTANGENT,
 		true, "liquid", "liquid" ),
 	u_CurrentMap( this ),
 	u_DepthMap( this ),
@@ -3122,7 +3207,7 @@ void GLShader_fxaa::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderPro
 }
 
 GLShader_cull::GLShader_cull() :
-	GLShader( "cull",
+	GLShaderMaterial( "cull",
 		false, "cull", true ),
 	u_Frame( this ),
 	u_ViewID( this ),
@@ -3142,7 +3227,7 @@ GLShader_cull::GLShader_cull() :
 }
 
 GLShader_depthReduction::GLShader_depthReduction() :
-	GLShader( "depthReduction",
+	GLShaderMaterial( "depthReduction",
 		false, "depthReduction" ),
 	u_ViewWidth( this ),
 	u_ViewHeight( this ),
@@ -3161,7 +3246,7 @@ GLShader_clearSurfaces::GLShader_clearSurfaces() :
 }
 
 GLShader_processSurfaces::GLShader_processSurfaces() :
-	GLShader( "processSurfaces",
+	GLShaderMaterial( "processSurfaces",
 		false, "processSurfaces" ),
 	u_Frame( this ),
 	u_ViewID( this ),

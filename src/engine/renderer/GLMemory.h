@@ -125,7 +125,10 @@ class GLBuffer {
 			if ( glClientWaitSync( syncs[area], GL_SYNC_FLUSH_COMMANDS_BIT, SYNC_TIMEOUT ) == GL_TIMEOUT_EXPIRED ) {
 				Sys::Drop( "Failed buffer %s area %u sync", name, area );
 			}
+			GL_CheckErrors();
 			glDeleteSync( syncs[area] );
+			syncs[area] = nullptr;
+			GL_CheckErrors();
 		}
 
 		return data + area * areaSize;
@@ -327,22 +330,31 @@ class GLStagingBuffer {
 struct PushBuffer {
 	uint32_t constUniformsSize;
 	uint32_t frameUniformsSize;
-	uint32_t globalUBOSize;
+	uint32_t pushSize;
 	uint32_t* globalUBOData;
 
-	uint32_t pushStart = UINT32_MAX;
+	uint32_t pushStart = 0;
 	uint32_t pushEnd = 0;
-
 	uint32_t sector = 0;
-	const uint32_t MAX_SECTORS = 1024;
+
+	/* Enough for ~32k drawcalls with different uniforms with an average of 256 bytes of uniforms per shader
+	The largest one that we have is for the liquid shader at ~332 bytes */
+	const uint32_t PUSH_SIZE = 64 * 1024 / sizeof( uint32_t );
+	const GLuint64 SYNC_TIMEOUT = 10000000000; // 10 seconds
 
 	GLUBO globalUBO = GLUBO( "globalUniforms", BufferBind::GLOBAL_DATA, 0, 0 );
+	GLUBO pushUBO = GLUBO( "pushUniforms", BufferBind::PUSH_DATA, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT,
+		GL_MAP_FLUSH_EXPLICIT_BIT | GL_MAP_INVALIDATE_BUFFER_BIT );
 
 	void InitGLBuffers();
 	void FreeGLBuffers();
 
 	uint32_t* MapGlobalUniformData( const int updateType );
 	void PushGlobalUniforms();
+
+	uint32_t* MapPushUniformData( const GLuint size );
+	void PushUniforms();
+	void WriteCurrentShaderToPushUBO();
 };
 
 extern GLStagingBuffer stagingBuffer;

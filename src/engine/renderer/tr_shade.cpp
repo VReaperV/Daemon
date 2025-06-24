@@ -521,12 +521,24 @@ void Tess_DrawElements()
 		return;
 	}
 
+	if ( glConfig2.pushBufferAvailable ) {
+		pushBuffer.WriteCurrentShaderToPushUBO();
+	}
+
 	// move tess data through the GPU, finally
 	if ( ( glState.currentVBO || tr.skipVBO ) && glState.currentIBO )
 	{
 		if ( tess.multiDrawPrimitives )
 		{
-			glMultiDrawElements( GL_TRIANGLES, tess.multiDrawCounts, GL_INDEX_TYPE, ( const GLvoid** ) tess.multiDrawIndexes, tess.multiDrawPrimitives );
+			if ( glConfig2.pushBufferAvailable ) {
+				for ( int i = 0; i < tess.multiDrawPrimitives; i++ ) {
+					glDrawElementsInstancedBaseInstance( GL_TRIANGLES, ( GLuint ) tess.multiDrawCounts[i], GL_INDEX_TYPE,
+						tess.multiDrawIndexes[i], 1, pushBuffer.sector );
+				}
+			} else {
+				glMultiDrawElements( GL_TRIANGLES, tess.multiDrawCounts, GL_INDEX_TYPE,
+					( const GLvoid** ) tess.multiDrawIndexes, tess.multiDrawPrimitives );
+			}
 
 			backEnd.pc.c_multiDrawElements++;
 			backEnd.pc.c_multiDrawPrimitives += tess.multiDrawPrimitives;
@@ -541,7 +553,12 @@ void Tess_DrawElements()
 				base = tess.indexBase * sizeof( glIndex_t );
 			}
 
-			glDrawRangeElements( GL_TRIANGLES, 0, tess.numVertexes, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ) );
+			if ( glConfig2.pushBufferAvailable ) {
+				glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE,
+					BUFFER_OFFSET( base ), 1, pushBuffer.sector );
+			} else {
+				glDrawRangeElements( GL_TRIANGLES, 0, tess.numVertexes, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ) );
+			}
 
 			backEnd.pc.c_drawElements++;
 
@@ -554,7 +571,12 @@ void Tess_DrawElements()
 	}
 	else
 	{
-		glDrawElements( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, tess.indexes );
+		if ( glConfig2.pushBufferAvailable ) {
+			glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE,
+				tess.indexes, 1, pushBuffer.sector );
+		} else {
+			glDrawElements( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, tess.indexes );
+		}
 
 		backEnd.pc.c_drawElements++;
 
@@ -593,7 +615,14 @@ void Tess_DrawArrays( GLenum elementType )
 
 	See https://github.com/DaemonEngine/Daemon/issues/344 */
 
-	glDrawArrays( elementType, 0, tess.numVertexes );
+	if ( glConfig2.pushBufferAvailable ) {
+		pushBuffer.WriteCurrentShaderToPushUBO();
+
+		glDrawArraysInstancedBaseInstance( GL_TRIANGLES, 0,
+			tess.numVertexes, 1, pushBuffer.sector );
+	} else {
+		glDrawArrays( elementType, 0, tess.numVertexes );
+	}
 
 	backEnd.pc.c_drawElements++;
 

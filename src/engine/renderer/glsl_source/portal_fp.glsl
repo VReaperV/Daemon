@@ -22,6 +22,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 /* portal_fp.glsl */
 
+#define CURRENTMAP_GLSL
+
 uniform sampler2D	u_CurrentMap;
 uniform float		u_InversePortalRange;
 
@@ -33,6 +35,8 @@ DECLARE_OUTPUT(vec4)
 
 void	main()
 {
+	#insert material_fp
+
 	vec4 color = texture2D(u_CurrentMap, var_TexCoords);
 	color *= var_Color;
 

@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 /* generic_fp.glsl */
 
 #define GENERIC_GLSL
+#define COLORMAP_GLSL
 
 uniform sampler2D	u_ColorMap;
 uniform float		u_AlphaThreshold;
@@ -38,8 +39,8 @@ IN(smooth) vec4		var_Color;
 #if defined(USE_DEPTH_FADE)
 	#define DEPTHMAP_GLSL
 
-IN(smooth) float        var_FadeDepth;
-uniform sampler2D       u_DepthMap;
+	IN(smooth) float var_FadeDepth;
+	uniform sampler2D u_DepthMap;
 #endif
 
 #insert shaderProfiler_fp

@@ -39,6 +39,8 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 
 #insert fxaa3_11_fp
 
+#define COLORMAP_GLSL
+
 uniform sampler2D	u_ColorMap;
 
 #if __VERSION__ > 120
@@ -49,6 +51,8 @@ out vec4 outputColor;
 
 void	main()
 {
+	#insert material_fp
+
 	outputColor = FxaaPixelShader(
 		gl_FragCoord.xy / r_FBufSize, //pos
 		vec4(0.0), //not used

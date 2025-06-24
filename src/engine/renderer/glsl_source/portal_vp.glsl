@@ -35,6 +35,8 @@ OUT(smooth) vec2	var_TexCoords;
 
 void	main()
 {
+	#insert material_vp
+
 	vec2 texCoord = attr_TexCoord0.xy;
 
 	// transform vertex position into homogenous clip-space

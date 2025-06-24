@@ -42,6 +42,8 @@ OUT(flat) vec3 unprojectionParams;
 
 void	main()
 {
+	#insert material_vp
+
 	unprojectionParams.x = - r_zNear * u_zFar.z;
 	unprojectionParams.y = 2.0 * (u_zFar.z - r_zNear);
 	unprojectionParams.z = 2.0 * u_zFar.z - r_zNear;

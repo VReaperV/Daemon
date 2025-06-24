@@ -39,6 +39,8 @@ IN vec2 attr_Position;
 OUT(smooth) vec2 vPosition;
 
 void main() {
+  #insert material_vp
+
   gl_Position = vec4( attr_Position, 0.0, 1.0 );
   gl_PointSize = 1.0;
 

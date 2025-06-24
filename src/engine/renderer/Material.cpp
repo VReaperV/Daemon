@@ -1547,6 +1547,7 @@ void MaterialSystem::DepthReduction() {
 	gl_depthReductionShader->SetUniform_InitialDepthLevel( true );
 	gl_depthReductionShader->SetUniform_ViewWidth( width );
 	gl_depthReductionShader->SetUniform_ViewHeight( height );
+
 	gl_depthReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
 
 	for ( int i = 0; i < depthImageLevels; i++ ) {
@@ -1562,6 +1563,7 @@ void MaterialSystem::DepthReduction() {
 		gl_depthReductionShader->SetUniform_InitialDepthLevel( false );
 		gl_depthReductionShader->SetUniform_ViewWidth( width );
 		gl_depthReductionShader->SetUniform_ViewHeight( height );
+
 		gl_depthReductionShader->DispatchCompute( globalWorkgroupX, globalWorkgroupY, 1 );
 
 		glMemoryBarrier( GL_SHADER_IMAGE_ACCESS_BARRIER_BIT );
@@ -1915,6 +1917,10 @@ void MaterialSystem::RenderMaterials( const shaderSort_t fromSort, const shaderS
 }
 
 void MaterialSystem::RenderIndirect( const Material& material, const uint32_t viewID, const GLenum mode = GL_TRIANGLES ) {
+	if ( glConfig2.pushBufferAvailable ) {
+		pushBuffer.WriteCurrentShaderToPushUBO();
+	}
+
 	glMultiDrawElementsIndirectCountARB( mode, GL_UNSIGNED_INT,
 		BUFFER_OFFSET( material.surfaceCommandBatchOffset * SURFACE_COMMANDS_PER_BATCH * sizeof( GLIndirectCommand )
 		               + ( surfaceCommandsCount * ( MAX_VIEWS * currentFrame + viewID )

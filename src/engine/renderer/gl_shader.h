@@ -282,6 +282,9 @@ public:
 	uint32_t* uniformStorage = nullptr;
 	bool uniformsUpdated = true;
 
+	GLuint pushUniformsSize = 0;
+	uint32_t pushUniformsPadding = 0;
+
 	void MarkProgramForBuilding( int deformIndex );
 	GLuint GetProgram( int deformIndex, const bool buildOneShader );
 	void BindProgram( int deformIndex );
@@ -376,7 +379,7 @@ class GLUniform {
 		uint32_t* currentValue;
 
 		const bool bufferUniform = ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
-			|| ( glConfig2.pushBufferAvailable && _updateType <= FRAME );
+			|| ( glConfig2.pushBufferAvailable && _updateType <= ( _shader->UseMaterialSystem() ? PUSH : TEXDATA_OR_PUSH ) );
 
 		if ( bufferUniform ) {
 			currentValue = _shader->uniformStorage + _uniformStorageOffset;
@@ -413,7 +416,7 @@ class GLUniform {
 		uint32_t* currentValue;
 
 		const bool bufferUniform = ( _shader->UseMaterialSystem() && _updateType == MATERIAL_OR_PUSH )
-			|| ( glConfig2.pushBufferAvailable && _updateType <= FRAME );
+			|| ( glConfig2.pushBufferAvailable && _updateType <= ( _shader->UseMaterialSystem() ? PUSH : TEXDATA_OR_PUSH ) );
 
 		if ( bufferUniform ) {
 			currentValue = _shader->uniformStorage + _uniformStorageOffset;
@@ -451,6 +454,7 @@ public:
 	GLHeader GLEngineConstants;
 
 	std::string globalUniformBlock;
+	GLuint maxShaderPaddedSize;
 
 	GLShaderManager() {}
 	~GLShaderManager();
@@ -542,6 +546,7 @@ private:
 		std::string& uniformStruct, std::string& uniformDefines );
 	std::string RemoveUniformsFromShaderText( const std::string& shaderText, const std::vector<GLUniform*>& uniforms );
 	std::string ShaderPostProcess( GLShader *shader, const std::string& shaderText, const uint32_t offset );
+	std::string ShaderPostProcessGlobal( GLShader* shader, const std::string& shaderText, const uint32_t offset );
 	std::string BuildDeformShaderText( const std::string& steps );
 	std::string ProcessInserts( const std::string& shaderText ) const;
 
@@ -805,8 +810,7 @@ class GLUniformMatrix32f : protected GLUniform {
 	}
 
 	inline void SetValue( GLboolean transpose, const vec_t* m ) {
-		vec_t value[12] {};
-		memcpy( value, m, 6 * sizeof( vec_t ) );
+		vec_t value[12]{ m[0], m[1], 0, 0, m[2], m[3], 0, 0, m[4], m[5], 0, 0 };
 
 		if ( !CacheValue( value ) ) {
 			return;
@@ -2181,6 +2185,18 @@ class u_MaterialColour :
 	}
 };
 
+class u_PushBufferSector :
+	GLUniform1ui {
+	public:
+	u_PushBufferSector( GLShader* shader ) :
+		GLUniform1ui( shader, "u_PushBufferSector", SKIP ) {
+	}
+
+	void SetUniform_PushBufferSector( const uint pushBufferSector ) {
+		this->SetValue( pushBufferSector );
+	}
+};
+
 // u_Profiler* uniforms are all used for shader profiling, with the corresponding r_profiler* cvars
 // u_ProfilerZero is used to reset the colour in a shader without the shader compiler optimising the rest of the shader out
 class u_ProfilerZero :
@@ -2329,7 +2345,7 @@ class u_Bones :
 {
 public:
 	u_Bones( GLShader *shader ) :
-		GLUniform4fv( shader, "u_Bones", MAX_BONES * 2, PUSH )
+		GLUniform4fv( shader, "u_Bones", MAX_BONES * 2, SKIP )
 	{
 	}
 
@@ -2957,6 +2973,19 @@ class u_Lights :
 	}
 };
 
+class GLShaderMaterial :
+	public GLShader,
+	public u_PushBufferSector {
+	public:
+	GLShaderMaterial( const std::string& name, uint32_t vertexAttribsRequired,
+		const bool useMaterialSystem,
+		const std::string newVertexShaderName, const std::string newFragmentShaderNamefalse );
+
+	GLShaderMaterial( const std::string& name,
+		const bool useMaterialSystem,
+		const std::string newComputeShaderName, const bool newWorldShader = false );
+};
+
 class GLShader_generic :
 	public GLShader,
 	public u_ColorMap,
@@ -2988,7 +3017,7 @@ public:
 };
 
 class GLShader_genericMaterial :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_ColorMap,
 	public u_DepthMap,
 	public u_TextureMatrix,
@@ -3066,7 +3095,7 @@ public:
 };
 
 class GLShader_lightMappingMaterial :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_DiffuseMap,
 	public u_NormalMap,
 	public u_HeightMap,
@@ -3140,7 +3169,7 @@ public:
 };
 
 class GLShader_reflectionMaterial :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_ColorMapCube,
 	public u_NormalMap,
 	public u_HeightMap,
@@ -3176,7 +3205,7 @@ public:
 };
 
 class GLShader_skyboxMaterial :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_ColorMapCube,
 	public u_CloudMap,
 	public u_TextureMatrix,
@@ -3211,7 +3240,7 @@ public:
 };
 
 class GLShader_fogQuake3Material :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_FogMap,
 	public u_ModelMatrix,
 	public u_ModelViewProjectionMatrix,
@@ -3262,7 +3291,7 @@ public:
 };
 
 class GLShader_heatHazeMaterial :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_CurrentMap,
 	public u_NormalMap,
 	public u_HeightMap,
@@ -3291,7 +3320,7 @@ public:
 };
 
 class GLShader_screenMaterial :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_CurrentMap,
 	public u_ModelViewProjectionMatrix {
 	public:
@@ -3385,7 +3414,7 @@ public:
 };
 
 class GLShader_liquidMaterial :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_CurrentMap,
 	public u_DepthMap,
 	public u_NormalMap,
@@ -3484,7 +3513,7 @@ public:
 };
 
 class GLShader_cull :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_Frame,
 	public u_ViewID,
 	public u_SurfaceDescriptorsCount,
@@ -3505,7 +3534,7 @@ class GLShader_cull :
 };
 
 class GLShader_depthReduction :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_ViewWidth,
 	public u_ViewHeight,
 	public u_DepthMap,
@@ -3523,7 +3552,7 @@ class GLShader_clearSurfaces :
 };
 
 class GLShader_processSurfaces :
-	public GLShader,
+	public GLShaderMaterial,
 	public u_Frame,
 	public u_ViewID,
 	public u_SurfaceCommandsOffset {
