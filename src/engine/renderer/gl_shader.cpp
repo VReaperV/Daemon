@@ -2730,7 +2730,7 @@ GLShader_fogQuake3Material::GLShader_fogQuake3Material() :
 GLShader_fogGlobal::GLShader_fogGlobal() :
 	GLShader( "fogGlobal", ATTR_POSITION,
 		false, "screenSpace", "fogGlobal" ),
-	u_ColorMap( this ),
+	u_FogMap( this ),
 	u_DepthMap( this ),
 	u_UnprojectMatrix( this ),
 	u_Color_Float( this ),
@@ -2741,7 +2741,7 @@ GLShader_fogGlobal::GLShader_fogGlobal() :
 
 void GLShader_fogGlobal::SetShaderProgramUniforms( ShaderProgramDescriptor *shaderProgram )
 {
-	glUniform1i( glGetUniformLocation( shaderProgram->id, "u_ColorMap" ), 0 );
+	glUniform1i( glGetUniformLocation( shaderProgram->id, "u_FogMap" ), 0 );
 	glUniform1i( glGetUniformLocation( shaderProgram->id, "u_DepthMap" ), 1 );
 }
 
