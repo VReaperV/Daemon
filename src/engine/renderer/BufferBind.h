@@ -39,13 +39,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace BufferBind {
 	enum : uint32_t {
 		// UBO
+		// Material system
 		MATERIALS = 0,
 		TEX_DATA = 1,
 		LIGHTMAP_DATA = 2,
-		GLOBAL_DATA = 3,
-		LIGHTS = 4,
 
-		SURFACE_BATCHES = 5,
+		// Core
+		GLOBAL_DATA = 3,
+		PUSH_DATA = 4,
+		LIGHTS = 5,
+
+		SURFACE_BATCHES = 6,
 
 		// SSBO
 		SURFACE_DESCRIPTORS = 0,

@@ -2204,6 +2204,9 @@ enum class ssaoMode {
 
 #define MAX_GLSTACK     5
 
+class GLShader;
+class GLShaderMaterial;
+
 // the renderer front end should never modify glState_t
 	struct glstate_t
 	{
@@ -2239,6 +2242,8 @@ enum class ssaoMode {
 		uint32_t        vertexAttribsNewFrame; // offset for VBO vertex animations
 		uint32_t        vertexAttribsOldFrame; // offset for VBO vertex animations
 		ShaderProgramDescriptor* currentProgram;
+		GLShader* currentShader = nullptr;
+		GLShaderMaterial* currentMaterialShader = nullptr;
 		FBO_t           *currentFBO;
 		VBO_t           *currentVBO;
 		IBO_t           *currentIBO;
@@ -2473,8 +2478,6 @@ enum class ssaoMode {
 		private:
 		T* grid;
 	};
-
-	class GLShader;
 
 	struct scissorState_t
 	{

@@ -86,6 +86,7 @@ void main() {
 	#elif defined(USE_TCGEN_LIGHTMAP)
 		var_TexCoords = ( u_TextureMatrix * vec3( lmCoord, 1.0 ) ).xy;
 	#else
+		// mat3x2 t = mat3x2( 1, 0, 0, 1, 0, 0 );
 		var_TexCoords = ( u_TextureMatrix * vec3( texCoord, 1.0 ) ).xy;
 	#endif
 

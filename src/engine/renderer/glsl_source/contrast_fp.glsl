@@ -22,6 +22,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 /* contrast_fp.glsl */
 
+#define COLORMAP_GLSL
+
 uniform sampler2D	u_ColorMap;
 
 const vec4			LUMINANCE_VECTOR = vec4(0.2125, 0.7154, 0.0721, 0.0);
@@ -42,6 +44,8 @@ vec4 f(vec4 color) {
 
 void	main()
 {
+	#insert material_fp
+
 	// calculate the screen texcoord in the 0.0 to 1.0 range
 	vec2 st = gl_FragCoord.st / r_FBufSize;
 

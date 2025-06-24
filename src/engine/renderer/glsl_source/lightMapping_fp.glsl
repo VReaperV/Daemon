@@ -191,7 +191,7 @@ void main()
 	// Blend static light.
 	#if defined(USE_DELUXE_MAPPING) || defined(USE_GRID_DELUXE_MAPPING)
 		#if defined(USE_REFLECTIVE_SPECULAR)
-			vec4 modifiedSpecular = material * EnvironmentalSpecularFactor(viewDir, normal);
+			vec4 modifiedSpecular = material * EnvironmentalSpecularFactor(viewDir, normal, u_EnvironmentMap0, u_EnvironmentMap1);
 			computeDeluxeLight(lightDir, normal, viewDir, lightColor, diffuse, modifiedSpecular, color);
 		#else // !USE_REFLECTIVE_SPECULAR
 			computeDeluxeLight(lightDir, normal, viewDir, lightColor, diffuse, material, color);

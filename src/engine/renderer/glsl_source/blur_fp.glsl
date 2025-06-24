@@ -22,6 +22,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 /* blur_fp.glsl */
 
+#define COLORMAP_GLSL
+
 uniform sampler2D u_ColorMap;
 uniform float u_DeformMagnitude;
 uniform vec2 u_TexScale;
@@ -30,6 +32,8 @@ uniform bool u_Horizontal;
 DECLARE_OUTPUT( vec4 )
 
 void main() {
+	#insert material_fp
+
 	vec2 st = gl_FragCoord.st * u_TexScale;
 
 #if 0

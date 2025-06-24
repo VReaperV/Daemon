@@ -39,7 +39,7 @@ uniform float u_EnvironmentInterpolation;
 // Only the RGB components are meaningful
 // FIXME: using reflective specular will always globally decrease the scene brightness
 // because we're multiplying with something that can only be less than 1.
-vec4 EnvironmentalSpecularFactor( vec3 viewDir, vec3 normal )
+vec4 EnvironmentalSpecularFactor( vec3 viewDir, vec3 normal, samplerCube u_EnvironmentMap0, samplerCube u_EnvironmentMap1 )
 {
 	vec4 envColor0 = textureCube(u_EnvironmentMap0, reflect( -viewDir, normal ) );
 	vec4 envColor1 = textureCube(u_EnvironmentMap1, reflect( -viewDir, normal ) );
