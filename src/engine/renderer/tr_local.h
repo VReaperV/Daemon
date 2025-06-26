@@ -2239,7 +2239,8 @@ enum class ssaoMode {
 		float           vertexAttribsInterpolation; // 0 = no interpolation, 1 = final position
 		uint32_t        vertexAttribsNewFrame; // offset for VBO vertex animations
 		uint32_t        vertexAttribsOldFrame; // offset for VBO vertex animations
-		GLuint currentPipeline;
+		ShaderPipelineDescriptor* currentPipeline;
+		ShaderProgramDescriptor* currentProgram;
 		FBO_t           *currentFBO;
 		VBO_t           *currentVBO;
 		IBO_t           *currentIBO;

@@ -107,7 +107,7 @@ private:
 	const bool pushSkip;
 protected:
 	int _activeMacros = 0;
-	GLuint currentPipeline;
+	ShaderPipelineDescriptor* currentPipeline;
 	uint32_t _vertexAttribs = 0; // can be set by uniforms
 
 	// std::vector<ShaderProgramDescriptor> shaderPrograms;
@@ -181,7 +181,7 @@ public:
 
 	GLint GetUniformLocation( const GLchar *uniformName ) const;
 
-	GLuint GetProgram() const {
+	ShaderPipelineDescriptor* GetCurrentPipeline() const {
 		return currentPipeline;
 	}
 
@@ -285,10 +285,6 @@ struct ShaderProgramDescriptor {
 	std::string mainShader;
 	uint32_t shaderCount = 0;
 
-	GLint* uniformLocations;
-	GLuint* uniformBlockIndexes = nullptr;
-	uint32_t* uniformStorage;
-
 	uint32_t checkSum;
 
 	void AttachShader( ShaderDescriptor* descriptor ) {
@@ -328,12 +324,25 @@ struct ShaderProgramDescriptor {
 struct ShaderPipelineDescriptor {
 	GLuint id = 0;
 
+	// Valid if glConfig2.separateShaderObjectsAvailable is true
 	ShaderProgramDescriptor VSProgram;
 	ShaderProgramDescriptor FSProgram;
 	ShaderProgramDescriptor CSProgram;
 
+	// Valid if glConfig2.separateShaderObjectsAvailable is false
+	ShaderProgramDescriptor program;
+
 	uint32_t shaderCount = 0;
 	ShaderEntry shaderNames[MAX_SHADER_PROGRAM_SHADERS * 3] {};
+
+	union {
+		GLint* uniformLocationsVS;
+		GLint* uniformLocationsCS;
+		GLint* uniformLocations;
+	};
+	GLint* uniformLocationsFS;
+	GLuint* uniformBlockIndexes = nullptr;
+	uint32_t* uniformStorage;
 
 	void AttachProgram( ShaderProgramDescriptor* descriptor ) {
 		ASSERT_LE( shaderCount, MAX_SHADER_PROGRAM_SHADERS );
@@ -376,6 +385,14 @@ class GLUniform {
 	size_t _locationIndex;
 	size_t _uniformStorageOffset;
 
+	enum Stage {
+		VS = BIT( 0 ),
+		FS = BIT( 1 ),
+		CS = BIT( 2 )
+	};
+
+	uint32_t stages = 0;
+
 	GLUniform( GLShader* shader, const char* name, const char* type, const GLuint std430Size, const GLuint std430Alignment,
 		const UpdateType updateType, const int components = 0,
 		const bool isTexture = false ) :
@@ -401,8 +418,10 @@ class GLUniform {
 		if ( bufferUniform ) {
 			currentValue = _shader->uniformStorage + _uniformStorageOffset;
 		} else {
-			ShaderProgramDescriptor* p = _shader->GetProgram();
-			ASSERT_EQ( p, glState.currentProgram );
+			ShaderPipelineDescriptor* p = _shader->GetCurrentPipeline();
+			if ( !glConfig2.separateShaderObjectsAvailable ) {
+				ASSERT_EQ( p->program, glState.currentPipeline );
+			}
 
 			currentValue = p->uniformStorage + _uniformStorageOffset;
 		}
@@ -446,8 +465,11 @@ class GLUniform {
 		return buffer + _nextUniformOffset;
 	}
 
-	void UpdateShaderProgramUniformLocation( ShaderProgramDescriptor* shaderProgram ) {
-		shaderProgram->uniformLocations[_locationIndex] = glGetUniformLocation( shaderProgram->id, _name.c_str() );
+	void UpdateShaderProgramUniformLocation( ShaderPipelineDescriptor* pipeline ) {
+		if ( glConfig2.separateShaderObjectsAvailable ) {
+			pipeline->uniformLocations[_locationIndex] = 
+		}
+		pipeline->uniformLocations[_locationIndex] = glGetUniformLocation( shaderProgram->id, _name.c_str() );
 	}
 };
 
