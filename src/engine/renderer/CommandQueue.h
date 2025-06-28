@@ -71,7 +71,8 @@ struct BindInfoEqual {
 	bool operator()( const BindInfo& lhs, const BindInfo& rhs ) const {
 		return lhs.VBO == rhs.VBO && lhs.IBO == rhs.IBO
 			&& lhs.program == rhs.program
-			&& lhs.GLState == rhs.GLState && lhs.cullType == rhs.cullType && lhs.depthRange == rhs.depthRange;
+			&& lhs.GLState == rhs.GLState && lhs.cullType == rhs.cullType
+			&& lhs.depthRange[0] == rhs.depthRange[0] && lhs.depthRange[1] == rhs.depthRange[1];
 	}
 };
 
@@ -105,8 +106,8 @@ class CommandQueue {
 	BindInfo bindInfos[MAX_BINDINFOS];
 	DrawInfo drawInfos[MAX_DRAWINFOS];
 
-	BindInfo currentBindInfo;
-	DrawInfo* currentDrawInfo;
+	BindInfo* currentBindInfo;
+	DrawInfo* currentDrawInfo = drawInfos;
 	uint32_t currentBindInfoOffset = 0;
 	uint32_t currentDrawInfoOffset = 0;
 

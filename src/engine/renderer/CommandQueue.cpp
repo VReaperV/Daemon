@@ -60,32 +60,26 @@ void CommandQueue::FreeGLBuffers() {
 	indirectRenderBuffer.DelBuffer();
 }
 
-void CommandQueue::AddDrawCommand( const GLenum mode, const GLuint count, const GLuint firstIndex ) {
-	UpdateCurrentBindInfo();
-
-	if ( mode != currentDrawInfo->mode ) {
-		AddDrawInfo( &currentBindInfo, mode );
-	}
-
-	if ( indirectBufferOffset == MAX_RENDER_CMDS ) {
-		Flush();
-	}
-
-	currentDrawInfo->count++;
-
-	cmds[indirectBufferOffset].count = count;
-	cmds[indirectBufferOffset].firstIndex = firstIndex;
-	cmds[indirectBufferOffset].instanceCount = 1;
-	cmds[indirectBufferOffset].baseInstance = pushBuffer.sector;
-
-	indirectBufferOffset++;
-}
-
 void CommandQueue::Flush() {
+	pushBuffer.PushUniforms();
+
 	uint32_t* indirectCmdsData = stagingBuffer.MapBuffer( indirectBufferOffset * INDIRECT_COMMAND_SIZE );
-	memcpy( indirectCmdsData, cmds, indirectBufferOffset * INDIRECT_COMMAND_SIZE );
+	memcpy( indirectCmdsData, cmds, indirectBufferOffset * sizeof( GLIndirectCommand ) );
 	stagingBuffer.QueueStagingCopy( &indirectRenderBuffer, 0 );
 	stagingBuffer.FlushAll();
+
+	{
+		GLsync pushSync = glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
+
+		static const GLuint64 SYNC_TIMEOUT = 10000000000; // 10 seconds
+		GLenum syncValue = glClientWaitSync( pushSync, GL_SYNC_FLUSH_COMMANDS_BIT, SYNC_TIMEOUT );
+		while ( syncValue != GL_ALREADY_SIGNALED && syncValue != GL_CONDITION_SATISFIED ) {
+			syncValue = glClientWaitSync( pushSync, 0, SYNC_TIMEOUT );
+		}
+
+		GL_CheckErrors();
+		glDeleteSync( pushSync );
+	}
 
 	indirectRenderBuffer.BindBuffer( GL_DRAW_INDIRECT_BUFFER );
 
@@ -99,7 +93,8 @@ void CommandQueue::Flush() {
 
 		for ( const DrawInfo* drawInfo = &drawInfos[bindInfos[i].drawInfoOffset];
 			drawInfo < &drawInfos[bindInfos[i].drawInfoCount]; drawInfo++ ) {
-			glMultiDrawElementsIndirect( drawInfo->mode, GL_INDEX_TYPE, BUFFER_OFFSET( drawInfo->offset ), drawInfo->count, 0 );
+			glMultiDrawElementsIndirect( drawInfo->mode, GL_INDEX_TYPE,
+				BUFFER_OFFSET( drawInfo->offset * sizeof( GLIndirectCommand ) ), drawInfo->count, 0 );
 		}
 	}
 
@@ -108,6 +103,7 @@ void CommandQueue::Flush() {
 
 	currentBindInfoOffset = 0;
 	currentDrawInfoOffset = 0;
+	indirectBufferOffset = 0;
 
 	memset( &currentBindInfo, 0, sizeof( BindInfo ) );
 	currentDrawInfo = drawInfos;
@@ -119,20 +115,28 @@ void CommandQueue::Flush() {
 	}
 }
 
-void CommandQueue::AddDrawInfo( BindInfo* bindInfo, const GLenum mode ) {
-	if ( bindInfo->drawInfoCount == MAX_DRAWINFOS_PER_BINDINFO ) {
+void CommandQueue::AddDrawCommand( const GLenum mode, const GLuint count, const GLuint firstIndex ) {
+	if ( indirectBufferOffset == MAX_RENDER_CMDS ) {
 		Flush();
 	}
 
-	if ( !bindInfo->drawInfoCount ) {
-		if ( currentDrawInfoOffset >= MAX_DRAWINFOS ) {
-			Flush();
-		}
+	UpdateCurrentBindInfo();
 
-		bindInfo->drawInfoOffset = currentDrawInfoOffset;
-		currentDrawInfoOffset += MAX_DRAWINFOS_PER_BINDINFO;
+	if ( mode != currentDrawInfo->mode || !currentBindInfo->drawInfoCount ) {
+		AddDrawInfo( currentBindInfo, mode );
 	}
 
+	currentDrawInfo->count++;
+
+	cmds[indirectBufferOffset].count = count;
+	cmds[indirectBufferOffset].firstIndex = firstIndex;
+	cmds[indirectBufferOffset].instanceCount = 1;
+	cmds[indirectBufferOffset].baseInstance = pushBuffer.sector;
+
+	indirectBufferOffset++;
+}
+
+void CommandQueue::AddDrawInfo( BindInfo* bindInfo, const GLenum mode ) {
 	if ( bindInfo->drawInfoCount == MAX_DRAWINFOS_PER_BINDINFO ) {
 		Flush();
 	}
@@ -147,26 +151,24 @@ void CommandQueue::AddDrawInfo( BindInfo* bindInfo, const GLenum mode ) {
 }
 
 void CommandQueue::UpdateCurrentBindInfo() {
-	const bool update = currentBindInfo.VBO != glState.currentVBO || currentBindInfo.IBO != glState.currentIBO
-		|| currentBindInfo.program != glState.currentProgram
-		|| currentBindInfo.GLState != glState.glStateBits || currentBindInfo.cullType != glState.faceCulling
-		|| currentBindInfo.depthRange[0] != glState.depthRange[0] || currentBindInfo.depthRange[1] != glState.depthRange[1];
+	const bool update = !currentBindInfo
+		|| currentBindInfo->VBO != glState.currentVBO || currentBindInfo->IBO != glState.currentIBO
+		|| currentBindInfo->program != glState.currentProgram
+		|| currentBindInfo->GLState != glState.glStateBits || currentBindInfo->cullType != glState.faceCulling
+		|| currentBindInfo->depthRange[0] != glState.depthRange[0] || currentBindInfo->depthRange[1] != glState.depthRange[1];
 
 	if ( update ) {
-		/* currentBindInfo.VBO = glState.currentVBO;
-		currentBindInfo.IBO = glState.currentIBO;
-		currentBindInfo.program = glState.currentProgram;
-		currentBindInfo.GLState = glState.glStateBits;
-		currentBindInfo.cullType = glState.faceCulling;
-		currentBindInfo.depthRange[0] = glState.depthRange[0];
-		currentBindInfo.depthRange[1] = glState.depthRange[1]; */
-
 		BindInfo bindInfo { glState.currentVBO, glState.currentIBO,
 			glState.currentProgram,
 			glState.glStateBits, glState.faceCulling, glState.depthRange[0], glState.depthRange[1] };
 
 		if ( bindInfosMap.find( bindInfo ) == bindInfosMap.end() ) {
-			AddDrawInfo( &bindInfo, GL_TRIANGLES );
+			if ( currentDrawInfoOffset >= MAX_DRAWINFOS ) {
+				Flush();
+			}
+
+			bindInfo.drawInfoOffset = currentDrawInfoOffset;
+			currentDrawInfoOffset += MAX_DRAWINFOS_PER_BINDINFO;
 
 			bindInfosMap[bindInfo] = currentBindInfoOffset;
 			bindInfos[currentBindInfoOffset] = bindInfo;
@@ -174,31 +176,6 @@ void CommandQueue::UpdateCurrentBindInfo() {
 			currentBindInfoOffset++;
 		}
 
-		currentBindInfo = bindInfo;
+		currentBindInfo = &bindInfos[bindInfosMap[bindInfo]];
 	}
-
-	/* if ( currentBindInfo.VBO != glState.currentVBO ) {
-		currentBindInfo.VBO = glState.currentVBO;
-	}
-
-	if ( currentBindInfo.IBO != glState.currentIBO ) {
-		currentBindInfo.IBO = glState.currentIBO;
-	}
-
-	if ( currentBindInfo.program != glState.currentProgram ) {
-		currentBindInfo.program = glState.currentProgram;
-	}
-
-	if ( currentBindInfo.GLState != glState.glStateBits ) {
-		currentBindInfo.GLState = glState.glStateBits;
-	}
-
-	if ( currentBindInfo.cullType != glState.faceCulling ) {
-		currentBindInfo.cullType = glState.faceCulling;
-	}
-
-	if ( currentBindInfo.depthRange[0] != glState.depthRange[0] || currentBindInfo.depthRange[1] != glState.depthRange[1] ) {
-		currentBindInfo.depthRange[0] = glState.depthRange[0];
-		currentBindInfo.depthRange[1] = glState.depthRange[1];
-	} */
 }

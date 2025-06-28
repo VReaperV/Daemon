@@ -3618,6 +3618,8 @@ const RenderCommand *SwapBuffersCommand::ExecuteSelf( ) const
 	// finish any 2D drawing if needed
 	Tess_End();
 
+	commandQueue.Flush();
+
 	// texture swapping test
 	if ( r_showImages->integer )
 	{

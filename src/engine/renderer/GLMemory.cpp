@@ -248,9 +248,9 @@ void PushBuffer::WriteCurrentShaderToPushUBO() {
 
 	if( glState.currentMaterialShader ) {
 		glState.currentMaterialShader->SetUniform_PushBufferSector( sector );
+		PushUniforms();
 	}
 
-	PushUniforms();
 }
 
 bool PushBuffer::CheckSizeForPushUBOBounds( const GLuint size ) {
