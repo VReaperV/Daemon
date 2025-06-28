@@ -2236,6 +2236,7 @@ class GLShaderMaterial;
 		cullType_t      faceCulling;
 		uint32_t        glStateBits;
 		uint32_t        glStateBitsMask; // GLS_ bits set to 1 will not be changed in GL_State
+		vec2_t depthRange;
 		uint32_t        vertexAttribsState;
 		uint32_t        vertexAttribPointersSet;
 		float           vertexAttribsInterpolation; // 0 = no interpolation, 1 = final position
@@ -3025,6 +3026,7 @@ inline bool checkGLErrors()
 	void GL_VertexAttribsState( uint32_t stateBits );
 	void GL_VertexAttribPointers( uint32_t attribBits );
 	void GL_Cull( cullType_t cullType );
+	void GL_DepthRange( const float min, const float max );
 	void R_ShutdownBackend();
 
 	/*

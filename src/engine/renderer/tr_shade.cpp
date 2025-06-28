@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "gl_shader.h"
 #include "Material.h"
 #include "ShadeCommon.h"
+#include "CommandQueue.h"
 
 /*
 =================================================================================
@@ -525,8 +526,9 @@ void Tess_DrawElements()
 		{
 			if ( glConfig2.pushBufferAvailable ) {
 				for ( int i = 0; i < tess.multiDrawPrimitives; i++ ) {
-					glDrawElementsInstancedBaseInstance( GL_TRIANGLES, ( GLuint ) tess.multiDrawCounts[i], GL_INDEX_TYPE,
-						tess.multiDrawIndexes[i], 1, pushBuffer.sector );
+					/* glDrawElementsInstancedBaseInstance( GL_TRIANGLES, ( GLuint ) tess.multiDrawCounts[i], GL_INDEX_TYPE,
+						tess.multiDrawIndexes[i], 1, pushBuffer.sector ); */
+					commandQueue.AddDrawCommand( GL_TRIANGLES, ( GLuint ) tess.multiDrawCounts[i], tess.multiDrawOffsets[i] );
 				}
 			} else {
 				glMultiDrawElements( GL_TRIANGLES, tess.multiDrawCounts, GL_INDEX_TYPE,
@@ -547,8 +549,9 @@ void Tess_DrawElements()
 			}
 
 			if ( glConfig2.pushBufferAvailable ) {
-				glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE,
-					BUFFER_OFFSET( base ), 1, pushBuffer.sector );
+				/* glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE,
+					BUFFER_OFFSET( base ), 1, pushBuffer.sector ); */
+				commandQueue.AddDrawCommand( GL_TRIANGLES, tess.numIndexes, tess.indexBase );
 			} else {
 				glDrawRangeElements( GL_TRIANGLES, 0, tess.numVertexes, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ) );
 			}
@@ -565,8 +568,9 @@ void Tess_DrawElements()
 	else
 	{
 		if ( glConfig2.pushBufferAvailable ) {
-			glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE,
-				tess.indexes, 1, pushBuffer.sector );
+			/* glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE,
+				tess.indexes, 1, pushBuffer.sector ); */
+			commandQueue.AddDrawCommand( GL_TRIANGLES, tess.numIndexes, tess.indexBase );
 		} else {
 			glDrawElements( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, tess.indexes );
 		}
@@ -700,11 +704,11 @@ static void DrawTris()
 	gl_genericShader->SetUniform_TextureMatrix( tess.svars.texMatrices[ TB_COLORMAP ] );
 	gl_genericShader->SetRequiredVertexPointers();
 
-	glDepthRange( 0, 0 );
+	GL_DepthRange( 0, 0 );
 
 	Tess_DrawElements();
 
-	glDepthRange( 0, 1 );
+	GL_DepthRange( 0, 1 );
 }
 
 /*
