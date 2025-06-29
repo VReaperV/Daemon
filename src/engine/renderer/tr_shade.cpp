@@ -528,7 +528,8 @@ void Tess_DrawElements()
 				for ( int i = 0; i < tess.multiDrawPrimitives; i++ ) {
 					/* glDrawElementsInstancedBaseInstance( GL_TRIANGLES, ( GLuint ) tess.multiDrawCounts[i], GL_INDEX_TYPE,
 						tess.multiDrawIndexes[i], 1, pushBuffer.sector ); */
-					commandQueue.AddDrawCommand( GL_TRIANGLES, ( GLuint ) tess.multiDrawCounts[i], tess.multiDrawOffsets[i] );
+					commandQueue.AddDrawCommand( GL_TRIANGLES,
+						( GLuint ) tess.multiDrawCounts[i], tess.multiDrawOffsets[i], tess.vertexBase );
 				}
 			} else {
 				glMultiDrawElements( GL_TRIANGLES, tess.multiDrawCounts, GL_INDEX_TYPE,
@@ -551,7 +552,7 @@ void Tess_DrawElements()
 			if ( glConfig2.pushBufferAvailable ) {
 				/* glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE,
 					BUFFER_OFFSET( base ), 1, pushBuffer.sector ); */
-				commandQueue.AddDrawCommand( GL_TRIANGLES, tess.numIndexes, tess.indexBase );
+				commandQueue.AddDrawCommand( GL_TRIANGLES, tess.numIndexes, tess.indexBase, tess.vertexBase );
 			} else {
 				glDrawRangeElements( GL_TRIANGLES, 0, tess.numVertexes, tess.numIndexes, GL_INDEX_TYPE, BUFFER_OFFSET( base ) );
 			}
@@ -570,7 +571,7 @@ void Tess_DrawElements()
 		if ( glConfig2.pushBufferAvailable ) {
 			/* glDrawElementsInstancedBaseInstance( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE,
 				tess.indexes, 1, pushBuffer.sector ); */
-			commandQueue.AddDrawCommand( GL_TRIANGLES, tess.numIndexes, tess.indexBase );
+			commandQueue.AddDrawCommand( GL_TRIANGLES, tess.numIndexes, tess.indexBase, tess.vertexBase );
 		} else {
 			glDrawElements( GL_TRIANGLES, tess.numIndexes, GL_INDEX_TYPE, tess.indexes );
 		}

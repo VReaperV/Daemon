@@ -68,7 +68,7 @@ void CommandQueue::Flush() {
 	stagingBuffer.QueueStagingCopy( &indirectRenderBuffer, 0 );
 	stagingBuffer.FlushAll();
 
-	{
+	if( false ) {
 		GLsync pushSync = glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
 
 		static const GLuint64 SYNC_TIMEOUT = 10000000000; // 10 seconds
@@ -84,7 +84,16 @@ void CommandQueue::Flush() {
 	indirectRenderBuffer.BindBuffer( GL_DRAW_INDIRECT_BUFFER );
 
 	for ( uint32_t i = 0; i < currentBindInfoOffset; i++ ) {
+		if ( !bindInfos[i].VBO ) {
+			tr.skipVBO = true;
+		}
+
 		R_BindVBO( bindInfos[i].VBO );
+		
+		if ( !bindInfos[i].VBO ) {
+			tr.skipVBO = false;
+		}
+
 		R_BindIBO( bindInfos[i].IBO );
 		GL_BindProgram( bindInfos[i].program );
 		GL_State( bindInfos[i].GLState );
@@ -115,7 +124,7 @@ void CommandQueue::Flush() {
 	}
 }
 
-void CommandQueue::AddDrawCommand( const GLenum mode, const GLuint count, const GLuint firstIndex ) {
+void CommandQueue::AddDrawCommand( const GLenum mode, const GLuint count, const GLuint firstIndex, const GLint baseVertex ) {
 	if ( indirectBufferOffset == MAX_RENDER_CMDS ) {
 		Flush();
 	}
@@ -132,6 +141,7 @@ void CommandQueue::AddDrawCommand( const GLenum mode, const GLuint count, const 
 	cmds[indirectBufferOffset].firstIndex = firstIndex;
 	cmds[indirectBufferOffset].instanceCount = 1;
 	cmds[indirectBufferOffset].baseInstance = pushBuffer.sector;
+	cmds[indirectBufferOffset].baseVertex = currentBindInfo->VBO == tess.vbo ? baseVertex : 0;
 
 	indirectBufferOffset++;
 }

@@ -90,7 +90,7 @@ class CommandQueue {
 	void InitGLBuffers();
 	void FreeGLBuffers();
 
-	void AddDrawCommand( const GLenum mode, const GLuint count, const GLuint firstIndex );
+	void AddDrawCommand( const GLenum mode, const GLuint count, const GLuint firstIndex, const GLint baseVertex );
 
 	void Flush();
 
