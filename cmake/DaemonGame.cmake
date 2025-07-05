@@ -130,6 +130,7 @@ function(buildGameModule module_slug)
 		COMPILE_OPTIONS "${GAMEMODULE_FLAGS}"
 		FOLDER ${GAMEMODULE_NAME}
 	)
+    target_compile_features( ${module_target} PRIVATE "cxx_std_23" )
 
 	if (module_slug STREQUAL "nacl")
 		set_target_properties(${module_target} PROPERTIES

@@ -222,6 +222,8 @@ bool OnMainThread()
 
 void Drop(Str::StringRef message)
 {
+	PrintStackTrace();
+
 	if (!OnMainThread()) {
 		Sys::Error(message);
 	}
