@@ -1346,6 +1346,12 @@ void GLShaderManager::InitShader( GLShader* shader ) {
 			ShaderDescriptor* desc = FindShader( shader->_name, shaderType.mainText, shaderType.GLType, shaderType.headers,
 				uniqueMacros, compileMacros, true );
 
+			if ( desc && glConfig.pushBufferAvailable ) {
+				desc->shaderSource = RemoveUniformsFromShaderText( desc->shaderSource, shader->_pushUniforms );
+
+				desc->shaderSource.insert( shaderType.offset, globalUniformBlock );
+			}
+
 			if ( desc && glConfig.usingMaterialSystem && shader->_useMaterialSystem ) {
 				desc->shaderSource = ShaderPostProcess( shader, desc->shaderSource, shaderType.offset );
 			}
@@ -1599,7 +1605,7 @@ void GLShaderManager::PostProcessGlobalUniforms() {
 	GLuint padding;
 	std::vector<GLUniform*>* uniforms = &( ( GLShader* ) globalUBOProxy )->_uniforms;
 	std::vector<GLUniform*> constUniforms =
-		ProcessUniforms( GLUniform::CONST, GLUniform::CONST, false, *uniforms, size, padding );
+		ProcessUniforms( GLUniform::CONST, GLUniform::CONST, !glConfig2.usingBindlessTextures, *uniforms, size, padding );
 
 	GenerateUniformStructDefinesText( constUniforms, padding, 0, "globalUniforms", uniformStruct, uniformDefines );
 
@@ -1608,7 +1614,7 @@ void GLShaderManager::PostProcessGlobalUniforms() {
 	pushBuffer.constUniformsSize = size + padding;
 
 	std::vector<GLUniform*> frameUniforms =
-		ProcessUniforms( GLUniform::FRAME, GLUniform::FRAME, false, *uniforms, size, padding );
+		ProcessUniforms( GLUniform::FRAME, GLUniform::FRAME, !glConfig2.usingBindlessTextures, *uniforms, size, padding );
 	
 	GenerateUniformStructDefinesText( frameUniforms, padding, paddingCount, "globalUniforms", uniformStruct, uniformDefines );
 
@@ -2194,6 +2200,43 @@ GLuint GLShaderManager::SortUniforms( std::vector<GLUniform*>& uniforms ) {
 		}
 	}
 	return structSize;
+}
+
+std::vector<GLUniform*> GLShaderManager::ProcessUniforms( const GLUniform::UpdateType minType, const GLUniform::UpdateType maxType,
+	const bool skipTextures,
+	std::vector<GLUniform*>& uniforms, GLuint& structSize, GLuint& padding ) {
+	std::vector<GLUniform*> tmp;
+
+	tmp.reserve( uniforms.size() );
+	for ( GLUniform* uniform : uniforms ) {
+		if ( uniform->_updateType >= minType && uniform->_updateType <= maxType
+			&& ( !uniform->_isTexture || !skipTextures ) ) {
+			tmp.emplace_back( uniform );
+		}
+	}
+
+	structSize = SortUniforms( tmp );
+
+	const GLuint structAlignment = 4; // Material buffer is now a UBO, so it uses std140 layout, which is aligned to vec4
+	if ( structSize > 0 ) {
+		padding = ( structAlignment - ( structSize % structAlignment ) ) % structAlignment;
+	}
+
+	return tmp;
+}
+
+// Compute std140 size/alignment and sort uniforms from highest to lowest alignment
+void GLShader::PostProcessUniforms() {
+	if ( _useMaterialSystem ) {
+		_materialSystemUniforms = gl_shaderManager.ProcessUniforms( GLUniform::MATERIAL_OR_PUSH, GLUniform::MATERIAL_OR_PUSH,
+			true, _uniforms, std430Size, padding );
+	}
+
+	if ( glConfig2.pushBufferAvailable && !pushSkip ) {
+		GLuint unused;
+		_pushUniforms = gl_shaderManager.ProcessUniforms( GLUniform::CONST, GLUniform::FRAME,
+			!glConfig.usingBindlessTextures, _uniforms, unused, unused );
+	}
 }
 
 uint32_t GLShader::GetUniqueCompileMacros( size_t permutation, const int type ) const {
