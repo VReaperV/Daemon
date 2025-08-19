@@ -38,6 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "GLMemory.h"
 
 #include "gl_shader.h"
+#include "CommandQueue.h"
 
 // 128 MB, should be enough to fit anything in BAR without going overboard
 const GLsizeiptr GLStagingBuffer::SIZE = 128 * 1024 * 1024 / sizeof( uint32_t );
@@ -233,6 +234,11 @@ void PushBuffer::PushUniforms() {
 }
 
 void PushBuffer::WriteCurrentShaderToPushUBO() {
+	if ( !glState.currentMaterialShader
+		&& !CheckSizeForPushUBOBounds( glState.currentShader->pushUniformsSize + glState.currentShader->pushUniformsPadding ) ) {
+		commandQueue.Flush();
+	}
+
 	if ( glState.currentShader ) {
 		glState.currentShader->WriteUniformsToBuffer(
 			MapPushUniformData( glState.currentShader->pushUniformsSize + glState.currentShader->pushUniformsPadding ),
@@ -242,7 +248,12 @@ void PushBuffer::WriteCurrentShaderToPushUBO() {
 
 	if( glState.currentMaterialShader ) {
 		glState.currentMaterialShader->SetUniform_PushBufferSector( sector );
+		PushUniforms();
 	}
 
-	PushUniforms();
+}
+
+bool PushBuffer::CheckSizeForPushUBOBounds( const GLuint size ) {
+	uint32_t checkPushEnd = ( pushEnd + size - 1 ) / size * size;
+	return checkPushEnd + size < PUSH_SIZE;
 }

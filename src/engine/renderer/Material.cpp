@@ -750,6 +750,10 @@ void MaterialSystem::BindBuffers() {
 	}
 }
 
+void MaterialSystem::BindIndirectBuffer() {
+	culledCommandsBuffer.BindBuffer( GL_DRAW_INDIRECT_BUFFER );
+}
+
 void MaterialSystem::GenerateDepthImages( const int width, const int height, imageParams_t imageParms ) {
 	imageParms.bits ^= ( IF_NOPICMIP | IF_PACKED_DEPTH24_STENCIL8 );
 	imageParms.bits |= IF_ONECOMP32F;

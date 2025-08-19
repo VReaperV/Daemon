@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 #include "gl_shader.h"
 #include "Material.h"
+#include "CommandQueue.h"
 #if defined( REFBONE_NAMES )
 	#include <client/client.h>
 #endif
@@ -615,6 +616,15 @@ void GL_State( uint32_t stateBits )
 	glState.glStateBits ^= diff;
 }
 
+void GL_DepthRange( const float min, const float max ) {
+	if ( min != glState.depthRange[0] || max != glState.depthRange[1] ) {
+		glState.depthRange[0] = min;
+		glState.depthRange[1] = max;
+
+		glDepthRange( glState.depthRange[0], glState.depthRange[1] );
+	}
+}
+
 static void GL_VertexAttribPointers( uint32_t attribBits, const bool settingUpVAO ) {
 	uint32_t i;
 
@@ -637,7 +647,7 @@ static void GL_VertexAttribPointers( uint32_t attribBits, const bool settingUpVA
 		uintptr_t base = 0;
 
 		if( glState.currentVBO == tess.vbo ) {
-			base = tess.vertexBase * sizeof( shaderVertex_t );
+			// base = tess.vertexBase * sizeof( shaderVertex_t );
 		}
 
 		if ( ( attribBits & bit ) != 0 &&
@@ -664,7 +674,16 @@ static void GL_VertexAttribPointers( uint32_t attribBits, const bool settingUpVA
 				           glState.currentVBO->name, attributeNames[ i ] );
 			}
 
-			glVertexAttribPointer( i, layout->numComponents, layout->componentType, layout->normalize, layout->stride, BUFFER_OFFSET( layout->ofs + ( frame * layout->frameOffset + base ) ) );
+			if ( false && glConfig2.pushBufferAvailable ) {
+				/* glState.vertexAttribPointersCache[i].size = layout->numComponents;
+				glState.vertexAttribPointersCache[i].type = layout->componentType;
+				glState.vertexAttribPointersCache[i].normalized = layout->normalize;
+				glState.vertexAttribPointersCache[i].stride = layout->stride;
+				glState.vertexAttribPointersCache[i].pointer = BUFFER_OFFSET( layout->ofs + ( frame * layout->frameOffset + base ) ); */
+			} else {
+				glVertexAttribPointer( i, layout->numComponents, layout->componentType, layout->normalize, layout->stride, BUFFER_OFFSET( layout->ofs + ( frame * layout->frameOffset + base ) ) );
+			}
+
 			glState.vertexAttribPointersSet |= bit;
 		}
 	}
@@ -1048,11 +1067,11 @@ static void RB_RenderDrawSurfaces( shaderSort_t fromSort, shaderSort_t toSort,
 			{
 				if ( depthRange )
 				{
-					glDepthRange( 0, 0.3 );
+					GL_DepthRange( 0, 0.3 );
 				}
 				else
 				{
-					glDepthRange( 0, 1 );
+					GL_DepthRange( 0, 1 );
 				}
 
 				oldDepthRange = depthRange;
@@ -1076,7 +1095,7 @@ static void RB_RenderDrawSurfaces( shaderSort_t fromSort, shaderSort_t toSort,
 
 	if ( depthRange )
 	{
-		glDepthRange( 0, 1 );
+		GL_DepthRange( 0, 1 );
 	}
 
 	GL_CheckErrors();
@@ -2762,6 +2781,8 @@ static void RB_RenderView( bool depthPass )
 	}
 
 	backEnd.pc.c_views++;
+
+	commandQueue.Flush();
 }
 
 /*
@@ -3526,7 +3547,7 @@ const RenderCommand *PreparePortalCommand::ExecuteSelf( ) const
 	glState.glStateBitsMask = 0;
 
 	// set depth to max on portal area
-	glDepthRange( 1.0f, 1.0f );
+	GL_DepthRange( 1.0f, 1.0f );
 
 	glStencilFunc( GL_EQUAL, backEnd.viewParms.portalLevel + 1, 0xff );
 	glStencilOp( GL_KEEP, GL_KEEP, GL_KEEP );
@@ -3540,7 +3561,7 @@ const RenderCommand *PreparePortalCommand::ExecuteSelf( ) const
 
 	glState.glStateBitsMask = 0;
 
-	glDepthRange( 0.0f, 1.0f );
+	GL_DepthRange( 0.0f, 1.0f );
 
 	// keep stencil test enabled !
 
@@ -3772,6 +3793,8 @@ const RenderCommand *SwapBuffersCommand::ExecuteSelf( ) const
 {
 	// finish any 2D drawing if needed
 	Tess_End();
+
+	commandQueue.Flush();
 
 	// texture swapping test
 	if ( r_showImages->integer )

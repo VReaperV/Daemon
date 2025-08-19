@@ -2104,6 +2104,14 @@ enum
 class GLShader;
 class GLShaderMaterial;
 
+struct VertexAttribState {
+	int size;
+	GLenum type;
+	bool normalized;
+	GLsizei stride;
+	const void* pointer;
+};
+
 // the renderer front end should never modify glState_t
 	struct glstate_t
 	{
@@ -2133,8 +2141,10 @@ class GLShaderMaterial;
 		cullType_t      faceCulling;
 		uint32_t        glStateBits;
 		uint32_t        glStateBitsMask; // GLS_ bits set to 1 will not be changed in GL_State
+		vec2_t depthRange;
 		uint32_t        vertexAttribsState;
 		uint32_t        vertexAttribPointersSet;
+		VertexAttribState vertexAttribPointersCache[ATTR_INDEX_MAX];
 		float           vertexAttribsInterpolation; // 0 = no interpolation, 1 = final position
 		uint32_t        vertexAttribsNewFrame; // offset for VBO vertex animations
 		uint32_t        vertexAttribsOldFrame; // offset for VBO vertex animations
@@ -2925,6 +2935,7 @@ void GL_TexImage2D( GLenum target, GLint level, GLint internalformat, GLsizei wi
 void GL_TexImage3D( GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void *data, bool isSRGB );
 void GL_CompressedTexImage2D( GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data, bool isSRGB );
 void GL_CompressedTexSubImage3D( GLenum target, GLint level, GLint xOffset, GLint yOffset, GLint zOffset, GLsizei width, GLsizei height, GLsizei depth, GLenum internalFormat, GLsizei size, const void *data, bool isSRGB );
+	void GL_DepthRange( const float min, const float max );
 	void R_ShutdownBackend();
 
 	/*

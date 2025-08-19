@@ -355,6 +355,8 @@ struct PushBuffer {
 	uint32_t* MapPushUniformData( const GLuint size );
 	void PushUniforms();
 	void WriteCurrentShaderToPushUBO();
+
+	bool CheckSizeForPushUBOBounds( const GLuint size );
 };
 
 extern GLStagingBuffer stagingBuffer;

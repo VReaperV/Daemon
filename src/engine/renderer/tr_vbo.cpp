@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "Material.h"
 #include "GeometryCache.h"
 #include "GLMemory.h"
+#include "CommandQueue.h"
 
 // interleaved data: position, colour, qtangent, texcoord
 // -> struct shaderVertex_t in tr_local.h
@@ -764,6 +765,8 @@ void R_InitVBOs()
 		pushBuffer.InitGLBuffers();
 	}
 
+	commandQueue.InitGLBuffers();
+
 	GL_CheckErrors();
 }
 
@@ -844,6 +847,8 @@ void R_ShutdownVBOs()
 	if ( glConfig2.pushBufferAvailable ) {
 		pushBuffer.FreeGLBuffers();
 	}
+
+	commandQueue.FreeGLBuffers();
 
 	tess.verts = tess.vertsBuffer = nullptr;
 	tess.indexes = tess.indexesBuffer = nullptr;

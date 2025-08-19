@@ -76,11 +76,11 @@ void Tess_StageIteratorSky()
 	// r_showSky will draw the whole skybox in front of everything else
 	if ( r_showSky->integer )
 	{
-		glDepthRange( 0.0, 0.0 );
+		GL_DepthRange( 0.0, 0.0 );
 	}
 	else
 	{
-		glDepthRange( 1.0, 1.0 );
+		GL_DepthRange( 1.0, 1.0 );
 	}
 
 	// Setup tess for rendering
@@ -167,7 +167,7 @@ void Tess_StageIteratorSky()
 	}
 
 	// back to standard depth range
-	glDepthRange( 0.0, 1.0 );
+	GL_DepthRange( 0.0, 1.0 );
 
 	// Restore matrices if we're rendering in a portal
 	if ( backEnd.viewParms.portalLevel > 0 ) {
