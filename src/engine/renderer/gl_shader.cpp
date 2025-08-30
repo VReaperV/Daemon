@@ -1550,8 +1550,8 @@ std::string GLShaderManager::RemoveUniformsFromShaderText( const std::string& sh
 	return shaderMain;
 }
 
-void GLShaderManager::GenerateUniformStructDefinesText( const std::vector<GLUniform*>& uniforms,
-	const std::string& definesName, std::string& uniformStruct, std::string& uniformDefines ) {
+int GLShaderManager::GenerateUniformStructDefinesText( const std::vector<GLUniform*>&uniforms,
+	const std::string & definesName, const int offset, std::string & uniformStruct, std::string & uniformDefines ) {
 	int pad = 0;
 	for ( GLUniform* uniform : uniforms ) {
 		uniformStruct += "	" + ( uniform->_isTexture ? "uvec2" : uniform->_type ) + " " + uniform->_name;
@@ -1562,7 +1562,7 @@ void GLShaderManager::GenerateUniformStructDefinesText( const std::vector<GLUnif
 		uniformStruct += ";\n";
 
 		for (int p = uniform->_std430Size - uniform->_std430BaseSize; p--; ) {
-			uniformStruct += "\tfloat _pad" + std::to_string( ++pad ) + ";\n";
+			uniformStruct += "\tfloat _pad" + std::to_string( ++pad + offset ) + ";\n";
 		}
 
 		uniformDefines += "#define ";
@@ -1579,6 +1579,8 @@ void GLShaderManager::GenerateUniformStructDefinesText( const std::vector<GLUnif
 	}
 
 	uniformDefines += "\n";
+
+	return pad;
 }
 
 void GLShaderManager::PostProcessGlobalUniforms() {
@@ -1607,7 +1609,7 @@ void GLShaderManager::PostProcessGlobalUniforms() {
 	std::vector<GLUniform*> constUniforms =
 		ProcessUniforms( GLUniform::CONST, GLUniform::CONST, !glConfig.usingBindlessTextures, *uniforms, size, padding );
 
-	GenerateUniformStructDefinesText( constUniforms, padding, 0, "globalUniforms", uniformStruct, uniformDefines );
+	const int pad = GenerateUniformStructDefinesText( constUniforms, "globalUniforms", 0, uniformStruct, uniformDefines );
 
 	uint32_t paddingCount = padding;
 
@@ -1616,7 +1618,7 @@ void GLShaderManager::PostProcessGlobalUniforms() {
 	std::vector<GLUniform*> frameUniforms =
 		ProcessUniforms( GLUniform::FRAME, GLUniform::FRAME, !glConfig.usingBindlessTextures, *uniforms, size, padding );
 	
-	GenerateUniformStructDefinesText( frameUniforms, padding, paddingCount, "globalUniforms", uniformStruct, uniformDefines );
+	GenerateUniformStructDefinesText( frameUniforms, "globalUniforms", pad, uniformStruct, uniformDefines );
 
 	pushBuffer.frameUniformsSize = size + padding;
 
@@ -1696,7 +1698,7 @@ std::string GLShaderManager::ShaderPostProcess( GLShader *shader, const std::str
 	std::string materialStruct = "\nstruct Material {\n";
 	std::string materialDefines;
 	GenerateUniformStructDefinesText( shader->_materialSystemUniforms,
-		"materials[baseInstance & 0xFFF]", materialStruct, materialDefines );
+		"materials[baseInstance & 0xFFF]", 0, materialStruct, materialDefines );
 
 	materialStruct += "};\n\n";
 
@@ -2168,12 +2170,7 @@ static auto FindUniformForOffset( std::vector<GLUniform*>& uniforms, const GLuin
 }
 
 GLuint GLShaderManager::SortUniforms( std::vector<GLUniform*>& uniforms ) {
-	std::vector<GLUniform*> uniformQueue;
-	for ( GLUniform* uniform : _uniforms ) {
-		if ( !uniform->_global ) {
-			uniformQueue.emplace_back( uniform );
-		}
-	}
+	std::vector<GLUniform*> uniformQueue = uniforms;
 
 	std::stable_sort( uniformQueue.begin(), uniformQueue.end(),
 		[]( const GLUniform* lhs, const GLUniform* rhs ) {
@@ -2192,7 +2189,7 @@ GLuint GLShaderManager::SortUniforms( std::vector<GLUniform*>& uniforms ) {
 			++structSize;
 			++uniforms.back()->_std430Size;
 		} else {
-			( *iterNext )->structSize = ( *iterNext )->_std430BaseSize;
+			( *iterNext )->_std430Size = ( *iterNext )->_std430BaseSize;
 			structSize += ( *iterNext )->_std430Size;
 			align = std::max( align, ( *iterNext )->_std430Alignment );
 			uniforms.push_back( *iterNext );
@@ -2227,13 +2224,13 @@ std::vector<GLUniform*> GLShaderManager::ProcessUniforms( const GLUniform::Updat
 
 // Compute std140 size/alignment and sort uniforms from highest to lowest alignment
 void GLShader::PostProcessUniforms() {
+	GLuint unused;
 	if ( _useMaterialSystem ) {
 		_materialSystemUniforms = gl_shaderManager.ProcessUniforms( GLUniform::MATERIAL_OR_PUSH, GLUniform::MATERIAL_OR_PUSH,
-			true, _uniforms, std430Size, padding );
+			true, _uniforms, std430Size, unused );
 	}
 
 	if ( glConfig.pushBufferAvailable && !pushSkip ) {
-		GLuint unused;
 		_pushUniforms = gl_shaderManager.ProcessUniforms( GLUniform::CONST, GLUniform::FRAME,
 			!glConfig.usingBindlessTextures, _uniforms, unused, unused );
 	}

@@ -311,7 +311,7 @@ public:
 	}
 
 	GLuint GetSTD430PaddedSize() const {
-		return std430Size + padding;
+		return std430Size;
 	}
 
 	bool UseMaterialSystem() const {
@@ -496,9 +496,8 @@ private:
 		ShaderProgramDescriptor* out );
 	void SaveShaderBinary( ShaderProgramDescriptor* descriptor );
 
-	void GenerateUniformStructDefinesText(
-		const std::vector<GLUniform*>& uniforms, const std::string& definesName,
-		std::string& uniformStruct, std::string& uniformDefines );
+	int GenerateUniformStructDefinesText( const std::vector<GLUniform*>& uniforms,
+		const std::string& definesName, const int offset, std::string& uniformStruct, std::string& uniformDefines );
 	std::string RemoveUniformsFromShaderText( const std::string& shaderText, const std::vector<GLUniform*>& uniforms );
 	std::string ShaderPostProcess( GLShader *shader, const std::string& shaderText, const uint32_t offset );
 	std::string BuildDeformShaderText( const std::string& steps );
