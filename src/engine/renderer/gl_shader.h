@@ -1971,6 +1971,90 @@ public:
 	}
 };
 
+class u_TextureModifierColorMap :
+	GLUniform1f {
+	public:
+	u_TextureModifierColorMap( GLShader* shader ) :
+		GLUniform1f( shader, "u_TextureModifierColorMap", true ) {
+	}
+
+	void SetUniform_TextureModifierColorMap( GLuint64 modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_TextureModifierNormalMap :
+	GLUniform1f {
+	public:
+	u_TextureModifierNormalMap( GLShader* shader ) :
+		GLUniform1f( shader, "u_TextureModifierNormalMap", true ) {
+	}
+
+	void SetUniform_TextureModifierNormalMap( GLuint64 modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_TextureModifierHeightMap :
+	GLUniform1f {
+	public:
+	u_TextureModifierHeightMap( GLShader* shader ) :
+		GLUniform1f( shader, "u_TextureModifierHeightMap", true ) {
+	}
+
+	void SetUniform_TextureModifierHeightMap( GLuint64 modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_TextureModifierMaterialMap :
+	GLUniform1f {
+	public:
+	u_TextureModifierMaterialMap( GLShader* shader ) :
+		GLUniform1f( shader, "u_TextureModifierMaterialMap", true ) {
+	}
+
+	void SetUniform_TextureModifierMaterialMap( GLuint64 modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_TextureModifierGlowMap :
+	GLUniform1f {
+	public:
+	u_TextureModifierGlowMap( GLShader* shader ) :
+		GLUniform1f( shader, "u_TextureModifierGlowMap", true ) {
+	}
+
+	void SetUniform_TextureModifierGlowMap( GLuint64 modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_TextureModifierLightMap :
+	GLUniform1f {
+	public:
+	u_TextureModifierLightMap( GLShader* shader ) :
+		GLUniform1f( shader, "u_TextureModifierLightMap", true ) {
+	}
+
+	void SetUniform_TextureModifierLightMap( GLuint64 modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
+class u_TextureModifierDeluxeMap :
+	GLUniform1f {
+	public:
+	u_TextureModifierDeluxeMap( GLShader* shader ) :
+		GLUniform1f( shader, "u_TextureModifierDeluxeMap", true ) {
+	}
+
+	void SetUniform_TextureModifierDeluxeMap( GLuint64 modifier ) {
+		this->SetValue( modifier );
+	}
+};
+
 class u_AlphaThreshold :
 	GLUniform1f
 {
@@ -3228,6 +3312,7 @@ class GLShader_generic :
 	public GLShader,
 	public u_ColorMap,
 	public u_DepthMap,
+	public u_TextureModifierColorMap,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_AlphaThreshold,
@@ -3258,6 +3343,7 @@ class GLShader_genericMaterial :
 	public GLShader,
 	public u_ColorMap,
 	public u_DepthMap,
+	public u_TextureModifierColorMap,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_AlphaThreshold,
@@ -3287,6 +3373,13 @@ class GLShader_lightMapping :
 	public u_LightMap,
 	public u_DeluxeMap,
 	public u_GlowMap,
+	public u_TextureModifierColorMap,
+	public u_TextureModifierNormalMap,
+	public u_TextureModifierHeightMap,
+	public u_TextureModifierMaterialMap,
+	public u_TextureModifierGlowMap,
+	public u_TextureModifierLightMap,
+	public u_TextureModifierDeluxeMap,
 	public u_EnvironmentMap0,
 	public u_EnvironmentMap1,
 	public u_LightGrid1,
@@ -3340,6 +3433,13 @@ class GLShader_lightMappingMaterial :
 	public u_LightMap,
 	public u_DeluxeMap,
 	public u_GlowMap,
+	public u_TextureModifierColorMap,
+	public u_TextureModifierNormalMap,
+	public u_TextureModifierHeightMap,
+	public u_TextureModifierMaterialMap,
+	public u_TextureModifierGlowMap,
+	public u_TextureModifierLightMap,
+	public u_TextureModifierDeluxeMap,
 	public u_EnvironmentMap0,
 	public u_EnvironmentMap1,
 	public u_LightGrid1,
@@ -3383,6 +3483,8 @@ class GLShader_reflection :
 	public u_ColorMapCube,
 	public u_NormalMap,
 	public u_HeightMap,
+	public u_TextureModifierNormalMap,
+	public u_TextureModifierHeightMap,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_ModelMatrix,
@@ -3409,6 +3511,8 @@ class GLShader_reflectionMaterial :
 	public u_ColorMapCube,
 	public u_NormalMap,
 	public u_HeightMap,
+	public u_TextureModifierNormalMap,
+	public u_TextureModifierHeightMap,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_ModelMatrix,
@@ -3505,6 +3609,7 @@ class GLShader_heatHaze :
 	public GLShader,
 	public u_CurrentMap,
 	public u_NormalMap,
+	public u_TextureModifierNormalMap,
 	public u_TextureMatrix,
 	public u_DeformMagnitude,
 	public u_ModelViewProjectionMatrix,
@@ -3526,6 +3631,7 @@ class GLShader_heatHazeMaterial :
 	public GLShader,
 	public u_CurrentMap,
 	public u_NormalMap,
+	public u_TextureModifierNormalMap,
 	public u_TextureMatrix,
 	public u_DeformEnable,
 	public u_DeformMagnitude,
@@ -3615,6 +3721,8 @@ class GLShader_liquid :
 	public u_LightGrid1,
 	public u_LightGrid2,
 	public u_HeightMap,
+	public u_TextureModifierNormalMap,
+	public u_TextureModifierHeightMap,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_RefractionIndex,
@@ -3651,6 +3759,8 @@ class GLShader_liquidMaterial :
 	public u_LightGrid1,
 	public u_LightGrid2,
 	public u_HeightMap,
+	public u_TextureModifierNormalMap,
+	public u_TextureModifierHeightMap,
 	public u_TextureMatrix,
 	public u_ViewOrigin,
 	public u_RefractionIndex,
