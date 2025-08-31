@@ -39,6 +39,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ShadeCommon.h"
 #include "GeometryCache.h"
 #include "GLMemory.h"
+#include "TexturePack.h"
 
 GLUBO materialsUBO( "materials", BufferBind::MATERIALS, 0, 0 );
 GLBuffer texDataBuffer( "texData", BufferBind::TEX_DATA, 0, 0 );
@@ -469,17 +470,38 @@ void MaterialSystem::GenerateMaterialsBuffer( std::vector<shaderStage_t*>& stage
 	}
 }
 
+static uint64_t PackTexturePackModifierToUint64( const vec3_t modifier ) {
+	f16_t xMod = floatToHalf( modifier[0] );
+	f16_t yMod = floatToHalf( modifier[1] );
+	uint16_t zMod = modifier[2];
+
+	return ( *( ( uint16_t* ) &xMod ) << 48 )
+	     | ( *( ( uint16_t* ) &yMod ) << 32 )
+	     | ( zMod << 16 );
+}
+
 void MaterialSystem::GenerateTexturesBuffer( std::vector<TextureData>& textures, TexBundle* textureBundles ) {
 	for ( TextureData& textureData : textures ) {
 		for ( int i = 0; i < MAX_TEXTURE_BUNDLES; i++ ) {
 			if ( textureData.texBundlesOverride[i] ) {
-				textureBundles->textures[i] = textureData.texBundlesOverride[i]->texture->bindlessTextureHandle;
+				if ( r_texturePacks.Get() ) {
+					textureBundles->textures[i] =
+						PackTexturePackModifierToUint64( textureData.texBundlesOverride[i]->texturePackModifier );
+				} else {
+					textureBundles->textures[i] = textureData.texBundlesOverride[i]->texture->bindlessTextureHandle;
+				}
+
 				continue;
 			}
 
 			const textureBundle_t* bundle = textureData.texBundles[i];
 			if ( bundle && bundle->image[0] ) {
-				textureBundles->textures[i] = BindAnimatedImage( 0, bundle );
+				if ( r_texturePacks.Get() ) {
+					textureBundles->textures[i] =
+						PackTexturePackModifierToUint64( bundle->image[0]->texturePackModifier );
+				} else {
+					textureBundles->textures[i] = BindAnimatedImage( 0, bundle );
+				}
 			}
 		}
 
@@ -1425,12 +1447,23 @@ void MaterialSystem::AddStageTextures( MaterialSurface* surface, shader_t* shade
 		const textureBundle_t& bundle = pStage->bundle[i];
 
 		if ( bundle.isVideoMap ) {
-			material->AddTexture( tr.cinematicImage[bundle.videoMapHandle]->texture );
+			image_t* image = tr.cinematicImage[bundle.videoMapHandle];
+
+			if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+				image = texturePacks[image->texturePackImage].texture;
+			}
+
+			material->AddTexture( image->texture );
 			continue;
 		}
 
 		for ( image_t* image : bundle.image ) {
 			if ( image ) {
+				if ( r_texturePacks.Get() && image->assignedTexturePack ) {
+					Log::Warn( "%s: texturePack: %u",  image->name, image->texturePackImage );
+					material->texturePacks[i] = image->texturePackImage;
+					image = texturePacks[image->texturePackImage].texture;
+				}
 				material->AddTexture( image->texture );
 			}
 		}
@@ -1451,7 +1484,13 @@ void MaterialSystem::AddStageTextures( MaterialSurface* surface, shader_t* shade
 
 	// u_Map, u_DeluxeMap
 	image_t* lightmap = SetLightMap( surface, lightMode );
+	if ( r_texturePacks.Get() && lightmap->assignedTexturePack ) {
+		lightmap = texturePacks[lightmap->texturePackImage].texture;
+	}
 	image_t* deluxemap = SetDeluxeMap( surface, deluxeMode );
+	if ( r_texturePacks.Get() && deluxemap->assignedTexturePack ) {
+		deluxemap = texturePacks[deluxemap->texturePackImage].texture;
+	}
 
 	material->AddTexture( lightmap->texture );
 	material->AddTexture( deluxemap->texture );

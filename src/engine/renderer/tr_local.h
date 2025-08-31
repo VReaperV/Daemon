@@ -526,6 +526,8 @@ enum class ssaoMode {
 		int minDimension = 0;
 		int maxDimension = 0;
 
+		bool useTexturePack = false;
+
 		bool operator==(const imageParams_t &o) const
 		{
 			return o.bits == bits && o.filterType == filterType && o.wrapType == wrapType
@@ -543,8 +545,18 @@ enum class ssaoMode {
 		GLuint         texnum; // gl texture binding
 		Texture        *texture;
 
+		bool useTexturePack;
+		uint32_t texturePackImage;
+		GLint layer = -1;
+		GLint level = 0;
+
 		uint16_t width, height, numLayers; // source image
 		uint16_t       uploadWidth, uploadHeight; // after power of two and picmip but not including clamp to MAX_TEXTURE_SIZE
+		
+		vec3_t texturePackModifier;
+		bool assignedTexturePack = false;
+
+		bool isTexturePack = false;
 
 		int            frameUsed; // for texture usage in frame statistics
 
@@ -2640,6 +2652,7 @@ enum
 	extern Cvar::Cvar<bool> r_gpuFrustumCulling;
 	extern Cvar::Cvar<bool> r_gpuOcclusionCulling;
 	extern Cvar::Cvar<bool> r_materialSystemSkip;
+	extern Cvar::Cvar<bool> r_texturePacks;
 	extern cvar_t *r_lightStyles;
 	extern cvar_t *r_exportTextures;
 	extern cvar_t *r_heatHaze;
@@ -2974,6 +2987,7 @@ void GL_CompressedTexSubImage3D( GLenum target, GLint level, GLint xOffset, GLin
 
 	image_t *R_CreateCubeImage( const char *name, const byte *pic[ 6 ], int width, int height, const imageParams_t &imageParams );
 	image_t *R_Create3DImage( const char *name, const byte *pic, int width, int height, int depth, const imageParams_t &imageParams );
+	image_t* R_Create2DArrayImage( const char* name, const byte* pic, int width, int height, int numLayers, int numMips, const imageParams_t& imageParams );
 
 	image_t *R_CreateGlyph( const char *name, const byte *pic, int width, int height );
 	qhandle_t RE_GenerateTexture( const byte *pic, int width, int height );

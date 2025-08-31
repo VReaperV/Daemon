@@ -156,10 +156,20 @@ struct Material {
 	bool texturesResident = false;
 	std::vector<Texture*> textures;
 
+	int texturePacks[MAX_TEXTURE_BUNDLES] = { -1, -1, -1, -1, -1 };
+
 	bool operator==( const Material& other ) {
 		if ( r_materialSeparatePerShader.Get() )
 		{
 			return refStage == other.refStage;
+		}
+
+		if ( r_texturePacks.Get() ) {
+			for ( int i = 0; i < MAX_TEXTURE_BUNDLES; i++ ) {
+				if ( texturePacks[i] != other.texturePacks[i] ) { // && texturePacks[i] != -1 && other.texturePacks[i] != -1 ) {
+					return false;
+				}
+			}
 		}
 
 		return program == other.program && stateBits == other.stateBits
@@ -167,7 +177,7 @@ struct Material {
 	}
 
 	void AddTexture( Texture* texture ) {
-		if ( !texture->hasBindlessHandle ) {
+		if ( glConfig.usingBindlessTextures && !texture->hasBindlessHandle ) {
 			texture->GenBindlessHandle();
 		}
 

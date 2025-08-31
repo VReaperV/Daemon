@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 #include <iomanip>
 #include "Material.h"
+#include "TexturePack.h"
 
 static Cvar::Cvar<bool> r_allowImageParamMismatch(
 	"r_allowImageParamMismatch", "reuse images when requested with different parameters",
@@ -906,11 +907,16 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 			target = GL_TEXTURE_CUBE_MAP_POSITIVE_X;
 			break;
 
+		case GL_TEXTURE_2D_ARRAY:
+			target = GL_TEXTURE_2D_ARRAY;
+			break;
+
 		default:
 			target = GL_TEXTURE_2D;
 			break;
 	}
 
+	GLenum texturePackFormat = GL_RGBA;
 	if ( image->bits & ( IF_DEPTH16 | IF_DEPTH24 | IF_DEPTH32 ) )
 	{
 		format = GL_DEPTH_COMPONENT;
@@ -982,26 +988,31 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 		    !GLEW_EXT_texture_compression_s3tc ) {
 			Log::Warn("compressed image '%s' cannot be loaded", image->name );
 			internalFormat = GL_RGBA8;
+			texturePackFormat = GL_RGBA;
 		}
 		else if( image->bits & IF_BC1 ) {
 			format = GL_NONE;
 			internalFormat = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
+			texturePackFormat = GL_RGB;
 			blockSize = 8;
 		}
 		else if ( image->bits & IF_BC2 ) {
 			format = GL_NONE;
 			internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+			texturePackFormat = GL_RGBA;
 			blockSize = 16;
 		}
 		else if ( image->bits & IF_BC3 ) {
 			format = GL_NONE;
 			internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+			texturePackFormat = GL_RGBA;
 			blockSize = 16;
 		}
 		else if ( image->bits & IF_BC4 ) {
 			if( !glConfig.textureCompressionRGTCAvailable ) {
 				format = GL_NONE;
 				internalFormat = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
+				texturePackFormat = GL_RGB;
 				blockSize = 8;
 
 				if( dataArray ) {
@@ -1011,6 +1022,7 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 			else {
 				format = GL_NONE;
 				internalFormat = GL_COMPRESSED_RED_RGTC1;
+				texturePackFormat = GL_RED;
 				blockSize = 8;
 			}
 		}
@@ -1018,6 +1030,7 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 			if( !glConfig.textureCompressionRGTCAvailable ) {
 				format = GL_NONE;
 				internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+				texturePackFormat = GL_RGBA;
 				blockSize = 16;
 
 				R_ConvertBC5Image( dataArray, &scaledBuffer,
@@ -1028,6 +1041,7 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 			else {
 				format = GL_NONE;
 				internalFormat = GL_COMPRESSED_RG_RGTC2;
+				texturePackFormat = GL_RG;
 				blockSize = 16;
 			}
 		}
@@ -1035,9 +1049,11 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 	else if ( image->bits & IF_RGBE )
 	{
 		internalFormat = GL_RGBA8;
+		texturePackFormat = GL_RGBA;
 	}
 	else if ( !dataArray ) {
 		internalFormat = GL_RGBA8;
+		texturePackFormat = GL_RGBA;
 	}
 	else
 	{
@@ -1062,6 +1078,7 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 				if ( scan[ i * 4 + 3 ] != 255 )
 				{
 					internalFormat = GL_RGBA8;
+					texturePackFormat = GL_RGBA;
 					break;
 				}
 			}
@@ -1078,7 +1095,9 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 		mipLayers = numLayers;
 
 		for( i = 0; i < numMips; i++ ) {
-			GL_TexImage3D( GL_TEXTURE_3D, i, internalFormat, scaledWidth, scaledHeight, mipLayers, 0, format, GL_UNSIGNED_BYTE, nullptr, isSRGB );
+			GL_TexImage3D( GL_TEXTURE_3D, i, internalFormat,
+				scaledWidth, scaledHeight, mipLayers,
+				0, format, GL_UNSIGNED_BYTE, nullptr, isSRGB );
 
 			if( mipWidth  > 1 ) mipWidth  >>= 1;
 			if( mipHeight > 1 ) mipHeight >>= 1;
@@ -1136,6 +1155,7 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 			switch ( image->type )
 			{
 			case GL_TEXTURE_3D:
+			case GL_TEXTURE_2D_ARRAY:
 				if( scaledBuffer ) {
 					glTexSubImage3D( GL_TEXTURE_3D, 0, 0, 0, i,
 							 scaledWidth, scaledHeight, 1,
@@ -1154,7 +1174,12 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 				}
 				else
 				{
-					GL_TexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer, isSRGB );
+					if ( imageParams.useTexturePack && AddToTexturePack( image, format, 0, scaledBuffer ) ) {
+						GL_Bind( image );
+					}  else {
+						GL_TexImage2D( target, 0, internalFormat, scaledWidth, scaledHeight, 0, format, GL_UNSIGNED_BYTE, scaledBuffer, isSRGB );
+						image->useTexturePack = false;
+					}
 				}
 
 				break;
@@ -1193,13 +1218,28 @@ void R_UploadImage( const char *name, const byte **dataArray, int numLayers, int
 				switch ( image->type )
 				{
 				case GL_TEXTURE_3D:
-					GL_CompressedTexSubImage3D( GL_TEXTURE_3D, i, 0, 0, j, scaledWidth, scaledHeight, 1, internalFormat, mipSize, data, isSRGB );
+				case GL_TEXTURE_2D_ARRAY:
+					if ( data != nullptr ) {
+						GL_CompressedTexSubImage3D( GL_TEXTURE_3D, i, 0, 0, j,
+							scaledWidth, scaledHeight, 1,
+							internalFormat, mipSize, data, isSRGB );
+					}
 					break;
 				case GL_TEXTURE_CUBE_MAP:
 					GL_CompressedTexImage2D( target + j, i, internalFormat, mipWidth, mipHeight, 0, mipSize, data, isSRGB );
 					break;
 
 				default:
+					image->uploadWidth = mipWidth;
+					image->uploadHeight = mipHeight;
+
+					if ( imageParams.useTexturePack && AddToTexturePack( image, internalFormat, mipSize, data ) ) {
+						GL_Bind( image );
+					} else {
+						GL_CompressedTexImage2D( target, i, internalFormat, mipWidth, mipHeight, 0, mipSize, data, isSRGB );
+						image->useTexturePack = false;
+					}
+
 					GL_CompressedTexImage2D( target, i, internalFormat, mipWidth, mipHeight, 0, mipSize, data, isSRGB );
 					break;
 				}
@@ -1609,6 +1649,47 @@ image_t *R_Create3DImage( const char *name, const byte *pic, int width, int heig
 	}
 
 	if( r_exportTextures->integer ) {
+		R_ExportTexture( image );
+	}
+
+	return image;
+}
+
+image_t* R_Create2DArrayImage( const char* name, const byte* pic, int width, int height, int numLayers, int numMips, const imageParams_t& imageParams ) {
+	image_t* image = R_AllocImage( name, true );
+
+	if ( !image ) {
+		return nullptr;
+	}
+
+	image->type = GL_TEXTURE_2D_ARRAY;
+
+	image->width = width;
+	image->height = height;
+	image->numLayers = numLayers;
+	image->isTexturePack = true;
+
+	const byte** pics;
+	if ( pic ) {
+		pics = ( const byte** ) ri.Hunk_AllocateTempMemory( numLayers * sizeof( const byte* ) );
+		for ( int i = 0; i < numLayers; i++ ) {
+			pics[i] = pic + i * width * height * sizeof( u8vec4_t );
+		}
+	} else {
+		pics = nullptr;
+	}
+
+	image->bits = imageParams.bits;
+	image->filterType = imageParams.filterType;
+	image->wrapType = imageParams.wrapType;
+
+	R_UploadImage( name, pics, numLayers, numMips, image, imageParams );
+
+	if ( pics ) {
+		ri.Hunk_FreeTempMemory( pics );
+	}
+
+	if ( r_exportTextures->integer ) {
 		R_ExportTexture( image );
 	}
 
