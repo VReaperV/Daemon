@@ -695,6 +695,8 @@ void SV_Shutdown( const char *finalmsg )
 		return;
 	}
 
+	Log::Warn( "Server Shutdown: %s", finalmsg );
+
 	SV_QuickShutdown( finalmsg );
 
 	NET_LeaveMulticast6();
